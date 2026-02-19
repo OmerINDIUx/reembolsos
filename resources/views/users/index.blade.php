@@ -9,11 +9,44 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
-                    <div class="flex justify-between items-center mb-6">
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
                         <h3 class="text-lg font-medium">Lista de Usuarios</h3>
                         <a href="{{ route('users.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
                             Nuevo Usuario
                         </a>
+                    </div>
+                    
+                    <!-- Search & Filter Form -->
+                    <div class="mb-6 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                        <form id="filter-form" action="{{ route('users.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <!-- Search Input -->
+                            <div class="col-span-1 md:col-span-2">
+                                <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar (Nombre, Email)</label>
+                                <input type="text" name="search" id="search" value="{{ request('search') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Buscar...">
+                            </div>
+
+                            <!-- Role Filter -->
+                            <div>
+                                <label for="role" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rol</label>
+                                <select name="role" id="role" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    <option value="">Todos</option>
+                                    <option value="admin" {{ request('role') == 'admin' ? 'selected' : '' }}>Admin</option>
+                                    <option value="director" {{ request('role') == 'director' ? 'selected' : '' }}>Director</option>
+                                    <option value="accountant" {{ request('role') == 'accountant' ? 'selected' : '' }}>Contador</option>
+                                    <option value="user" {{ request('role') == 'user' ? 'selected' : '' }}>Usuario</option>
+                                </select>
+                            </div>
+
+                            <!-- Buttons -->
+                            <div class="col-span-1 flex justify-end items-end space-x-2">
+                                <a href="{{ route('users.index') }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-10">
+                                    Limpiar
+                                </a>
+                                <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-10">
+                                    Filtrar
+                                </button>
+                            </div>
+                        </form>
                     </div>
 
                     @if (session('success'))
@@ -27,7 +60,7 @@
                         </div>
                     @endif
 
-                    <div class="overflow-x-auto">
+                    <div id="results-container">
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
@@ -78,11 +111,93 @@
                             </tbody>
                         </table>
                     </div>
-                    <div class="mt-4">
-                        {{ $users->links() }}
-                    </div>
+                    </div> <!-- End results-container -->
                 </div>
             </div>
         </div>
     </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('filter-form');
+            const container = document.getElementById('results-container');
+            
+            // Function to handle fetching and updating
+            function fetchResults(url) {
+                // simple opacity fade for feedback
+                container.style.opacity = '0.5';
+                
+                fetch(url, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.text())
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const newContent = doc.getElementById('results-container').innerHTML;
+                    container.innerHTML = newContent;
+                    container.style.opacity = '1';
+                    
+                    // Update URL without reload
+                    window.history.pushState({}, '', url);
+                    
+                    // Re-attach pagination listeners
+                    attachPaginationListeners();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    container.style.opacity = '1';
+                });
+            }
+            
+            // Handle Form Submit (Manual Filter)
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                submitFilter();
+            });
+
+            function submitFilter() {
+                const url = new URL(form.action);
+                const params = new URLSearchParams(new FormData(form));
+                url.search = params.toString();
+                fetchResults(url);
+            }
+
+            // Real-time Search Logic with Debounce
+            let debounceTimer;
+            
+            // Listen to inputs
+            form.querySelectorAll('input').forEach(input => {
+                input.addEventListener('input', function() {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        submitFilter();
+                    }, 500); // 500ms delay
+                });
+            });
+
+            // Listen to selects (immediate trigger)
+            form.querySelectorAll('select').forEach(select => {
+                select.addEventListener('change', function() {
+                    submitFilter();
+                });
+            });
+            
+            // Handle Pagination Clicks
+            function attachPaginationListeners() {
+                const links = container.querySelectorAll('a.page-link, .pagination a'); // Adapt selector to Laravel's pagination classes
+                links.forEach(link => {
+                     link.addEventListener('click', function(e) {
+                         e.preventDefault();
+                         fetchResults(this.href);
+                     });
+                });
+            }
+            
+            // Initial attach
+            attachPaginationListeners();
+        });
+    </script>
 </x-app-layout>

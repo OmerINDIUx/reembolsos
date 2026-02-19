@@ -13,25 +13,37 @@ class CostCenterController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
-        
-        if ($user->isAdmin() || $user->role === 'accountant') {
-            $costCenters = CostCenter::with('director')->orderBy('code')->paginate(10);
-        } elseif ($user->isDirector()) {
-            $costCenters = CostCenter::with('director')->where('director_id', $user->id)->orderBy('code')->paginate(10);
-        } else {
-            // Regular user sees only their director's cost centers? Or shouldn't handle cost centers?
-            // The request says: "usuario ligado al director solo ve los centros de costos del director ligado"
-            // This is for SELECTION, but if they access index, show only relevant ones.
-            if ($user->director_id) {
-                $costCenters = CostCenter::with('director')->where('director_id', $user->director_id)->orderBy('code')->paginate(10);
+
+        // Base query
+        $query = CostCenter::with('director')->orderBy('code');
+
+        if ($user->role === 'director' || $user->role === 'user') {
+            // Filter by director_id (for director users, it's their id. For normal users, it's their director_id)
+            $directorId = ($user->role === 'director') ? $user->id : $user->director_id;
+            
+            if ($directorId) {
+                $query->where('director_id', $directorId);
             } else {
-                $costCenters = CostCenter::where('id', 0)->paginate(10); // Empty
+                 // If a normal user has no director assigned, they see nothing or everything? 
+                 // Assuming they see nothing to be safe, or just public ones (if any).
+                 // For now, let's return empty if no director assigned finding logic.
+                 if ($user->role === 'user') $query->where('id', 0); 
             }
         }
 
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('code', 'like', "%{$search}%")
+                  ->orWhere('name', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        $costCenters = $query->paginate(10)->appends($request->all());
         return view('cost_centers.index', compact('costCenters'));
     }
 

@@ -12,10 +12,23 @@ class UserController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        // Only show this to authorized users (middleware handles this, but query scoping helps)
-        $users = User::with('director')->orderBy('name')->paginate(10);
+        $query = User::with('director')->orderBy('name');
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('role')) {
+            $query->where('role', $request->role);
+        }
+
+        $users = $query->paginate(10)->appends($request->all());
         return view('users.index', compact('users'));
     }
 
@@ -106,7 +119,7 @@ class UserController extends Controller
      */
     public function destroy(User $user)
     {
-        if ($user->id === auth()->id()) {
+        if ($user->getKey() === auth()->id()) {
             return back()->with('error', 'No puedes eliminar tu propia cuenta.');
         }
 
