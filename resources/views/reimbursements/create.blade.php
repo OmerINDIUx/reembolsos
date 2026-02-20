@@ -171,12 +171,12 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="category">Categoría</label>
-                                <input list="categories_list" name="category" id="category" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Seleccione o escriba..." :required="type !== 'viaje'" autocomplete="off">
-                                <datalist id="categories_list">
+                                <select name="category" id="category" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Seleccione o escriba..." :required="type !== 'viaje'">
+                                    <option value="">Seleccione o escriba...</option>
                                     @foreach($categories as $cat)
-                                        <option value="{{ $cat }}">
+                                        <option value="{{ $cat }}">{{ $cat }}</option>
                                     @endforeach
-                                </datalist>
+                                </select>
                                 @error('category')
                                     <p class="text-red-500 text-xs italic mt-2">{{ $message }}</p>
                                 @enderror
@@ -475,6 +475,26 @@
 
         xmlInput.addEventListener('change', parseFiles);
         pdfInput.addEventListener('change', parseFiles);
+
+        // Initialize Tom Select for Category
+        if (document.getElementById('category')) {
+            new TomSelect("#category", {
+                create: true, // Allow user to type new values
+                sortField: {
+                    field: "text",
+                    direction: "asc"
+                },
+                maxItems: 1, // Ensure only one category can be selected/typed
+                render: {
+                    option_create: function(data, escape) {
+                        return '<div class="create">Crear nueva categoría: <strong>' + escape(data.input) + '</strong>&hellip;</div>';
+                    },
+                    no_results: function(data, escape) {
+                        return '<div class="no-results">No hay resultados. Escribe para crear.</div>';
+                    }
+                }
+            });
+        }
     </script>
     @endpush
 </x-app-layout>

@@ -50,17 +50,7 @@
                             @error('role') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                         </div>
 
-                        <div class="mb-4" id="director-field">
-                            <label for="director_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Asignar Director / Jefe</label>
-                            <select name="director_id" id="director_id" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                <option value="">Seleccione un director...</option>
-                                @foreach($directors as $director)
-                                    <option value="{{ $director->id }}" {{ $user->director_id === $director->id ? 'selected' : '' }}>{{ $director->name }} ({{ $director->role }})</option>
-                                @endforeach
-                            </select>
-                            <p class="text-xs text-gray-500 mt-1">Requerido para el rol de Usuario.</p>
-                            @error('director_id') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
-                        </div>
+
 
                         <div class="flex items-center justify-end">
                             <a href="{{ route('users.index') }}" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 mr-4">Cancelar</a>
@@ -75,20 +65,5 @@
     </div>
     
     @push('scripts')
-    <script>
-        const roleSelect = document.getElementById('role');
-        const directorField = document.getElementById('director-field');
-        
-        function toggleDirector() {
-            if (roleSelect.value === 'user') {
-                directorField.style.display = 'block';
-            } else {
-                directorField.style.display = 'none';
-            }
-        }
-        
-        roleSelect.addEventListener('change', toggleDirector);
-        toggleDirector();
-    </script>
     @endpush
 </x-app-layout>

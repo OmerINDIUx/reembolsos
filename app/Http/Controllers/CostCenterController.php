@@ -20,18 +20,8 @@ class CostCenterController extends Controller
         // Base query
         $query = CostCenter::with('director')->orderBy('code');
 
-        if ($user->role === 'director' || $user->role === 'user') {
-            // Filter by director_id (for director users, it's their id. For normal users, it's their director_id)
-            $directorId = ($user->role === 'director') ? $user->id : $user->director_id;
-            
-            if ($directorId) {
-                $query->where('director_id', $directorId);
-            } else {
-                 // If a normal user has no director assigned, they see nothing or everything? 
-                 // Assuming they see nothing to be safe, or just public ones (if any).
-                 // For now, let's return empty if no director assigned finding logic.
-                 if ($user->role === 'user') $query->where('id', 0); 
-            }
+        if ($user->role === 'director') {
+            $query->where('director_id', $user->id);
         }
 
         if ($request->filled('search')) {

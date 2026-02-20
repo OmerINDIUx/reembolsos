@@ -51,7 +51,6 @@ class UserController extends Controller
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role' => ['required', 'in:admin,director,accountant,user,tesoreria'],
-            'director_id' => ['nullable', 'exists:users,id'],
         ]);
 
         User::create([
@@ -59,7 +58,6 @@ class UserController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => $request->role,
-            'director_id' => ($request->role === 'user') ? $request->director_id : null,
         ]);
 
         return redirect()->route('users.index')->with('success', 'Usuario creado exitosamente.');
@@ -92,14 +90,12 @@ class UserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             'role' => ['required', 'in:admin,director,accountant,user,tesoreria'],
-            'director_id' => ['nullable', 'exists:users,id'],
         ]);
 
         $data = [
             'name' => $request->name,
             'email' => $request->email,
             'role' => $request->role,
-            'director_id' => ($request->role === 'user') ? $request->director_id : null,
         ];
 
         if ($request->filled('password')) {
