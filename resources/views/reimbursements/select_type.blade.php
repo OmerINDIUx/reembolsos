@@ -45,16 +45,19 @@
                             </div>
                         </a>
 
-                        <!-- Viaje -->
-                        <a href="{{ route('reimbursements.create', ['type' => 'viaje']) }}" class="group block">
-                            <div class="p-6 bg-white dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl hover:border-indigo-500 hover:shadow-lg transition-all text-center h-full flex flex-col items-center justify-center group-hover:bg-indigo-50 dark:group-hover:bg-gray-600">
-                                <div class="bg-blue-100 dark:bg-blue-900 p-4 rounded-full mb-4 group-hover:scale-110 transition-transform">
-                                    <svg class="w-10 h-10 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <!-- Viaje (Disabled) -->
+                        <div class="group block cursor-not-allowed opacity-60 relative" title="Próximamente">
+                            <div class="relative p-6 bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl text-center h-full flex flex-col items-center justify-center">
+                                <span class="absolute top-[-10px] right-2 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider shadow-sm">
+                                    Próximamente
+                                </span>
+                                <div class="bg-gray-200 dark:bg-gray-700 p-4 rounded-full mb-4">
+                                    <svg class="w-10 h-10 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                 </div>
-                                <h4 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Viaje</h4>
-                                <p class="text-sm text-gray-500 dark:text-gray-300">Viáticos, hospedaje y transporte.</p>
+                                <h4 class="text-xl font-bold text-gray-400 dark:text-gray-500 mb-2">Viaje</h4>
+                                <p class="text-sm text-gray-400 dark:text-gray-500">Viáticos, hospedaje y transporte.</p>
                             </div>
-                        </a>
+                        </div>
                     </div>
 
                     <div class="mt-8 text-center">
