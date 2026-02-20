@@ -50,9 +50,14 @@ class User extends Authenticatable
         return $this->role === 'director';
     }
 
-    public function isAccountant()
+    public function isCxp()
     {
         return $this->role === 'accountant';
+    }
+
+    public function isTreasury()
+    {
+        return $this->role === 'tesoreria';
     }
 
     /**

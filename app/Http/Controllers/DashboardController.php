@@ -15,15 +15,28 @@ class DashboardController extends Controller
         $recentReimbursements = collect();
 
         // Admin, Accountant, or Director logic
-        if ($user->isAdmin() || $user->isAccountant()) {
-            // General Stats for Company
-            $stats['pending_count'] = Reimbursement::where('status', 'pendiente')->count();
+        // Admin gets full visibility
+        if ($user->isAdmin()) {
+            $stats['pending_count'] = Reimbursement::whereIn('status', ['pendiente', 'aprobado_director', 'requiere_correccion'])->count();
             $stats['approved_count'] = Reimbursement::where('status', 'aprobado')->count();
             $stats['rejected_count'] = Reimbursement::where('status', 'rechazado')->count();
-            $stats['total_amount_pending'] = Reimbursement::where('status', 'pendiente')->sum('total');
+            $stats['total_amount_pending'] = Reimbursement::whereIn('status', ['pendiente', 'aprobado_director', 'requiere_correccion'])->sum('total');
             $stats['total_amount_approved'] = Reimbursement::where('status', 'aprobado')->sum('total');
             
             $recentReimbursements = Reimbursement::with('user', 'costCenter')->latest()->take(5)->get();
+
+        } elseif ($user->isCxp()) {
+            // Cuentas por Pagar (CXP)
+            // Pending for them is 'aprobado_director'
+            $stats['pending_count'] = Reimbursement::where('status', 'aprobado_director')->count();
+            $stats['approved_count'] = Reimbursement::where('status', 'aprobado')->count();
+            $stats['total_amount_pending'] = Reimbursement::where('status', 'aprobado_director')->sum('total');
+            $stats['total_amount_approved'] = Reimbursement::where('status', 'aprobado')->sum('total');
+
+            // Only show items approved by director or finally approved
+            $recentReimbursements = Reimbursement::whereIn('status', ['aprobado_director', 'aprobado'])
+                                    ->with('user', 'costCenter')
+                                    ->latest()->take(5)->get();
 
         } elseif ($user->isDirector()) {
             // Director sees approvals for their cost centers AND their own requests
@@ -39,6 +52,7 @@ class DashboardController extends Controller
             // Their Own Requests
             $myRequestsQuery = Reimbursement::where('user_id', $user->id);
             $stats['my_pending_count'] = (clone $myRequestsQuery)->where('status', 'pendiente')->count();
+            $stats['my_correction_count'] = (clone $myRequestsQuery)->where('status', 'requiere_correccion')->count();
             $stats['my_approved_count'] = (clone $myRequestsQuery)->where('status', 'aprobado')->count();
             $stats['my_total_reimbursed'] = (clone $myRequestsQuery)->where('status', 'aprobado')->sum('total');
 
@@ -57,7 +71,8 @@ class DashboardController extends Controller
             $stats['pending_count'] = (clone $myRequestsQuery)->where('status', 'pendiente')->count();
             $stats['approved_count'] = (clone $myRequestsQuery)->where('status', 'aprobado')->count();
             $stats['rejected_count'] = (clone $myRequestsQuery)->where('status', 'rechazado')->count();
-            $stats['total_pending_amount'] = (clone $myRequestsQuery)->where('status', 'pendiente')->sum('total');
+            $stats['correction_count'] = (clone $myRequestsQuery)->where('status', 'requiere_correccion')->count();
+            $stats['total_pending_amount'] = (clone $myRequestsQuery)->whereIn('status', ['pendiente', 'requiere_correccion'])->sum('total');
             $stats['total_approved_amount'] = (clone $myRequestsQuery)->where('status', 'aprobado')->sum('total');
 
             $recentReimbursements = $myRequestsQuery->with('costCenter')->latest()->take(5)->get();

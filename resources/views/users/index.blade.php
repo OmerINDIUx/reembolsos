@@ -32,7 +32,8 @@
                                     <option value="">Todos</option>
                                     <option value="admin" {{ request('role') == 'admin' ? 'selected' : '' }}>Admin</option>
                                     <option value="director" {{ request('role') == 'director' ? 'selected' : '' }}>Director</option>
-                                    <option value="accountant" {{ request('role') == 'accountant' ? 'selected' : '' }}>Contador</option>
+                                    <option value="accountant" {{ request('role') == 'accountant' ? 'selected' : '' }}>Cuentas por Pagar</option>
+                                    <option value="tesoreria" {{ request('role') == 'tesoreria' ? 'selected' : '' }}>Tesorería</option>
                                     <option value="user" {{ request('role') == 'user' ? 'selected' : '' }}>Usuario</option>
                                 </select>
                             </div>
@@ -86,10 +87,11 @@
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                                             {{ $user->role === 'admin' ? 'bg-purple-100 text-purple-800' : '' }}
                                             {{ $user->role === 'director' ? 'bg-blue-100 text-blue-800' : '' }}
-                                            {{ $user->role === 'accountant' ? 'bg-green-100 text-green-800' : '' }}
-                                            {{ $user->role === 'user' ? 'bg-gray-100 text-gray-800' : '' }}
-                                        ">
-                                            {{ ucfirst($user->role) }}
+                                            {{ $user->role === 'accountant' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : '' }}
+                                            {{ $user->role === 'tesoreria' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300' : '' }}
+                                            {{ $user->role === 'user' ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' : '' }}"
+                                        >
+                                            {{ $user->role === 'accountant' ? 'Cuentas por Pagar' : ($user->role === 'tesoreria' ? 'Tesorería' : ucfirst($user->role)) }}
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">

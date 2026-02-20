@@ -44,6 +44,18 @@
                         </div>
                     </div>
 
+                    <!-- My Corrections (Director) -->
+                    @if(isset($stats['my_correction_count']) && $stats['my_correction_count'] > 0)
+                    <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg border-l-4 border-orange-500">
+                        <div class="p-6">
+                            <div class="text-gray-500 dark:text-gray-400 text-sm font-medium uppercase tracking-wider">Requieren Mi Corrección</div>
+                            <div class="mt-2 flex items-baseline">
+                                <span class="text-3xl font-bold text-gray-900 dark:text-gray-100">{{ $stats['my_correction_count'] }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+
                     <!-- My Approved -->
                     <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg border-l-4 border-green-500">
                         <div class="p-6">
@@ -72,6 +84,18 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Corrections (User / Admin) -->
+                    @if(isset($stats['correction_count']) && $stats['correction_count'] > 0)
+                    <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg border-l-4 border-orange-500">
+                        <div class="p-6">
+                            <div class="text-gray-500 dark:text-gray-400 text-sm font-medium uppercase tracking-wider">Por Corregir</div>
+                            <div class="mt-2 flex items-baseline">
+                                <span class="text-3xl font-bold text-gray-900 dark:text-gray-100">{{ $stats['correction_count'] }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    @endif
 
                     <!-- Approved -->
                     <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg border-l-4 border-green-500">
@@ -151,8 +175,9 @@
                                                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                                                     {{ $reimbursement->status === 'aprobado' ? 'bg-green-100 text-green-800' : '' }}
                                                     {{ $reimbursement->status === 'rechazado' ? 'bg-red-100 text-red-800' : '' }}
-                                                    {{ $reimbursement->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800' : '' }}">
-                                                    {{ ucfirst($reimbursement->status) }}
+                                                    {{ $reimbursement->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800' : '' }}
+                                                    {{ !in_array($reimbursement->status, ['aprobado', 'rechazado', 'requiere_correccion']) ? 'bg-yellow-100 text-yellow-800' : '' }}">
+                                                    {{ ucfirst(str_replace('_', ' ', $reimbursement->status)) }}
                                                 </span>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

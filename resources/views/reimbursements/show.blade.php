@@ -6,7 +6,81 @@
     </x-slot>
 
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+            <!-- User Correction Panel -->
+            @if(Auth::user()->id === $reimbursement->user_id && $reimbursement->status === 'requiere_correccion')
+                <div class="bg-yellow-50 dark:bg-yellow-900/20 shadow sm:rounded-lg border-2 border-yellow-300 dark:border-yellow-600">
+                    <div class="p-6">
+                        <h4 class="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">Requiere Corrección</h4>
+                        <p class="text-sm text-yellow-700 dark:text-yellow-400 mb-4">
+                            Este reembolso requiere que corrijas los archivos o proporciones más información.
+                        </p>
+                        <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST" enctype="multipart/form-data" class="space-y-4">
+                            @csrf
+                            @method('PUT')
+                            <input type="hidden" name="is_resubmission" value="1">
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Actualizar archivo PDF (Opcional)</label>
+                                    <input type="file" id="pdf_file_input" name="pdf_file" accept=".pdf" class="mt-1 block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900 dark:file:text-indigo-300">
+                                    <div id="pdf-validation-result" class="mt-2 text-sm hidden"></div>
+                                </div>
+
+                                @if($reimbursement->type === 'comida')
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="attendees_count">Número de Asistentes</label>
+                                        <input type="number" name="attendees_count" id="attendees_count" value="{{ old('attendees_count', $reimbursement->attendees_count) }}" min="1" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="location">Lugar</label>
+                                        <input type="text" name="location" id="location" value="{{ old('location', $reimbursement->location) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="attendees_names">Nombre de los Asistentes</label>
+                                        <textarea name="attendees_names" id="attendees_names" rows="2" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">{{ old('attendees_names', $reimbursement->attendees_names) }}</textarea>
+                                    </div>
+                                @endif
+
+                                @if($reimbursement->type === 'viaje')
+                                    <div class="md:col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="title">Título del Viaje / Gasto</label>
+                                        <input type="text" name="title" id="title" value="{{ old('title', $reimbursement->title) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="trip_destination">Lugar de Destino</label>
+                                        <input type="text" name="trip_destination" id="trip_destination" value="{{ old('trip_destination', $reimbursement->trip_destination) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="trip_nights">Noches</label>
+                                        <input type="number" name="trip_nights" id="trip_nights" value="{{ old('trip_nights', $reimbursement->trip_nights) }}" min="0" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="trip_start_date">Fecha de Inicio</label>
+                                        <input type="date" name="trip_start_date" id="trip_start_date" value="{{ old('trip_start_date', $reimbursement->trip_start_date) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="trip_end_date">Fecha Final</label>
+                                        <input type="date" name="trip_end_date" id="trip_end_date" value="{{ old('trip_end_date', $reimbursement->trip_end_date) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                @endif
+
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="observaciones_update">Justificación / Información Adicional</label>
+                                    <textarea name="user_correction_comment" id="observaciones_update" rows="2" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Añade nueva información o describe las correcciones..." required></textarea>
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end mt-6">
+                                <button type="submit" class="inline-flex items-center px-6 py-3 bg-indigo-600 border border-transparent rounded-md font-bold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition ease-in-out duration-150 shadow-md">
+                                    Reenviar para Aprobación
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            @endif
+
             <div class="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
                 <div class="px-4 py-5 sm:px-6">
                     <div class="flex justify-between items-center">
@@ -65,11 +139,51 @@
                         <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                             <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Status</dt>
                             <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
-                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $reimbursement->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : ($reimbursement->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300') }}">
-                                    {{ ucfirst($reimbursement->status) }}
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                    {{ $reimbursement->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
+                                    {{ $reimbursement->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
+                                    {{ $reimbursement->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
+                                    {{ $reimbursement->status === 'aprobado_cxp' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
+                                    {{ !in_array($reimbursement->status, ['aprobado', 'rechazado', 'requiere_correccion', 'aprobado_cxp']) ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
+                                ">
+                                    {{ ucfirst(str_replace('_', ' ', $reimbursement->status)) }}
                                 </span>
                             </dd>
                         </div>
+                        <!-- Approval Details -->
+                        <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Aprobaciones</dt>
+                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
+                                <ul class="list-disc list-inside">
+                                    @if($reimbursement->approved_by_director_id)
+                                        <li class="text-green-600">
+                                            Director: {{ $reimbursement->directorApprover->name ?? 'Director' }} 
+                                            <span class="text-gray-500 text-xs text-nowrap">({{ $reimbursement->approved_by_director_at ? $reimbursement->approved_by_director_at->format('d/m/Y H:i') : '' }})</span>
+                                        </li>
+                                    @else
+                                        <li class="text-gray-500">Director: Pendiente</li>
+                                    @endif
+
+                                    @if($reimbursement->approved_by_cxp_id)
+                                        <li class="text-green-600 mt-1">
+                                            Cuentas por Pagar: {{ $reimbursement->cxpApprover->name ?? 'CXP' }}
+                                            <span class="text-gray-500 text-xs text-nowrap">({{ $reimbursement->approved_by_cxp_at ? $reimbursement->approved_by_cxp_at->format('d/m/Y H:i') : '' }})</span>
+                                        </li>
+                                    @else
+                                        <li class="text-gray-500">Cuentas por Pagar: Pendiente</li>
+                                    @endif
+                                    @if($reimbursement->approved_by_treasury_id)
+                                        <li class="text-green-600 mt-1">
+                                            Tesorería: {{ $reimbursement->treasuryApprover->name ?? 'Tesorería' }}
+                                            <span class="text-gray-500 text-xs text-nowrap">({{ $reimbursement->approved_by_treasury_at ? $reimbursement->approved_by_treasury_at->format('d/m/Y H:i') : '' }})</span>
+                                        </li>
+                                    @else
+                                        <li class="text-gray-500">Tesorería: Pendiente</li>
+                                    @endif
+                                </ul>
+                            </dd>
+                        </div>
+
                         <div class="bg-gray-50 dark:bg-gray-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                             <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Observaciones</dt>
                             <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2 whitespace-pre-wrap">{{ $reimbursement->observaciones ?? 'Ninguna' }}</dd>
@@ -269,30 +383,83 @@
                     </a>
                 </div>
 
-                <!-- Approval Actions for Admin/Director/Accountant -->
-                @if(Auth::user()->isAdmin() || Auth::user()->isAccountant() || (Auth::user()->isDirector() && Auth::user()->id === $reimbursement->costCenter->director_id))
-                    @if($reimbursement->status === 'pendiente')
+                <!-- Approval Actions -->
+                @php
+                    $user = Auth::user();
+                    $canApproveDirector = ($user->isAdmin() || ($user->isDirector() && $user->id === $reimbursement->costCenter->director_id)) && $reimbursement->status === 'pendiente';
+                    $canApproveCXP = ($user->isAdmin() || $user->isCxp()) && $reimbursement->status === 'aprobado_director';
+                    $canApproveTreasury = ($user->isAdmin() || $user->isTreasury()) && $reimbursement->status === 'aprobado_cxp';
+                @endphp
+
+                @if($canApproveDirector || $canApproveCXP || $canApproveTreasury)
                     <div class="bg-gray-100 dark:bg-gray-900 p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-4">
-                         <!-- Approve Form -->
                         <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST">
                             @csrf
                             @method('PUT')
                             <input type="hidden" name="status" value="aprobado">
                             <button type="submit" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition ease-in-out duration-150">
-                                Aprobar
+                                {{ $canApproveTreasury ? 'Aprobar Final/Pago' : ($canApproveCXP ? 'Revisado y Listo para Pago' : 'Aprobar') }}
                             </button>
                         </form>
 
-                        <!-- Reject Button (Triggers Modal) -->
                         <button type="button" x-data @click="$dispatch('open-rejection-modal')" class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition ease-in-out duration-150">
                             Rechazar
                         </button>
                     </div>
-                    @endif
                 @endif
             </div>
         </div>
     </div>
+
+    @push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const pdfInput = document.getElementById('pdf_file_input');
+            const validationResult = document.getElementById('pdf-validation-result');
+
+            if (pdfInput) {
+                pdfInput.addEventListener('change', function() {
+                    if (this.files.length === 0) {
+                        validationResult.classList.add('hidden');
+                        return;
+                    }
+
+                    validationResult.classList.remove('hidden');
+                    validationResult.innerHTML = '<span class="text-gray-500">Validando archivo PDF en tiempo real...</span>';
+
+                    const formData = new FormData();
+                    formData.append('pdf_file', this.files[0]);
+                    formData.append('_token', '{{ csrf_token() }}');
+
+                    fetch('{{ route("reimbursements.validate_pdf_correction", $reimbursement->id) }}', {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            validationResult.innerHTML = `<span class="text-red-500 font-medium">❌ Error: ${data.error}</span>`;
+                            return;
+                        }
+
+                        if (data.uuid_match) {
+                            validationResult.innerHTML = `<span class="text-green-600 font-medium">✅ Excelente: ${data.message} Puedes continuar.</span>`;
+                        } else {
+                            validationResult.innerHTML = `<span class="text-red-600 font-medium">❌ Cuidado: ${data.message}</span>`;
+                        }
+                    })
+                    .catch(error => {
+                        validationResult.innerHTML = `<span class="text-red-500 font-medium">❌ Error al validar el archivo.</span>`;
+                        console.error('Error:', error);
+                    });
+                });
+            }
+        });
+    </script>
+    @endpush
 </x-app-layout>
 
 <!-- Rejection Modal -->
@@ -321,7 +488,6 @@
             <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST">
                 @csrf
                 @method('PUT')
-                <input type="hidden" name="status" value="rechazado">
                 
                 <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <div class="sm:flex sm:items-start">
@@ -346,6 +512,22 @@
                                         <option :value="reason" x-text="reason"></option>
                                     </template>
                                 </select>
+                                
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-4">Tipo de Rechazo</label>
+                                <div class="mt-2 space-y-2">
+                                    <div class="flex items-center">
+                                        <input id="rechazo_correccion" name="status" type="radio" value="requiere_correccion" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:bg-gray-700 dark:border-gray-600" required>
+                                        <label for="rechazo_correccion" class="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Requiere Corrección (El usuario podrá actualizar archivos y reenviar)
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input id="rechazo_definitivo" name="status" type="radio" value="rechazado" class="focus:ring-red-500 h-4 w-4 text-red-600 border-gray-300 dark:bg-gray-700 dark:border-gray-600">
+                                        <label for="rechazo_definitivo" class="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Rechazo Definitivo (No se podrá modificar)
+                                        </label>
+                                    </div>
+                                </div>
                                 
                                 <label for="rejection_comment" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-4">Comentario Adicional (Opcional)</label>
                                 <textarea name="rejection_comment" id="rejection_comment" rows="3" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 mt-1 block w-full sm:text-sm border-gray-300 dark:bg-gray-700 dark:text-gray-300 rounded-md"></textarea>

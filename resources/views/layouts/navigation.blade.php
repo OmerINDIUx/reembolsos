@@ -32,7 +32,53 @@
             </div>
 
             <!-- Settings Dropdown -->
-            <div class="hidden sm:flex sm:items-center sm:ms-6">
+            <div class="hidden sm:flex sm:items-center sm:ms-6 space-x-4">
+                
+                <!-- Notifications Dropdown -->
+                <x-dropdown align="right" width="w-96 border border-gray-200 dark:border-gray-700">
+                    <x-slot name="trigger">
+                        <button class="relative inline-flex items-center p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 focus:outline-none transition ease-in-out duration-150">
+                            <!-- Bell Icon -->
+                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                            </svg>
+                            <!-- Unread Badge -->
+                            @if(Auth::user()->unreadNotifications->count() > 0)
+                                <span class="absolute top-1 right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-600 rounded-full">
+                                    {{ Auth::user()->unreadNotifications->count() }}
+                                </span>
+                            @endif
+                        </button>
+                    </x-slot>
+
+                    <x-slot name="content">
+                        <div class="block px-4 py-2 text-xs text-gray-400 font-semibold border-b border-gray-100 dark:border-gray-700">
+                            Notificaciones
+                        </div>
+                        
+                        <div class="max-h-64 overflow-y-auto">
+                            @forelse(Auth::user()->unreadNotifications->take(5) as $notification)
+                                <a href="{{ route('notifications.mark_read', $notification->id) }}" class="block px-4 py-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
+                                    <p class="text-sm text-gray-800 dark:text-gray-200">
+                                        {{ $notification->data['message'] ?? 'Nueva notificación' }}
+                                    </p>
+                                    <span class="text-xs text-indigo-600 dark:text-indigo-400">{{ $notification->created_at->diffForHumans() }}</span>
+                                </a>
+                            @empty
+                                <div class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                                    No tienes notificaciones nuevas.
+                                </div>
+                            @endforelse
+                        </div>
+
+                        <div class="border-t border-gray-100 dark:border-gray-700 block text-center">
+                            <a href="{{ route('notifications.index') }}" class="block px-4 py-2 text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-semibold transition">
+                                Ver Todas
+                            </a>
+                        </div>
+                    </x-slot>
+                </x-dropdown>
+
                 <x-dropdown align="right" width="48">
                     <x-slot name="trigger">
                         <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none transition ease-in-out duration-150">

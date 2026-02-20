@@ -50,7 +50,7 @@ class UserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'role' => ['required', 'in:admin,director,accountant,user'],
+            'role' => ['required', 'in:admin,director,accountant,user,tesoreria'],
             'director_id' => ['nullable', 'exists:users,id'],
         ]);
 
@@ -91,7 +91,7 @@ class UserController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
-            'role' => ['required', 'in:admin,director,accountant,user'],
+            'role' => ['required', 'in:admin,director,accountant,user,tesoreria'],
             'director_id' => ['nullable', 'exists:users,id'],
         ]);
 

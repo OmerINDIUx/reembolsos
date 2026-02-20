@@ -42,6 +42,12 @@ class Reimbursement extends Model
         'company_confirmed',
         'validation_data',
         'user_id',
+        'approved_by_director_id',
+        'approved_by_director_at',
+        'approved_by_cxp_id',
+        'approved_by_cxp_at',
+        'approved_by_treasury_id',
+        'approved_by_treasury_at',
     ];
 
     protected $casts = [
@@ -49,7 +55,25 @@ class Reimbursement extends Model
         'trip_start_date' => 'date',
         'trip_end_date' => 'date',
         'validation_data' => 'array',
+        'approved_by_director_at' => 'datetime',
+        'approved_by_cxp_at' => 'datetime',
+        'approved_by_treasury_at' => 'datetime',
     ];
+
+    public function directorApprover()
+    {
+        return $this->belongsTo(User::class, 'approved_by_director_id');
+    }
+
+    public function cxpApprover()
+    {
+        return $this->belongsTo(User::class, 'approved_by_cxp_id');
+    }
+
+    public function treasuryApprover()
+    {
+        return $this->belongsTo(User::class, 'approved_by_treasury_id');
+    }
 
     public function user()
     {

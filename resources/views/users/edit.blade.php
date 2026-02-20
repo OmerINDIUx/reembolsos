@@ -43,7 +43,8 @@
                             <select name="role" id="role" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                 <option value="user" {{ $user->role === 'user' ? 'selected' : '' }}>Usuario</option>
                                 <option value="director" {{ $user->role === 'director' ? 'selected' : '' }}>Director</option>
-                                <option value="accountant" {{ $user->role === 'accountant' ? 'selected' : '' }}>Contador</option>
+                                <option value="accountant" {{ $user->role === 'accountant' ? 'selected' : '' }}>Cuentas por Pagar</option>
+                                <option value="tesoreria" {{ $user->role === 'tesoreria' ? 'selected' : '' }}>Tesorería</option>
                                 <option value="admin" {{ $user->role === 'admin' ? 'selected' : '' }}>Administrador</option>
                             </select>
                             @error('role') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror

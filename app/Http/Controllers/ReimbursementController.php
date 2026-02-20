@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Reimbursement;
 use App\Models\CostCenter;
+use App\Models\User;
+use App\Notifications\ReimbursementNotification;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Storage;
@@ -24,8 +26,15 @@ class ReimbursementController extends Controller
         $query = Reimbursement::orderBy('created_at', 'desc');
 
         // Permissions Logic
-        if ($user->isAdmin() || $user->isAccountant()) {
-            // Admins and Accountants see all
+        // Permissions Logic
+        if ($user->isAdmin()) {
+            // Admins see all
+        } elseif ($user->isTreasury()) {
+            // Tesorería ve solo lo aprobado por CXP o final (historial)
+            $query->whereIn('status', ['aprobado_cxp', 'aprobado']);
+        } elseif ($user->isCxp()) {
+            // Cuentas por pagar (CXP) ven solo aprobado_director o lo que ellos aprobaron (aprobado_cxp) o final
+            $query->whereIn('status', ['aprobado_director', 'aprobado_cxp', 'aprobado']);
         } elseif ($user->isDirector()) {
             // Directors see:
             // 1. Their own reimbursements
@@ -49,6 +58,22 @@ class ReimbursementController extends Controller
                   ->orWhere('nombre_emisor', 'like', "%{$search}%")
                   ->orWhere('title', 'like', "%{$search}%");
             });
+        }
+
+        $tab = $request->input('tab', 'active');
+        
+        $historyStatuses = ['aprobado', 'rechazado'];
+        if ($user->isDirector() || $user->isCxp()) {
+            $historyStatuses[] = 'aprobado_cxp';
+        }
+        if ($user->isDirector()) {
+            $historyStatuses[] = 'aprobado_director'; // Also hide what director already approved from their active list
+        }
+
+        if ($tab === 'history') {
+            $query->whereIn('status', $historyStatuses);
+        } else {
+            $query->whereNotIn('status', $historyStatuses);
         }
 
         if ($request->filled('status')) {
@@ -100,6 +125,8 @@ class ReimbursementController extends Controller
      */
     public function parseCfdi(Request $request)
     {
+        set_time_limit(120); // Increase time limit for slow PDF parsing
+
         $request->validate([
             'xml_file' => 'required|file|mimes:xml',
             'pdf_file' => 'nullable|file|mimes:pdf',
@@ -113,8 +140,17 @@ class ReimbursementController extends Controller
                 return response()->json(['error' => 'No se encontró un UUID válido en el XML provided.'], 422);
             }
 
-            if (Reimbursement::where('uuid', $data['uuid'])->exists()) {
-                 return response()->json(['error' => 'Este CFDI (UUID: ' . $data['uuid'] . ') ya ha sido registrado previamente.'], 422);
+            $existingReimbursement = Reimbursement::where('uuid', $data['uuid'])->first();
+            if ($existingReimbursement) {
+                $statusMsg = '';
+                if ($existingReimbursement->status === 'rechazado') {
+                    $statusMsg = ' (Folio: ' . $existingReimbursement->folio . ') fue RECHAZADO definitivamente.';
+                } elseif ($existingReimbursement->status === 'requiere_correccion') {
+                    $statusMsg = ' (Folio: ' . $existingReimbursement->folio . ') REQUIERE CORRECCIÓN.';
+                } else {
+                    $statusMsg = ' (Folio: ' . $existingReimbursement->folio . ') se encuentra actualmente registrado con estatus: ' . strtoupper($existingReimbursement->status) . '.';
+                }
+                return response()->json(['error' => 'Atención: Este CFDI (UUID: ' . $data['uuid'] . ')' . $statusMsg], 422);
             }
 
             // PDF Validation
@@ -280,6 +316,15 @@ class ReimbursementController extends Controller
         $reimbursement->folio = $prefix . '-' . str_pad($reimbursement->id, 6, '0', STR_PAD_LEFT);
         $reimbursement->save();
 
+        // Notify Director
+        if ($reimbursement->costCenter && $reimbursement->costCenter->director) {
+            $reimbursement->costCenter->director->notify(new ReimbursementNotification(
+                $reimbursement, 
+                "Nueva solicitud ({$reimbursement->folio}) pendiente de tu aprobación.", 
+                "info"
+            ));
+        }
+
         // Handle International Trip Files
         if ($request->type === 'viaje' && $request->trip_type === 'internacional' && $request->hasFile('extra_files')) {
             $folderName = Str::slug($request->title . '-' . $reimbursement->id);
@@ -323,45 +368,240 @@ class ReimbursementController extends Controller
      */
     public function update(Request $request, Reimbursement $reimbursement)
     {
+        set_time_limit(120); // Increase time limit for slow PDF parsing
+
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         // Authorization Check
         $canApprove = $user->isAdmin() || 
-                      $user->isAccountant() || 
+                      $user->isTreasury() || 
+                      $user->isCxp() || 
                       ($user->isDirector() && $reimbursement->costCenter->director_id === $user->id);
 
-        if (!$canApprove) {
-            abort(403, 'No tienes permiso para aprobar o rechazar este reembolso.');
+        // Owner can update if it requires correction
+        $isOwnerCorrecting = $user->id === $reimbursement->user_id && $reimbursement->status === 'requiere_correccion';
+
+        if (!$canApprove && !$isOwnerCorrecting) {
+            abort(403, 'No tienes permiso para modificar este reembolso.');
         }
 
-        $request->validate([
-            'status' => 'required|in:pendiente,aprobado,rechazado',
-            'rejection_reason' => 'nullable|string|required_if:status,rechazado',
-            'rejection_comment' => 'nullable|string',
-        ]);
+        if ($isOwnerCorrecting && $request->has('is_resubmission')) {
+            $request->validate([
+                'pdf_file' => 'nullable|file|mimes:pdf',
+                'user_correction_comment' => 'required|string',
+                'attendees_count' => 'nullable|integer',
+                'location' => 'nullable|string',
+                'attendees_names' => 'nullable|string',
+                'title' => 'nullable|string',
+                'trip_destination' => 'nullable|string',
+                'trip_nights' => 'nullable|integer',
+                'trip_start_date' => 'nullable|date',
+                'trip_end_date' => 'nullable|date',
+            ]);
+            
+            $data = array_filter($request->only([
+                'attendees_count', 'location', 'attendees_names',
+                'title', 'trip_destination', 'trip_nights', 'trip_start_date', 'trip_end_date'
+            ]), function($value) { return !is_null($value); });
 
-        $data = ['status' => $request->status];
+            if ($request->hasFile('pdf_file')) {
+                if ($reimbursement->pdf_path) Storage::delete($reimbursement->pdf_path);
+                $data['pdf_path'] = $request->file('pdf_file')->store('pdfs');
+                
+                // Re-validate PDF against XML Data
+                if (!empty($reimbursement->uuid)) {
+                    try {
+                        $parser = new \Smalot\PdfParser\Parser();
+                        $pdf = $parser->parseFile($request->file('pdf_file')->getRealPath());
+                        $text = $pdf->getText();
+                        $cleanText = str_replace([' ', "\n", "\r", "\t"], '', $text);
+                        
+                        // UUID Check
+                        $uuidFound = stripos($text, (string)$reimbursement->uuid) !== false || stripos($cleanText, (string)$reimbursement->uuid) !== false;
+                        
+                        // Total Check
+                        $total = $reimbursement->total;
+                        $totalFormatted = number_format((float)$total, 2);
+                        $totalRaw = $total;
+                        $totalFound = str_contains($text, (string)$totalFormatted) || str_contains($text, (string)$totalRaw) || str_contains($cleanText, (string)$totalFormatted) || str_contains($cleanText, (string)$totalRaw);
 
-        if ($request->status === 'rechazado') {
-             // Append reason to observations or a separate field?
-             // Since we don't have a 'rejection_reason' column yet, let's append it to observations for now,
-             // or just save it there.
-             $currentObs = $reimbursement->observaciones;
-             $newObs = "RECHAZADO: " . $request->rejection_reason;
-             if ($request->rejection_comment) {
-                 $newObs .= " - " . $request->rejection_comment;
-             }
-             
-             if ($currentObs) {
-                 $data['observaciones'] = $currentObs . "\n\n" . $newObs;
-             } else {
-                 $data['observaciones'] = $newObs;
-             }
+                        $validationData = [
+                            'uuid_match' => $uuidFound,
+                            'total_match' => $totalFound,
+                            'message' => $uuidFound ? 'UUID encontrado en PDF (Corrección).' : 'Advertencia: UUID NO encontrado en PDF (Corrección).',
+                        ];
+                        
+                        $data['validation_data'] = $validationData;
+                    } catch (\Exception $e) {
+                        $validationData = is_array($reimbursement->validation_data) ? $reimbursement->validation_data : [];
+                        $validationData['error'] = 'No se pudo leer el PDF corregido: ' . $e->getMessage();
+                        $data['validation_data'] = $validationData;
+                    }
+                }
+            }
+            
+            // Append correction note
+            $currentObs = $reimbursement->observaciones;
+            $newObs = "CORREGIDO por " . $user->name . " el " . now()->format('d/m/Y H:i') . ": " . $request->user_correction_comment;
+            $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
+
+            // Route back appropriately
+            if ($reimbursement->approved_by_cxp_id !== null) {
+                // Was rejected by Treasury
+                $data['status'] = 'aprobado_cxp';
+            } elseif ($reimbursement->approved_by_director_id !== null) {
+                // Was rejected by CXP
+                $data['status'] = 'aprobado_director';
+            } else {
+                // Was rejected by Director
+                $data['status'] = 'pendiente';
+            }
+        } else {
+            $request->validate([
+                'status' => 'required|in:pendiente,aprobado,rechazado,requiere_correccion',
+                'rejection_reason' => 'nullable|string|required_if:status,rechazado|required_if:status,requiere_correccion',
+                'rejection_comment' => 'nullable|string',
+            ]);
+
+            $data = [];
+
+            if ($request->status === 'rechazado' || $request->status === 'requiere_correccion') {
+                 // Append rejection/correction reason
+                 $currentObs = $reimbursement->observaciones;
+                 $prefix = ($request->status === 'requiere_correccion') ? "REQUIERE CORRECCIÓN" : "RECHAZADO";
+                 $newObs = $prefix . " por " . $user->name . ": " . $request->rejection_reason;
+                 if ($request->rejection_comment) {
+                     $newObs .= " - " . $request->rejection_comment;
+                 }
+                 $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
+                 $data['status'] = $request->status;
+                 
+            } elseif ($request->status === 'aprobado') {
+                // Logic: Director -> aprobado_director -> CXP -> aprobado_cxp -> Tesoreria -> aprobado (Final)
+                if ($user->isDirector() && $reimbursement->costCenter->director_id === $user->id) {
+                    $data['status'] = 'aprobado_director';
+                    $data['approved_by_director_id'] = $user->id;
+                    $data['approved_by_director_at'] = now();
+                }
+
+                // CXP 
+                if ($user->isCxp()) {
+                    $data['status'] = 'aprobado_cxp';
+                    $data['approved_by_cxp_id'] = $user->id;
+                    $data['approved_by_cxp_at'] = now();
+                }
+
+                // Treasury or Admin can verify/finalize. 
+                if ($user->isTreasury() || $user->isAdmin()) {
+                    $data['status'] = 'aprobado';
+                    $data['approved_by_treasury_id'] = $user->id;
+                    $data['approved_by_treasury_at'] = now();
+                }
+            }
         }
 
         $reimbursement->update($data);
 
-        return back()->with('success', 'Estatus actualizado.');
+        // Notify based on status change
+        if (isset($data['status'])) {
+            $owner = $reimbursement->user;
+            
+            if ($data['status'] === 'aprobado_director') {
+                if ($isOwnerCorrecting) {
+                    $cxpUsers = User::where('role', 'accountant')->get();
+                    foreach($cxpUsers as $cxp) {
+                        $cxp->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio} corregido y reenviado a CXP.", "info"));
+                    }
+                } else {
+                    // Notify CXP
+                    $cxpUsers = User::where('role', 'accountant')->get();
+                    foreach($cxpUsers as $cxp) {
+                        $cxp->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio} aprobado por Director, pendiente de CXP.", "warning"));
+                    }
+                    // Notify Owner
+                    if ($owner) {
+                        $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido aprobado por el Director.", "info"));
+                    }
+                }
+            } elseif ($data['status'] === 'aprobado_cxp') {
+                if ($isOwnerCorrecting) {
+                    // Resubmitted directly to Treasury
+                    $treasuryUsers = User::where('role', 'tesoreria')->get();
+                    foreach($treasuryUsers as $treasury) {
+                        $treasury->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio} corregido y reenviado a Tesorería.", "info"));
+                    }
+                } else {
+                    // Notify Treasury
+                    $treasuryUsers = User::where('role', 'tesoreria')->get();
+                    foreach($treasuryUsers as $treasury) {
+                        $treasury->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio} revisado por CXP, pendiente de pago.", "warning"));
+                    }
+                    // Notify Owner
+                    if ($owner) {
+                        $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido revisado por CXP.", "info"));
+                    }
+                }
+            } elseif ($data['status'] === 'aprobado') {
+                if ($owner) {
+                    $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido aprobado finalmente y está listo para pago.", "success"));
+                }
+            } elseif ($data['status'] === 'rechazado') {
+                if ($owner) {
+                    $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido rechazado definitivamente.", "danger"));
+                }
+            } elseif ($data['status'] === 'requiere_correccion') {
+                if ($owner) {
+                    $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} requiere corrección.", "warning"));
+                }
+            } elseif ($data['status'] === 'pendiente' && $isOwnerCorrecting) {
+                // Resubmitted to Director
+                if ($reimbursement->costCenter && $reimbursement->costCenter->director) {
+                    $reimbursement->costCenter->director->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio} corregido y reenviado.", "info"));
+                }
+            }
+        }
+
+        return back()->with('success', 'Actualización guardada con éxito.');
+    }
+
+    public function validatePdfCorrection(Request $request, Reimbursement $reimbursement)
+    {
+        set_time_limit(120); // Increase time limit for slow PDF parsing
+
+        $request->validate([
+            'pdf_file' => 'required|file|mimes:pdf',
+        ]);
+
+        if (empty($reimbursement->uuid)) {
+            return response()->json(['error' => 'Este reembolso original no contiene un UUID XML.'], 422);
+        }
+
+        try {
+            $parser = new \Smalot\PdfParser\Parser();
+            $pdf = $parser->parseFile($request->file('pdf_file')->getRealPath());
+            $text = $pdf->getText();
+            $cleanText = str_replace([' ', "\n", "\r", "\t"], '', $text);
+            
+            // UUID Check
+            $uuidFound = stripos($text, (string)$reimbursement->uuid) !== false || stripos($cleanText, (string)$reimbursement->uuid) !== false;
+            
+            // Total Check
+            $total = $reimbursement->total;
+            $totalFormatted = number_format((float)$total, 2);
+            $totalRaw = $total;
+            $totalFound = str_contains($text, (string)$totalFormatted) || str_contains($text, (string)$totalRaw) || str_contains($cleanText, (string)$totalFormatted) || str_contains($cleanText, (string)$totalRaw);
+
+            $validationData = [
+                'uuid_match' => $uuidFound,
+                'total_match' => $totalFound,
+                'message' => $uuidFound ? 'UUID encontrado en PDF.' : 'Advertencia: UUID NO encontrado en PDF.',
+            ];
+
+            return response()->json($validationData);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'No se pudo leer el PDF: ' . $e->getMessage()], 422);
+        }
     }
 
     /**
