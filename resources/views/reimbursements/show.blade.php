@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('Detalle del Reembolso') }}
+            {{ __('Detalle de la Solicitud') }}
         </h2>
     </x-slot>
 
@@ -13,7 +13,7 @@
                     <div class="p-6">
                         <h4 class="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">Requiere Corrección</h4>
                         <p class="text-sm text-yellow-700 dark:text-yellow-400 mb-4">
-                            Este reembolso requiere que corrijas los archivos o proporciones más información.
+                            Esta solicitud requiere que corrijas los archivos o proporciones más información.
                         </p>
                         <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST" enctype="multipart/form-data" class="space-y-4">
                             @csrf
@@ -137,7 +137,7 @@
                             <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2 font-bold text-lg">${{ number_format($reimbursement->total, 2) }} {{ $reimbursement->moneda }}</dd>
                         </div>
                         <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Status</dt>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Estatus</dt>
                             <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
                                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                                     {{ $reimbursement->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
@@ -448,18 +448,47 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.error) {
-                            validationResult.innerHTML = `<span class="text-red-500 font-medium">❌ Error: ${data.error}</span>`;
+                            validationResult.innerHTML = `
+                                <div class="p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 flex items-start">
+                                    <svg class="w-5 h-5 text-red-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    <div>
+                                        <p class="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest mb-1">Error de Validación</p>
+                                        <p class="text-sm font-medium text-red-700 dark:text-red-300">${data.error}</p>
+                                    </div>
+                                </div>
+                            `;
                             return;
                         }
 
                         if (data.uuid_match) {
-                            validationResult.innerHTML = `<span class="text-green-600 font-medium">✅ Excelente: ${data.message} Puedes continuar.</span>`;
+                            validationResult.innerHTML = `
+                                <div class="p-4 rounded-2xl bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/50 flex items-start">
+                                    <svg class="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    <div>
+                                        <p class="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest mb-1">Validación Exitosa</p>
+                                        <p class="text-sm font-medium text-green-700 dark:text-green-300">Excelente: El UUID coincide con el XML. Puedes continuar.</p>
+                                    </div>
+                                </div>
+                            `;
                         } else {
-                            validationResult.innerHTML = `<span class="text-red-600 font-medium">❌ Cuidado: ${data.message}</span>`;
+                            validationResult.innerHTML = `
+                                <div class="p-4 rounded-2xl bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800/50 flex items-start">
+                                    <svg class="w-5 h-5 text-orange-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                    <div>
+                                        <p class="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-1">Advertencia</p>
+                                        <p class="text-sm font-medium text-orange-700 dark:text-orange-300">${data.message}</p>
+                                    </div>
+                                </div>
+                            `;
                         }
                     })
                     .catch(error => {
-                        validationResult.innerHTML = `<span class="text-red-500 font-medium">❌ Error al validar el archivo.</span>`;
+                        validationResult.innerHTML = `
+                            <div class="p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 flex items-center">
+                                <svg class="w-5 h-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                <span class="text-xs font-black text-red-700 dark:text-red-400 uppercase">Error crítico al validar el archivo.</span>
+                            </div>
+                        `;
                         console.error('Error:', error);
                     });
                 });

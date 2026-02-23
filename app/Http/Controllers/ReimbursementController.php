@@ -420,15 +420,13 @@ class ReimbursementController extends Controller
 
             $existingReimbursement = Reimbursement::where('uuid', $data['uuid'])->first();
             if ($existingReimbursement) {
-                $statusMsg = '';
-                if ($existingReimbursement->status === 'rechazado') {
-                    $statusMsg = ' (Folio: ' . $existingReimbursement->folio . ') fue RECHAZADO definitivamente.';
-                } elseif ($existingReimbursement->status === 'requiere_correccion') {
-                    $statusMsg = ' (Folio: ' . $existingReimbursement->folio . ') REQUIERE CORRECCIÓN.';
-                } else {
-                    $statusMsg = ' (Folio: ' . $existingReimbursement->folio . ') se encuentra actualmente registrado con estatus: ' . strtoupper($existingReimbursement->status) . '.';
-                }
-                return response()->json(['error' => 'Atención: Este CFDI (UUID: ' . $data['uuid'] . ')' . $statusMsg], 422);
+                return response()->json([
+                    'error' => 'duplicate_cfdi',
+                    'error_type' => 'duplicate_cfdi',
+                    'uuid' => $data['uuid'],
+                    'folio' => $existingReimbursement->folio,
+                    'status' => $existingReimbursement->status,
+                ], 422);
             }
 
             $pdfFile = $request->file('pdf_file');

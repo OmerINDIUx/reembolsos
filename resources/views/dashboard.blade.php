@@ -11,7 +11,7 @@
             <!-- Welcome Section -->
             <div class="mb-6">
                 <h3 class="text-2xl font-bold text-gray-800 dark:text-gray-200">Hola, {{ Auth::user()->name }} 👋</h3>
-                <p class="text-gray-600 dark:text-gray-400">Bienvenido al sistema de Reimbursements.</p>
+                <p class="text-gray-600 dark:text-gray-400">Bienvenido al sistema de Reembolsos.</p>
             </div>
 
             <!-- Stats Grid -->

@@ -18,7 +18,7 @@
             </div>
         </div>
 
-        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="mb-8 flex justify-between items-center">
@@ -42,8 +42,8 @@
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
                             </div>
                             <div>
-                                <h3 class="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Configuración General</h3>
-                                <p class="text-sm text-gray-500 font-medium">Define el centro de costos para todos los comprobantes de esta sesión.</p>
+                                <h3 class="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Paso 1</h3>
+                                <p class="text-sm text-gray-500 font-medium">Define el Centro de Costos al que se cargarán todos los comprobantes de esta sesión.</p>
                             </div>
                         </div>
 
@@ -76,7 +76,7 @@
                             <div class="bg-gray-50 dark:bg-gray-900/40 px-8 md:px-10 py-6 flex justify-between items-center border-b border-gray-100 dark:border-gray-700">
                                 <div class="flex items-center space-x-4">
                                     <div class="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center font-black text-lg" x-text="index + 1"></div>
-                                    <h3 class="text-xl font-bold text-gray-800 dark:text-white" x-text="item.fileName || 'Pendiente de Carga'"></h3>
+                                    <h3 class="text-xl font-bold text-gray-800 dark:text-white" x-text="item.fileName || 'Paso 2: Sube tu factura y completa la información requerida.'"></h3>
                                 </div>
                                 <button type="button" x-on:click="removeItem(index)" class="flex items-center space-x-2 text-red-500 hover:text-white hover:bg-red-500 px-4 py-2 rounded-xl transition-all font-bold text-sm">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
@@ -199,7 +199,7 @@
                                                 <div class="flex items-center">
                                                     <input type="checkbox" :name="'items['+index+'][confirm_company]'" class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" required>
                                                     <label class="ml-2 text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase italic">
-                                                        Confirmo mi empresa *
+                                                        Confirmo que esta es la empresa en la que estoy dado de alta como colaborador(a). *
                                                     </label>
                                                 </div>
                                             </div>
@@ -350,7 +350,23 @@
                         data: { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0 }
                     });
                 },
-                removeItem(index) { if (this.items.length > 1) this.items.splice(index, 1); else Swal.fire('Atención', 'Mínimo un comprobante.', 'info'); },
+                removeItem(index) { 
+                    if (this.items.length > 1) {
+                        this.items.splice(index, 1); 
+                    } else {
+                        Swal.fire({
+                            title: '<span class="text-xl font-black uppercase tracking-tight">Atención</span>',
+                            html: '<p class="text-sm font-medium text-gray-500">Debes registrar al menos un comprobante para continuar.</p>',
+                            icon: 'info',
+                            confirmButtonText: 'ENTENDIDO',
+                            confirmButtonColor: '#4f46e5',
+                            customClass: {
+                                popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                                confirmButton: 'rounded-xl px-10 py-3 font-black text-xs uppercase tracking-widest'
+                            }
+                        });
+                    }
+                },
                 handleXmlChange(e, index) {
                     const file = e.target.files[0];
                     if (!file) return;
@@ -384,7 +400,66 @@
                     .then(r => r.json())
                     .then(d => {
                         if (d.error) { 
-                            Swal.fire('Error', d.error, 'error'); 
+                            if (d.error === 'duplicate_cfdi') {
+                                let statusClasses = 'bg-gray-100 text-gray-800';
+                                let statusLabel = d.status.toUpperCase().replace('_', ' ');
+                                
+                                if (d.status === 'requiere_correccion') {
+                                    statusClasses = 'bg-orange-100 text-orange-800';
+                                    statusLabel = 'REQUIERE CORRECCIÓN';
+                                } else if (d.status === 'rechazado') {
+                                    statusClasses = 'bg-red-100 text-red-800';
+                                    statusLabel = 'RECHAZADO';
+                                } else if (d.status === 'aprobado') {
+                                    statusClasses = 'bg-green-100 text-green-800';
+                                    statusLabel = 'PAGADO';
+                                } else if (d.status === 'pendiente') {
+                                    statusClasses = 'bg-yellow-100 text-yellow-800';
+                                    statusLabel = 'PENDIENTE';
+                                }
+
+                                Swal.fire({
+                                    title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Comprobante Duplicado</span>',
+                                    html: `
+                                        <div class="mt-4 p-6 bg-gray-50 dark:bg-gray-700/50 rounded-2xl border border-gray-100 dark:border-gray-600 text-left">
+                                            <div class="mb-4">
+                                                <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Este CFDI : UUID</p>
+                                                <p class="text-xs font-mono font-bold text-gray-700 dark:text-gray-200 break-all leading-relaxed">${d.uuid}</p>
+                                            </div>
+                                            <div class="mb-4">
+                                                <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Folio Interno</p>
+                                                <p class="text-sm font-bold text-gray-900 dark:text-white">${d.folio || 'Sin Folio'}</p>
+                                            </div>
+                                            <div>
+                                                <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Estatus Actual</p>
+                                                <span class="inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tight ${statusClasses}">
+                                                    ${statusLabel}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-4 px-2">Este comprobante ya existe en el sistema y no puede ser registrado nuevamente.</p>
+                                    `,
+                                    icon: 'error',
+                                    confirmButtonText: 'ENTENDIDO',
+                                    confirmButtonColor: '#ef4444',
+                                    customClass: {
+                                        popup: 'rounded-[2rem] border-none shadow-2xl dark:bg-gray-800',
+                                        confirmButton: 'rounded-xl px-12 py-3 font-black text-xs uppercase tracking-widest'
+                                    }
+                                });
+                            } else {
+                                Swal.fire({
+                                    title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Error de Procesamiento</span>',
+                                    html: `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">${d.error}</p>`,
+                                    icon: 'error',
+                                    confirmButtonText: 'CORREGIR ARCHIVO',
+                                    confirmButtonColor: '#ef4444',
+                                    customClass: {
+                                        popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                                        confirmButton: 'rounded-xl px-8 py-3 font-black text-xs uppercase tracking-widest'
+                                    }
+                                });
+                            }
                             item.xmlParsed = false; 
                             xmlInput.value = ''; 
                             item.fileName = ''; 
@@ -394,7 +469,17 @@
                             // Check for duplicates in current session list
                             const isDuplicateSession = this.items.some((it, idx) => idx !== index && it.data.uuid === d.uuid);
                             if (isDuplicateSession) {
-                                Swal.fire('Factura Duplicada', 'Este CFDI ya ha sido agregado en otro renglón de este mismo registro.', 'warning');
+                                Swal.fire({
+                                    title: '<span class="text-xl font-black uppercase tracking-tight text-orange-600">Factura Duplicada</span>',
+                                    html: '<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">Este CFDI ya ha sido agregado en otro renglón de este mismo registro.</p>',
+                                    icon: 'warning',
+                                    confirmButtonText: 'ENTENDIDO',
+                                    confirmButtonColor: '#f59e0b',
+                                    customClass: {
+                                        popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                                        confirmButton: 'rounded-xl px-8 py-3 font-black text-xs uppercase tracking-widest'
+                                    }
+                                });
                                 xmlInput.value = '';
                                 item.xmlParsed = false;
                                 item.fileName = '';
@@ -409,9 +494,14 @@
                             if (d.pdf_validation && !d.pdf_validation.uuid_match && !item.noPdf) {
                                 Swal.fire({
                                     icon: 'warning',
-                                    title: 'PDF no coincide',
-                                    text: 'El UUID del XML no se encuentra en el archivo PDF seleccionado.',
-                                    confirmButtonColor: '#4f46e5'
+                                    title: '<span class="text-xl font-black uppercase tracking-tight text-orange-600">PDF no coincide</span>',
+                                    html: '<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">El <b>UUID</b> del XML no se encuentra dentro del contenido de texto del archivo <b>PDF</b> especificado. Por favor verifica que ambos archivos correspondan a la misma factura.</p>',
+                                    confirmButtonText: 'VERIFICAR ARCHIVOS',
+                                    confirmButtonColor: '#f59e0b',
+                                    customClass: {
+                                        popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                                        confirmButton: 'rounded-xl px-8 py-3 font-black text-xs uppercase tracking-widest'
+                                    }
                                 });
                             }
                         }

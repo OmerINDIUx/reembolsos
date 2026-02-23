@@ -196,7 +196,7 @@
                                     </th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                         <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="status">
-                                            Status / Ubicación
+                                            Estatus / Ubicación
                                             <span class="ml-1">
                                                 @if(request('sort_by') == 'status')
                                                     @if(request('sort_order', 'desc') == 'asc')

@@ -13,7 +13,7 @@
                 <!-- Navigation Links -->
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                        {{ __('Dashboard') }}
+                        {{ __('Panel') }}
                     </x-nav-link>
                     <x-nav-link :href="route('reimbursements.index')" :active="request()->routeIs('reimbursements.*')">
                         {{ __('Reembolsos') }}
@@ -59,14 +59,37 @@
                         <div class="max-h-64 overflow-y-auto">
                             @forelse(Auth::user()->unreadNotifications->take(5) as $notification)
                                 <a href="{{ route('notifications.mark_read', $notification->id) }}" class="block px-4 py-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
-                                    <p class="text-sm text-gray-800 dark:text-gray-200">
-                                        {{ $notification->data['message'] ?? 'Nueva notificación' }}
-                                    </p>
-                                    <span class="text-xs text-indigo-600 dark:text-indigo-400">{{ $notification->created_at->diffForHumans() }}</span>
+                                    <div class="flex items-start">
+                                        <div class="flex-shrink-0 mr-3 mt-1">
+                                            @php $type = $notification->data['type'] ?? 'info'; @endphp
+                                            @if($type === 'success')
+                                                <svg class="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            @elseif($type === 'danger')
+                                                <svg class="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            @elseif($type === 'warning')
+                                                <svg class="h-5 w-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                            @else
+                                                <svg class="h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            @endif
+                                        </div>
+                                        <div>
+                                            <p class="text-sm font-bold text-gray-800 dark:text-gray-200 line-clamp-2">
+                                                {{ $notification->data['message'] ?? 'Nueva notificación' }}
+                                            </p>
+                                            <div class="mt-1 flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                @if(isset($notification->data['reimbursement_folio']))
+                                                    <span class="text-indigo-600 dark:text-indigo-400">#{{ $notification->data['reimbursement_folio'] }}</span>
+                                                    <span>•</span>
+                                                @endif
+                                                <span>{{ $notification->created_at->diffForHumans() }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </a>
                             @empty
-                                <div class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
-                                    No tienes notificaciones nuevas.
+                                <div class="px-4 py-8 text-center">
+                                    <svg class="mx-auto h-8 w-8 text-gray-300 dark:text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest">Sin notificaciones nuevas</p>
                                 </div>
                             @endforelse
                         </div>
@@ -94,7 +117,7 @@
 
                     <x-slot name="content">
                         <x-dropdown-link :href="route('profile.edit')">
-                            {{ __('Profile') }}
+                            {{ __('Perfil') }}
                         </x-dropdown-link>
 
                         <!-- Authentication -->
@@ -104,7 +127,7 @@
                             <x-dropdown-link :href="route('logout')"
                                     onclick="event.preventDefault();
                                                 this.closest('form').submit();">
-                                {{ __('Log Out') }}
+                                {{ __('Cerrar Sesión') }}
                             </x-dropdown-link>
                         </form>
                     </x-slot>
@@ -127,7 +150,7 @@
     <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
         <div class="pt-2 pb-3 space-y-1">
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                {{ __('Dashboard') }}
+                {{ __('Panel') }}
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('reimbursements.index')" :active="request()->routeIs('reimbursements.*')">
                 {{ __('Reembolsos') }}
@@ -153,7 +176,7 @@
 
             <div class="mt-3 space-y-1">
                 <x-responsive-nav-link :href="route('profile.edit')">
-                    {{ __('Profile') }}
+                    {{ __('Perfil') }}
                 </x-responsive-nav-link>
 
                 <!-- Authentication -->
@@ -163,7 +186,7 @@
                     <x-responsive-nav-link :href="route('logout')"
                             onclick="event.preventDefault();
                                         this.closest('form').submit();">
-                        {{ __('Log Out') }}
+                        {{ __('Cerrar Sesión') }}
                     </x-responsive-nav-link>
                 </form>
             </div>

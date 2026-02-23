@@ -91,7 +91,11 @@
                                             {{ $user->role === 'tesoreria' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300' : '' }}
                                             {{ $user->role === 'user' ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' : '' }}"
                                         >
-                                            {{ $user->role === 'accountant' ? 'Cuentas por Pagar' : ($user->role === 'tesoreria' ? 'Tesorería' : ucfirst($user->role)) }}
+                                            @if($user->role === 'accountant') Cuentas por Pagar 
+                                            @elseif($user->role === 'tesoreria') Tesorería 
+                                            @elseif($user->role === 'user') Usuario 
+                                            @else {{ ucfirst($user->role) }} 
+                                            @endif
                                         </span>
                                     </td>
 

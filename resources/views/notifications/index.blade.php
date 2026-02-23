@@ -22,46 +22,77 @@
                         @endif
                     </div>
 
-                    @if($notifications->count() > 0)
-                        <div class="space-y-4">
+                        <div class="space-y-6">
+                            @php $lastDate = null; @endphp
                             @foreach($notifications as $notification)
-                                <div class="p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center border {{ $notification->unread() ? 'bg-indigo-50 border-indigo-200 dark:bg-indigo-900/30 dark:border-indigo-800' : 'bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700' }}">
-                                    
-                                    <div class="flex items-start mb-4 md:mb-0">
-                                        <div class="flex-shrink-0 mr-4 mt-1">
-                                            @if($notification->data['type'] === 'success')
-                                                <svg class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                            @elseif($notification->data['type'] === 'danger')
-                                                <svg class="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                            @elseif($notification->data['type'] === 'warning')
-                                                <svg class="h-6 w-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                                            @else
-                                                <svg class="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                @php 
+                                    $date = $notification->created_at->timezone(config('app.timezone'));
+                                    $currDate = $date->format('Y-m-d'); 
+                                @endphp
+                                
+                                @if($lastDate !== $currDate)
+                                    <div class="flex items-center mt-8 mb-4">
+                                        <div class="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
+                                        <span class="px-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                            @if($date->isToday()) Hoy
+                                            @elseif($date->isYesterday()) Ayer
+                                            @else {{ $date->translatedFormat('d \d\e F, Y') }}
+                                            @endif
+                                        </span>
+                                        <div class="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
+                                    </div>
+                                    @php $lastDate = $currDate; @endphp
+                                @endif
+
+                                <div class="group relative p-5 rounded-2xl transition-all border {{ $notification->unread() ? 'bg-indigo-50/50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800 shadow-sm' : 'bg-white border-gray-100 dark:bg-gray-800 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600' }}">
+                                    @if($notification->unread())
+                                        <div class="absolute top-5 left-2 w-1.5 h-1.5 bg-indigo-600 rounded-full"></div>
+                                    @endif
+
+                                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pl-4">
+                                        <div class="flex items-start flex-grow">
+                                            <div class="flex-shrink-0 mr-4 bg-white dark:bg-gray-900 p-2.5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                                                @php $type = $notification->data['type'] ?? 'info'; @endphp
+                                                @if($type === 'success')
+                                                    <svg class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                @elseif($type === 'danger')
+                                                    <svg class="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                @elseif($type === 'warning')
+                                                    <svg class="h-6 w-6 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                                @else
+                                                    <svg class="h-6 w-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                @endif
+                                            </div>
+                                            <div>
+                                                <p class="text-sm font-bold {{ $notification->unread() ? 'text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400' }}">
+                                                    {{ $notification->data['message'] ?? 'Nueva notificación' }}
+                                                </p>
+                                                <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                                                    <span class="flex items-center">
+                                                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+                                                        Folio: <span class="text-indigo-600 dark:text-indigo-400 ml-1">{{ $notification->data['reimbursement_folio'] ?? 'N/A' }}</span>
+                                                    </span>
+                                                    <span class="flex items-center">
+                                                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                        {{ $notification->created_at->diffForHumans() }} ({{ $notification->created_at->format('H:i') }})
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="flex items-center space-x-3 w-full md:w-auto self-end md:self-center">
+                                            @if(isset($notification->data['url']))
+                                                <a href="{{ route('notifications.mark_read', $notification->id) }}" class="inline-flex items-center px-5 py-2.5 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-500/30 text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition transform hover:scale-105">
+                                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                    Ver Detalle
+                                                </a>
+                                            @elseif($notification->unread())
+                                                <a href="{{ route('notifications.mark_read', $notification->id) }}" class="inline-flex items-center px-4 py-2 text-xs font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-xl transition">
+                                                    Marcar como leída
+                                                </a>
                                             @endif
                                         </div>
-                                        <div>
-                                            <p class="text-sm font-medium {{ $notification->unread() ? 'text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400' }}">
-                                                {{ $notification->data['message'] ?? 'Nueva notificación' }}
-                                            </p>
-                                            <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                Folio: {{ $notification->data['reimbursement_folio'] ?? 'N/A' }} | {{ $notification->created_at->diffForHumans() }} ({{ $notification->created_at->format('d/m/Y H:i') }})
-                                            </p>
-                                        </div>
                                     </div>
-
-                                    <div class="flex items-center space-x-3 w-full md:w-auto mt-2 md:mt-0">
-                                        @if(isset($notification->data['url']))
-                                            <a href="{{ route('notifications.mark_read', $notification->id) }}" class="inline-flex items-center px-3 py-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition">
-                                                Ver Reembolso
-                                            </a>
-                                        @endif
-                                        @if($notification->unread() && !isset($notification->data['url']))
-                                            <a href="{{ route('notifications.mark_read', $notification->id) }}" class="text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition">
-                                                Marcar leída
-                                            </a>
-                                        @endif
-                                    </div>
-                                    
                                 </div>
                             @endforeach
                         </div>

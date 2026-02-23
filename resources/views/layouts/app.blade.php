@@ -36,6 +36,46 @@
                 {{ $slot }}
             </main>
         </div>
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         @stack('scripts')
+
+        <script>
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 4000,
+                timerProgressBar: true,
+                didOpen: (toast) => {
+                    toast.addEventListener('mouseenter', Swal.stopTimer)
+                    toast.addEventListener('mouseleave', Swal.resumeTimer)
+                },
+                customClass: {
+                    popup: 'rounded-2xl shadow-2xl border-none font-sans'
+                }
+            });
+
+            @if(session('success'))
+                Toast.fire({ icon: 'success', title: '{{ session('success') }}' });
+            @endif
+
+            @if(session('error'))
+                Swal.fire({
+                    title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Atención</span>',
+                    html: '<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">{{ session('error') }}</p>',
+                    icon: 'error',
+                    confirmButtonText: 'ENTENDIDO',
+                    confirmButtonColor: '#ef4444',
+                    customClass: {
+                        popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                        confirmButton: 'rounded-xl px-8 py-3 font-black text-xs uppercase tracking-widest'
+                    }
+                });
+            @endif
+
+            @if(session('warning'))
+                Toast.fire({ icon: 'warning', title: '{{ session('warning') }}' });
+            @endif
+        </script>
     </body>
 </html>
