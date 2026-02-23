@@ -251,6 +251,68 @@
                     </div>
                 </div>
 
+                <!-- VIAJE FORM -->
+                <div x-show="type === 'viaje'" class="animate-fadeIn">
+                    <div class="bg-white dark:bg-gray-800 shadow-2xl rounded-[2.5rem] border border-gray-100 dark:border-gray-700 overflow-hidden relative p-8 md:p-10">
+                        <div class="flex items-center mb-8">
+                            <div class="w-12 h-12 bg-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-purple-500/30 mr-5">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Detalles del Viaje</h3>
+                                <p class="text-sm text-gray-500 font-medium">Información general sobre el viaje o comisión.</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Título del Viaje (Ej: Visita Obra Querétaro) *</label>
+                                <input type="text" name="title" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Tipo de Viaje *</label>
+                                <select name="trip_type" x-model="tripType" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                                    <option value="nacional">Nacional</option>
+                                    <option value="internacional">Internacional</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Destino *</label>
+                                <input type="text" name="trip_destination" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'" placeholder="Ciudad, Estado/Pais">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Noches *</label>
+                                <input type="number" name="trip_nights" min="0" value="0" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Fecha Inicio *</label>
+                                    <input type="date" name="trip_start_date" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Fecha Fin *</label>
+                                    <input type="date" name="trip_end_date" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                                </div>
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Observaciones / Justificación</label>
+                                <textarea name="observaciones" rows="3" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" placeholder="Describe el motivo del viaje..."></textarea>
+                            </div>
+
+                            <div class="md:col-span-2" x-show="tripType === 'internacional'">
+                                <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Documentación Adicional (PDF, Imágenes) - Viajes Internacionales</label>
+                                <input type="file" name="extra_files[]" multiple class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5">
+                                <p class="text-[10px] text-gray-500 mt-2 italic font-bold">Puedes seleccionar múltiples archivos para comprobar gastos en el extranjero que no cuentan con XML.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Footer -->
                 <div class="mt-24 border-t border-gray-100 dark:border-gray-700 pt-12 pb-32 flex flex-col md:flex-row items-center justify-between gap-10">
                     <a href="{{ route('reimbursements.index') }}" class="text-[10px] font-black text-gray-400 hover:text-gray-900 dark:hover:text-white uppercase tracking-[0.3em] transition-all">CANCELAR TODO</a>
@@ -276,6 +338,7 @@
         function reimbursementForm() {
             return {
                 type: '{{ $type }}',
+                tripType: 'nacional',
                 items: [],
                 init() { if (this.type !== 'viaje') this.addItem(); },
                 addItem() {

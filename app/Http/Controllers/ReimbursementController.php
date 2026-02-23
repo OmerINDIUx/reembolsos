@@ -158,7 +158,7 @@ class ReimbursementController extends Controller
             abort(403, 'Tu rol (CXP/Tesorería) no tiene permisos para crear reembolsos, solo para aprobarlos y pagarlos.');
         }
 
-        $type = $request->get('type', 'reembolso');
+        $type = $request->get('type');
         $allowedTypes = ['reembolso', 'fondo_fijo', 'comida', 'viaje'];
 
         if (!$type || !in_array($type, $allowedTypes)) {

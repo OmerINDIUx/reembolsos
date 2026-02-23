@@ -86,6 +86,7 @@ Sigue los siguientes pasos en la consola en la que te acabas de conectar (donde 
    Primero debes entrar a tu dominio y luego a la carpeta pública donde subiste los archivos.
     - Escribe: `cd domains` y presiona Enter.
     - Escribe: `ls` y presiona Enter (verás el listado de tu dominio, en este caso `xn--diseoygestion-lkb.com`).
+      https://reembolsosindi.com/
     - Escribe: `cd xn--diseoygestion-lkb.com` y presiona Enter.
     - Escribe: `cd public_html` y presiona Enter.
     - _(Para verificar que estás en el lugar correcto, escribe `ls` de nuevo y deberías ver todas las carpetas que subiste: `app`, `public`, `routes`, el archivo `artisan`, etc.)_
