@@ -204,11 +204,23 @@ class ReimbursementController extends Controller
         $costCenter = CostCenter::find($costCenterId);
 
         $createdCount = 0;
+        $failedCount = 0;
+        $errors = [];
+        $processedUuids = [];
 
-        foreach ($request->items as $item) {
+        foreach ($request->items as $index => $item) {
             try {
                 $xmlContent = file_get_contents($item['xml_file']->getRealPath());
                 $xmlData = $this->extractXmlData($xmlContent);
+                $uuid = $xmlData['uuid'];
+
+                // Check for duplicate in DB or current batch
+                if (in_array($uuid, $processedUuids) || Reimbursement::where('uuid', $uuid)->exists()) {
+                    $errors[] = "Ítem #" . ($index + 1) . ": El CFDI con UUID {$uuid} ya está registrado o duplicado en esta carga.";
+                    $failedCount++;
+                    continue;
+                }
+                $processedUuids[] = $uuid;
                 
                 $pdfFile = $item['pdf_file'] ?? null;
                 $validationData = $this->getValidationData($xmlData, $pdfFile);
@@ -221,7 +233,7 @@ class ReimbursementController extends Controller
                     'cost_center_id' => $costCenterId,
                     'week' => $week,
                     'category' => $item['category'],
-                    'uuid' => $xmlData['uuid'],
+                    'uuid' => $uuid,
                     'rfc_emisor' => $xmlData['rfc_emisor'],
                     'nombre_emisor' => $xmlData['nombre_emisor'],
                     'rfc_receptor' => $xmlData['rfc_receptor'],
@@ -250,21 +262,28 @@ class ReimbursementController extends Controller
 
                 $createdCount++;
             } catch (\Exception $e) {
+                $errors[] = "Ítem #" . ($index + 1) . ": Error al procesar - " . $e->getMessage();
+                $failedCount++;
                 Log::error("Bulk store error: " . $e->getMessage());
                 continue;
             }
         }
 
-        if ($costCenter && $costCenter->director) {
+        if ($createdCount > 0 && $costCenter && $costCenter->director) {
             $costCenter->director->notify(new ReimbursementNotification(
                 null, 
-                "Se han registrado {$createdCount} nuevas solicitudes de {$type} pendientes de tu aprobación.", 
+                "Se cargaron {$createdCount} reembolsos. Revísalos en tu listado de reembolsos.", 
                 "info"
             ));
         }
 
-        return redirect()->route('reimbursements.index')
-                         ->with('success', "Se han creado {$createdCount} reembolsos exitosamente.");
+        $message = "Se han creado {$createdCount} reembolsos exitosamente.";
+        if ($failedCount > 0) {
+            $message .= " Sin embargo, {$failedCount} no pudieron procesarse: " . implode(' ', $errors);
+            return redirect()->route('reimbursements.index')->with('warning', $message);
+        }
+
+        return redirect()->route('reimbursements.index')->with('success', $message);
     }
 
 
@@ -420,6 +439,11 @@ class ReimbursementController extends Controller
                 'uuid' => 'required',
                 'total' => 'required',
             ]);
+
+            // Duplicity check
+            if (Reimbursement::where('uuid', $request->uuid)->exists()) {
+                return back()->withInput()->with('error', 'Atención: Este CFDI (UUID: ' . $request->uuid . ') ya se encuentra registrado en el sistema.');
+            }
         }
         // But the previous prompts imply "Viaje" is a container.
         // Let's adjust validation for XML/PDF to be nullable if type is viaje

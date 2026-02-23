@@ -323,10 +323,22 @@
                         if (d.error) { 
                             Swal.fire('Error', d.error, 'error'); 
                             item.xmlParsed = false; 
-                            if (!d.error.includes('CFDI')) xmlInput.value = ''; 
+                            xmlInput.value = ''; 
                             item.fileName = ''; 
+                            item.data = { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0 };
                         }
                         else { 
+                            // Check for duplicates in current session list
+                            const isDuplicateSession = this.items.some((it, idx) => idx !== index && it.data.uuid === d.uuid);
+                            if (isDuplicateSession) {
+                                Swal.fire('Factura Duplicada', 'Este CFDI ya ha sido agregado en otro renglón de este mismo registro.', 'warning');
+                                xmlInput.value = '';
+                                item.xmlParsed = false;
+                                item.fileName = '';
+                                item.data = { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0 };
+                                return;
+                            }
+
                             item.xmlParsed = true; 
                             item.data = d; 
                             item.fileName = 'Factura: ' + (d.folio || d.uuid.substring(0, 8));

@@ -57,11 +57,11 @@ class ReimbursementNotification extends Notification
     public function toArray(object $notifiable): array
     {
         return [
-            'reimbursement_id' => $this->reimbursement->id,
-            'reimbursement_folio' => $this->reimbursement->folio ?? substr($this->reimbursement->uuid, 0, 8) ?? 'S/F',
+            'reimbursement_id' => $this->reimbursement ? $this->reimbursement->id : null,
+            'reimbursement_folio' => $this->reimbursement ? ($this->reimbursement->folio ?? substr($this->reimbursement->uuid, 0, 8) ?? 'S/F') : 'VARIOS',
             'message' => $this->message,
             'type' => $this->type, // success, danger, warning, info
-            'url' => route('reimbursements.show', $this->reimbursement->id)
+            'url' => $this->reimbursement ? route('reimbursements.show', $this->reimbursement->id) : route('reimbursements.index')
         ];
     }
 }
