@@ -10,6 +10,8 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
 use SimpleXMLElement;
 use Smalot\PdfParser\Parser;
 
@@ -142,6 +144,94 @@ class ReimbursementController extends Controller
         return view('reimbursements.create', compact('type', 'costCenters', 'currentWeek', 'categories', 'parentReimbursement'));
     }
 
+    /**
+     * Store multiple resources in storage.
+     */
+    public function bulkStore(Request $request)
+    {
+        $request->validate([
+            'type' => 'required|in:reembolso,fondo_fijo,comida',
+            'cost_center_id' => 'required|exists:cost_centers,id',
+            'week' => 'required|string',
+            'items' => 'required|array|min:1',
+            'items.*.category' => ['required', Rule::in($this->getCategories())],
+            'items.*.xml_file' => 'required|file|mimes:xml',
+            'items.*.pdf_file' => 'nullable|file|mimes:pdf',
+            'items.*.confirm_company' => 'required',
+        ]);
+
+        set_time_limit(300); // Higher limit for bulk processing
+
+        $type = $request->type;
+        $costCenterId = $request->cost_center_id;
+        $week = $request->week;
+        $user = Auth::user();
+        $costCenter = CostCenter::find($costCenterId);
+
+        $createdCount = 0;
+
+        foreach ($request->items as $item) {
+            try {
+                $xmlContent = file_get_contents($item['xml_file']->getRealPath());
+                $xmlData = $this->extractXmlData($xmlContent);
+                
+                $pdfFile = $item['pdf_file'] ?? null;
+                $validationData = $this->getValidationData($xmlData, $pdfFile);
+
+                $xmlPath = $item['xml_file']->store('xmls');
+                $pdfPath = $pdfFile ? $pdfFile->store('pdfs') : null;
+
+                $reimbursement = Reimbursement::create([
+                    'type' => $type,
+                    'cost_center_id' => $costCenterId,
+                    'week' => $week,
+                    'category' => $item['category'],
+                    'uuid' => $xmlData['uuid'],
+                    'rfc_emisor' => $xmlData['rfc_emisor'],
+                    'nombre_emisor' => $xmlData['nombre_emisor'],
+                    'rfc_receptor' => $xmlData['rfc_receptor'],
+                    'nombre_receptor' => $xmlData['nombre_receptor'],
+                    'folio' => $xmlData['folio'], 
+                    'fecha' => $xmlData['fecha'],
+                    'total' => $xmlData['total'],
+                    'subtotal' => $xmlData['subtotal'],
+                    'moneda' => $xmlData['moneda'],
+                    'tipo_comprobante' => $xmlData['tipo_comprobante'],
+                    'xml_path' => $xmlPath,
+                    'pdf_path' => $pdfPath,
+                    'status' => 'pendiente',
+                    'observaciones' => $item['observaciones'] ?? null,
+                    'attendees_count' => $item['attendees_count'] ?? null,
+                    'attendees_names' => $item['attendees_names'] ?? null,
+                    'location' => $item['location'] ?? null,
+                    'user_id' => $user->id,
+                    'company_confirmed' => true,
+                    'validation_data' => $validationData, // Saving validation for the table
+                ]);
+
+                $prefix = strtoupper(substr($type, 0, 3));
+                $reimbursement->folio = $prefix . '-' . str_pad($reimbursement->id, 6, '0', STR_PAD_LEFT);
+                $reimbursement->save();
+
+                $createdCount++;
+            } catch (\Exception $e) {
+                Log::error("Bulk store error: " . $e->getMessage());
+                continue;
+            }
+        }
+
+        if ($costCenter && $costCenter->director) {
+            $costCenter->director->notify(new ReimbursementNotification(
+                null, 
+                "Se han registrado {$createdCount} nuevas solicitudes de {$type} pendientes de tu aprobación.", 
+                "info"
+            ));
+        }
+
+        return redirect()->route('reimbursements.index')
+                         ->with('success', "Se han creado {$createdCount} reembolsos exitosamente.");
+    }
+
 
 
 
@@ -151,7 +241,7 @@ class ReimbursementController extends Controller
      */
     public function parseCfdi(Request $request)
     {
-        set_time_limit(120); // Increase time limit for slow PDF parsing
+        set_time_limit(120);
 
         $request->validate([
             'xml_file' => 'required|file|mimes:xml',
@@ -179,42 +269,45 @@ class ReimbursementController extends Controller
                 return response()->json(['error' => 'Atención: Este CFDI (UUID: ' . $data['uuid'] . ')' . $statusMsg], 422);
             }
 
-            // PDF Validation
-            $pdfValidation = null;
-            if ($request->hasFile('pdf_file')) {
-                try {
-                    $parser = new \Smalot\PdfParser\Parser();
-                    $pdf = $parser->parseFile($request->file('pdf_file')->getRealPath());
-                    $text = $pdf->getText();
-                    
-                    // Simple cleaning of text for easier matching
-                    $cleanText = str_replace([' ', "\n", "\r", "\t"], '', $text); 
-                    
-                    // UUID Check
-                    $uuidFound = str_contains($text, $data['uuid']); // UUIDs usually distinct enough
-                    
-                    // Total Check (naive)
-                    // Try to match formatted or unformatted total
-                    $total = $data['total'];
-                    $totalFormatted = number_format((float)$total, 2); // 1,234.56
-                    $totalRaw = $total; // 1234.56
-                    
-                    $totalFound = str_contains($text, $totalFormatted) || str_contains($text, $totalRaw);
-
-                    $pdfValidation = [
-                        'uuid_match' => $uuidFound,
-                        'total_match' => $totalFound,
-                        'message' => $uuidFound ? 'UUID encontrado en PDF.' : 'Advertencia: UUID NO encontrado en PDF.',
-                    ];
-                } catch (\Exception $e) {
-                    $pdfValidation = ['error' => 'No se pudo leer el PDF: ' . $e->getMessage()];
-                }
-            }
+            $pdfFile = $request->file('pdf_file');
+            $pdfValidation = $this->getValidationData($data, $pdfFile);
 
             return response()->json(array_merge($data, ['pdf_validation' => $pdfValidation]));
 
         } catch (\Exception $e) {
             return response()->json(['error' => 'Error al procesar el XML: ' . $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Helper to perform PDF/XML cross-validation.
+     */
+    private function getValidationData($xmlData, $pdfFile)
+    {
+        if (!$pdfFile) return null;
+
+        try {
+            $parser = new \Smalot\PdfParser\Parser();
+            $pdf = $parser->parseFile($pdfFile->getRealPath());
+            $text = $pdf->getText();
+            
+            // UUID Check
+            $uuidFound = str_contains($text, $xmlData['uuid']);
+            
+            // Total Check
+            $total = $xmlData['total'];
+            $totalFormatted = number_format((float)$total, 2);
+            $totalRaw = $total;
+            
+            $totalFound = str_contains($text, $totalFormatted) || str_contains($text, $totalRaw);
+
+            return [
+                'uuid_match' => $uuidFound,
+                'total_match' => $totalFound,
+                'message' => $uuidFound ? 'Validación exitosa.' : 'Advertencia de UUID.',
+            ];
+        } catch (\Exception $e) {
+            return ['error' => 'Lectura de PDF fallida: ' . $e->getMessage()];
         }
     }
 

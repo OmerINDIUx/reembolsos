@@ -1,500 +1,358 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('Nuevo ') . ucfirst(str_replace('_', ' ', $type)) }}
+            {{ __('Registrar ') . ucfirst(str_replace('_', ' ', $type)) }}
         </h2>
     </x-slot>
 
-    <div class="py-12 relative">
+    <div class="py-12 relative" x-data="reimbursementForm()">
         <!-- Loading Overlay -->
-        <div id="loading-overlay" class="hidden absolute inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50 rounded-lg">
-            <div class="bg-white p-4 rounded-lg shadow-lg flex flex-col items-center">
-                <svg class="animate-spin h-10 w-10 text-indigo-600 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <p class="text-gray-700 font-medium">Procesando Comprobantes...</p>
+        <div id="loading-overlay" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-60 backdrop-blur-sm">
+            <div class="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-sm w-full mx-4 border border-gray-200 dark:border-gray-700">
+                <div class="relative mb-6">
+                    <div class="w-16 h-16 border-4 border-indigo-200 dark:border-indigo-900 rounded-full"></div>
+                    <div class="w-16 h-16 border-4 border-indigo-600 rounded-full animate-spin absolute top-0 left-0 border-t-transparent"></div>
+                </div>
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Procesando Solicitudes</h3>
+                <p class="text-gray-500 dark:text-gray-400 text-center text-sm">Por favor, espera un momento mientras guardamos tus registros.</p>
             </div>
         </div>
 
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6 text-gray-900 dark:text-gray-100" x-data="{ 
-                        type: '{{ $type }}',
-                        tripType: null,
-                        uploading: false,
-                        files: [],
-                        init() {
-                            this.$watch('files', value => {
-                                const input = document.getElementById('extra_files_input');
-                                const dt = new DataTransfer();
-                                value.forEach(file => dt.items.add(file));
-                                input.files = dt.files;
-                            });
-                        },
-                        removeFile(index) {
-                            this.files.splice(index, 1);
-                        },
-                        handleDrop(e) {
-                            if (this.tripType !== 'internacional') return;
-                            const droppedFiles = e.dataTransfer.files;
-                            this.addFiles(droppedFiles);
-                        },
-                        addFiles(fileList) {
-                            for (let i = 0; i < fileList.length; i++) {
-                                // Prevent duplicates if needed, or simple push
-                                this.files.push(fileList[i]);
-                            }
-                        }
-                    }">
-                    <div class="mb-6 flex justify-between items-center">
-                         <a href="{{ route('reimbursements.create') }}" class="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
-                            &larr; Cambiar Tipo de Solicitud
-                        </a>
-                    </div>
-
-                    <form action="{{ route('reimbursements.store') }}" method="POST" enctype="multipart/form-data" id="reimbursement-form">
-                        @csrf
-                        <input type="hidden" name="type" value="{{ $type }}">
-                        <input type="hidden" name="validation_data" id="validation_data_input">
-                        @if(isset($parentReimbursement))
-                            <input type="hidden" name="parent_id" value="{{ $parentReimbursement->id }}">
-                            <div class="bg-blue-50 dark:bg-blue-900 border-l-4 border-blue-400 p-4 mb-4">
-                                <div class="flex">
-                                    <div class="flex-shrink-0">
-                                        <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <div class="ml-3">
-                                        <p class="text-sm text-blue-700 dark:text-blue-200">
-                                            Agregando gasto al viaje: <strong>{{ $parentReimbursement->title ?? 'Viaje sin título' }}</strong>
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        @endif
-                        
-                        <!-- Standard XML/PDF Inputs (Hidden for Viaje International/Nacional initially) -->
-                        <div x-show="type !== 'viaje'">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="xml_file">
-                                        Archivo XML (CFDI) *
-                                    </label>
-                                    <input class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 dark:text-gray-400 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400" id="xml_file" type="file" name="xml_file" accept=".xml" :required="type !== 'viaje'">
-                                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-300">Carga el XML para autocompletar los campos.</p>
-                                    @error('xml_file')
-                                        <p class="text-red-500 text-xs italic mt-2">{{ $message }}</p>
-                                    @enderror
-                                </div>
-    
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="pdf_file">
-                                        Archivo PDF
-                                    </label>
-                                    <div class="flex items-center mb-2">
-                                        <input id="no_pdf" name="no_pdf" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                                        <label for="no_pdf" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">
-                                            No cuento con el PDF
-                                        </label>
-                                    </div>
-                                    <input class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 dark:text-gray-400 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400" id="pdf_file" type="file" name="pdf_file" accept=".pdf">
-                                    @error('pdf_file')
-                                        <p class="text-red-500 text-xs italic mt-2">{{ $message }}</p>
-                                    @enderror
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Viaje Logic -->
-                        <template x-if="type === 'viaje'">
-                            <div class="mb-8 border-b pb-6 border-gray-200 dark:border-gray-700">
-                                <label class="block text-lg font-medium text-gray-900 dark:text-gray-100 mb-4 text-center">Tipo de Destino</label>
-                                <div class="flex justify-center space-x-6">
-                                    <label class="cursor-pointer border-2 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition" :class="tripType === 'nacional' ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900' : 'border-gray-300'">
-                                        <input type="radio" name="trip_type" value="nacional" class="hidden" x-model="tripType">
-                                        <span class="block text-center font-bold text-gray-900 dark:text-gray-100">Nacional</span>
-                                        <span class="block text-xs text-gray-500 dark:text-gray-400 mt-1">Con facturas XML/PDF</span>
-                                    </label>
-                                    <label class="cursor-pointer border-2 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition" :class="tripType === 'internacional' ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900' : 'border-gray-300'">
-                                        <input type="radio" name="trip_type" value="internacional" class="hidden" x-model="tripType">
-                                        <span class="block text-center font-bold text-gray-900 dark:text-gray-100">Internacional</span>
-                                        <span class="block text-xs text-gray-500 dark:text-gray-400 mt-1">Archivos varios (Drag & Drop)</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </template>
-
-                        <!-- Trip Common Fields -->
-                         <div x-show="type === 'viaje' && tripType">
-                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                <div class="md:col-span-2">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="title">Título del Viaje *</label>
-                                    <input type="text" name="title" id="title" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Ej: Visita a Cliente X en Monterrey" :required="type === 'viaje'">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="trip_nights">Duración del Viaje (Noches) *</label>
-                                    <input type="number" name="trip_nights" id="trip_nights" min="0" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" :required="type === 'viaje'">
-                                </div>
-                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="trip_destination">Lugar de Destino *</label>
-                                    <input type="text" name="trip_destination" id="trip_destination" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Ciudad, Estado, País..." :required="type === 'viaje'">
-                                </div>
-                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="trip_start_date">Fecha de Inicio *</label>
-                                    <input type="date" name="trip_start_date" id="trip_start_date" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" :required="type === 'viaje'">
-                                </div>
-                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="trip_end_date">Fecha Final *</label>
-                                    <input type="date" name="trip_end_date" id="trip_end_date" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" :required="type === 'viaje'">
-                                </div>
-                             </div>
-                         </div>
-                        
-                        <hr class="my-6 border-gray-200 dark:border-gray-700" x-show="type !== 'viaje'">
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4" x-show="type !== 'viaje'">Detalles del Comprobante</h3>
-
-                        <!-- Auto-filled Fields / Common Fields -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6" x-show="type !== 'viaje'"> <!-- Hide standard details for Trip until supported -->
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="cost_center_id">Centro de Costos</label>
-                                <select name="cost_center_id" id="cost_center_id" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" required x-bind:disabled="type === 'viaje'">
-                                    <option value="">Seleccione un Centro de Costos...</option>
-                                    @foreach($costCenters as $center)
-                                        <option value="{{ $center->id }}">{{ $center->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="category">Categoría</label>
-                                <select name="category" id="category" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Seleccione o escriba..." :required="type !== 'viaje'">
-                                    <option value="">Seleccione o escriba...</option>
-                                    @foreach($categories as $cat)
-                                        <option value="{{ $cat }}">{{ $cat }}</option>
-                                    @endforeach
-                                </select>
-                                @error('category')
-                                    <p class="text-red-500 text-xs italic mt-2">{{ $message }}</p>
-                                @enderror
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="week">Semana (Año-Semana)</label>
-                                <input type="text" name="week" id="week" value="{{ $currentWeek }}" class="w-full bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-md shadow-sm sm:text-sm cursor-not-allowed" readonly>
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="uuid">UUID (Folio Fiscal)</label>
-                                <input type="text" name="uuid" id="uuid" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" readonly :required="type !== 'viaje'">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="folio">Folio Interno</label>
-                                <input type="text" name="folio" id="folio" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                            </div>
-                            
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="rfc_emisor">RFC Emisor</label>
-                                <input type="text" name="rfc_emisor" id="rfc_emisor" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" readonly>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="nombre_emisor">Nombre Emisor</label>
-                                <input type="text" name="nombre_emisor" id="nombre_emisor" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" readonly>
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="rfc_receptor">RFC Receptor</label>
-                                <input type="text" name="rfc_receptor" id="rfc_receptor" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" readonly>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="nombre_receptor">Nombre Receptor</label>
-                                <input type="text" name="nombre_receptor" id="nombre_receptor" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm mb-2" readonly>
-                                <div class="flex items-center">
-                                    <input id="confirm_company" name="confirm_company" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" required>
-                                    <label for="confirm_company" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">
-                                        Confirmo que es la empresa donde estoy dado de alta *
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="fecha">Fecha de Emisión</label>
-                                <input type="text" name="fecha" id="fecha" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" readonly>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="moneda">Moneda</label>
-                                <input type="text" name="moneda" id="moneda" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" readonly>
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="subtotal">Subtotal</label>
-                                <input type="number" step="0.01" name="subtotal" id="subtotal" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" readonly>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="total">Total</label>
-                                <input type="number" step="0.01" name="total" id="total" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" readonly :required="type !== 'viaje'">
-                            </div>
-                            
-                            <input type="hidden" name="tipo_comprobante" id="tipo_comprobante">
-                        </div>
-                        
-                        <!-- Cost Center Copy for Viaje (Needs to be visible always essentially, or at least for Viaje too) -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6" x-show="type === 'viaje' && tripType">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="cost_center_id_viaje">Centro de Costos</label>
-                                <select name="cost_center_id" id="cost_center_id_viaje" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" required x-bind:disabled="type !== 'viaje'">
-                                    <option value="">Seleccione un Centro de Costos...</option>
-                                    @foreach($costCenters as $center)
-                                        <option value="{{ $center->id }}">{{ $center->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                             <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="week_viaje">Semana (Año-Semana)</label>
-                                <input type="text" name="week" id="week_viaje" value="{{ $currentWeek }}" class="w-full bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-md shadow-sm sm:text-sm cursor-not-allowed" readonly>
-                            </div>
-                        </div>
-
-
-                        <div class="mb-6" x-show="type === 'viaje' ? tripType : true">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="observaciones">
-                                Justificación del Reembolso 
-                                @if($type === 'comida') 
-                                    (motivo del negocio) 
-                                @elseif($type === 'viaje')
-                                    (Describe los resultados tu agenda y el motivo del viaje)
-                                @endif
-                            </label>
-                            <textarea name="observaciones" id="observaciones" rows="3" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
-                        </div>
-                        
-                        <!-- Drag & Drop Zone for International -->
-                        <div class="mb-6" x-show="type === 'viaje' && tripType === 'internacional'">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Documentos del Viaje (Imágenes, PDF, Word)</label>
-                            <div 
-                                class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:bg-gray-50 dark:hover:bg-gray-700 transition relative"
-                                @dragover.prevent="uploading = true"
-                                @dragleave.prevent="uploading = false"
-                                @drop.prevent="uploading = false; handleDrop($event)"
-                            >
-                                <input type="file" id="extra_files_input" name="extra_files[]" multiple class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" @change="addFiles($event.target.files)">
-                                <div class="flex flex-col items-center justify-center">
-                                    <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                                    <p class="text-sm text-gray-600 dark:text-gray-400">Arrivastra archivos aquí o haz click para seleccionar</p>
-                                    <p class="text-xs text-gray-500 mt-1">Soporta múltiples archivos</p>
-                                </div>
-                            </div>
-                            
-                            <!-- File List -->
-                            <div class="mt-4 space-y-2" x-show="files.length > 0">
-                                <template x-for="(file, index) in files" :key="index">
-                                    <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-2 rounded-md">
-                                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="file.name"></span>
-                                        <button type="button" @click="removeFile(index)" class="text-red-500 hover:text-red-700 text-sm">Eliminar</button>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-
-                        <!-- Buttons for Nacional -->
-                        <div class="mb-6" x-show="type === 'viaje' && tripType === 'nacional'">
-                            <div class="bg-yellow-50 dark:bg-yellow-900 p-4 rounded-md border border-yellow-200 dark:border-yellow-700 mb-4">
-                                <p class="text-sm text-yellow-800 dark:text-yellow-200">
-                                    <strong>Nota:</strong> Para agregar gastos (Reembolsos y Comidas) vinculados a este viaje:
-                                </p>
-                                <ol class="list-decimal list-inside text-sm text-yellow-800 dark:text-yellow-200 mt-1">
-                                    <li>Complete la información del viaje y haga clic en "Guardar y Continuar".</li>
-                                    <li>Será redirigido al panel del viaje donde podrá usar los botones de "Agregar Reembolso" o "Agregar Comida".</li>
-                                </ol>
-                            </div>
-                             <div class="flex space-x-4 opacity-50 cursor-not-allowed"> 
-                                <!-- Mock buttons to show the user what's coming, as requested "aparecen abajo" -->
-                                <button type="button" disabled class="flex items-center px-4 py-2 bg-indigo-100 text-indigo-700 rounded-md">
-                                    + Agregar Reembolso (XML/PDF)
-                                </button>
-                                <button type="button" disabled class="flex items-center px-4 py-2 bg-indigo-100 text-indigo-700 rounded-md">
-                                    + Agregar Comida (XML/PDF)
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Comida Fields -->
-                        @if($type === 'comida')
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="attendees_count">Número de Asistentes *</label>
-                                <input type="number" name="attendees_count" id="attendees_count" min="1" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" required>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="location">Lugar *</label>
-                                <input type="text" name="location" id="location" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Restaurante, Ciudad, etc." required>
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="attendees_names">Nombre de los Asistentes (Opcional)</label>
-                                <textarea name="attendees_names" id="attendees_names" rows="2" class="w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Nombres separados por comas..."></textarea>
-                            </div>
-                        </div>
-                        @endif
-
-                        <div class="flex items-center justify-end" x-show="type !== 'viaje' || (type === 'viaje' && tripType)">
-                            <a href="{{ route('reimbursements.index') }}" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 mr-4">Cancelar</a>
-                            <button type="submit" class="inline-flex items-center px-4 py-2 bg-gray-800 dark:bg-gray-200 border border-transparent rounded-md font-semibold text-xs text-white dark:text-gray-800 uppercase tracking-widest hover:bg-gray-700 dark:hover:bg-white focus:bg-gray-700 dark:focus:bg-white active:bg-gray-900 dark:active:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
-                                <span x-text="type === 'viaje' && tripType === 'nacional' ? 'Guardar y Continuar' : 'Guardar Reembolso'"></span>
-                            </button>
-                        </div>
-                    </form>
-                </div>
+            <div class="mb-8 flex justify-between items-center">
+                <a href="{{ route('reimbursements.create') }}" class="inline-flex items-center text-sm font-bold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 transition-colors">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    CAMBIAR TIPO DE SOLICITUD
+                </a>
             </div>
+
+            <!-- Global Form -->
+            <form :action="type === 'viaje' ? '{{ route('reimbursements.store') }}' : '{{ route('reimbursements.bulk_store') }}'" method="POST" enctype="multipart/form-data" x-on:submit="handleSubmit">
+                @csrf
+                <input type="hidden" name="type" value="{{ $type }}">
+                <input type="hidden" name="week" value="{{ $currentWeek }}">
+
+                <!-- Header Info Card -->
+                <div class="bg-white dark:bg-gray-800 shadow-xl rounded-3xl mb-10 overflow-hidden border border-gray-100 dark:border-gray-700">
+                    <div class="p-8 md:p-10">
+                        <div class="flex items-center mb-8">
+                            <div class="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 mr-5">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Configuración General</h3>
+                                <p class="text-sm text-gray-500 font-medium">Define el centro de costos para todos los comprobantes de esta sesión.</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div>
+                                <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Centro de Costos *</label>
+                                <select name="cost_center_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" required>
+                                    <option value="">Selecciona el Centro de Costos...</option>
+                                    @foreach($costCenters as $center)
+                                        <option value="{{ $center->id }}">{{ $center->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Semana de Proceso</label>
+                                <div class="w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-2xl py-4 px-5 text-gray-500 font-bold">
+                                    {{ $currentWeek }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- REPEATER (FOR REEMBOLSO, FONDO FIJO, COMIDA) -->
+                <div x-show="type !== 'viaje'" class="space-y-16">
+                    <template x-for="(item, index) in items" :key="item.id">
+                        <div class="bg-white dark:bg-gray-800 shadow-2xl rounded-[2.5rem] border border-gray-100 dark:border-gray-700 overflow-hidden animate-fadeIn relative">
+                            
+                            <!-- Card Header -->
+                            <div class="bg-gray-50 dark:bg-gray-900/40 px-8 md:px-10 py-6 flex justify-between items-center border-b border-gray-100 dark:border-gray-700">
+                                <div class="flex items-center space-x-4">
+                                    <div class="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center font-black text-lg" x-text="index + 1"></div>
+                                    <h3 class="text-xl font-bold text-gray-800 dark:text-white" x-text="item.fileName || 'Pendiente de Carga'"></h3>
+                                </div>
+                                <button type="button" x-on:click="removeItem(index)" class="flex items-center space-x-2 text-red-500 hover:text-white hover:bg-red-500 px-4 py-2 rounded-xl transition-all font-bold text-sm">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                    <span>ELIMINAR FACTURA</span>
+                                </button>
+                            </div>
+
+                            <div class="p-8 md:p-10">
+                                <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+                                    <!-- Left Column: XML/PDF Carga -->
+                                    <div class="lg:col-span-4 space-y-8 border-r border-gray-50 dark:border-gray-700/50 pr-6">
+                                        <div class="space-y-6">
+                                            <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3">Archivos Fuente</h4>
+                                            
+                                            <div>
+                                                <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Archivo XML (CFDI) *</label>
+                                                <input type="file" :name="'items['+index+'][xml_file]'" accept=".xml" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" required x-on:change="handleXmlChange($event, index)">
+                                            </div>
+
+                                            <div :class="item.xmlParsed ? 'opacity-100' : 'opacity-40 pointer-events-none transition-opacity'">
+                                                <div class="flex items-center justify-between mb-3">
+                                                    <label class="block text-sm font-bold text-gray-700 dark:text-gray-300">Archivo PDF</label>
+                                                    <label class="flex items-center cursor-pointer">
+                                                        <input type="checkbox" :name="'items['+index+'][no_pdf]'" class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" x-on:change="item.noPdf = $event.target.checked">
+                                                        <span class="ml-2 text-[10px] font-bold text-gray-500 uppercase">Sin PDF</span>
+                                                    </label>
+                                                </div>
+                                                <input type="file" :name="'items['+index+'][pdf_file]'" accept=".pdf" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :disabled="item.noPdf" :required="!item.noPdf && item.xmlParsed" x-on:change="handlePdfChange($event, index)">
+                                                
+                                                <!-- PDF Validation Indicator -->
+                                                <div x-show="item.data.pdf_validation" class="mt-2 space-y-2 animate-fadeIn text-[10px] font-black uppercase tracking-widest">
+                                                    <!-- UUID Badge -->
+                                                    <template x-if="item.data.pdf_validation?.uuid_match">
+                                                        <div class="flex items-center text-green-600 bg-green-50 dark:bg-green-900/20 px-3 py-1.5 rounded-lg border border-green-100">
+                                                            <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                                            UUID VALIDADO
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="item.data.pdf_validation && !item.data.pdf_validation.uuid_match && !item.data.pdf_validation.error">
+                                                        <div class="flex items-center text-red-600 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg border border-red-100">
+                                                            <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                                            UUID NO COINCIDE
+                                                        </div>
+                                                    </template>
+
+                                                    <!-- Total Badge -->
+                                                    <template x-if="item.data.pdf_validation?.total_match">
+                                                        <div class="flex items-center text-green-600 bg-green-50 dark:bg-green-900/20 px-3 py-1.5 rounded-lg border border-green-100">
+                                                            <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                                            TOTAL VALIDADO
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="item.data.pdf_validation && !item.data.pdf_validation.total_match && !item.data.pdf_validation.error">
+                                                        <div class="flex items-center text-red-600 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg border border-red-100">
+                                                            <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                                            IMPORTE NO COINCIDE
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Clasificación -->
+                                        <div class="space-y-6">
+                                            <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3">Clasificación</h4>
+                                            <div>
+                                                <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Categoría *</label>
+                                                <select :name="'items['+index+'][category]'" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 text-sm py-3" required>
+                                                    <option value="">Selecciona...</option>
+                                                    @foreach($categories as $cat)
+                                                        <option value="{{ $cat }}">{{ $cat }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Justificación *</label>
+                                                <textarea :name="'items['+index+'][observaciones]'" rows="4" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm text-sm" required placeholder="Motivo del gasto..."></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Right Column: ALL DATA FIELDS -->
+                                    <div class="lg:col-span-8 space-y-8">
+                                        <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3">Información del Sistema (CFDI)</h4>
+                                        
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
+                                            <div class="col-span-1 md:col-span-2">
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Folio Fiscal (UUID)</label>
+                                                <input type="text" :value="item.data.uuid" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs font-mono text-gray-600 dark:text-gray-400" readonly placeholder="Esperando XML...">
+                                            </div>
+                                            
+                                            <div>
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">RFC Emisor</label>
+                                                <input type="text" :value="item.data.rfc_emisor" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                            </div>
+                                            <div>
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Folio Interno (XML)</label>
+                                                <input type="text" :value="item.data.folio" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                            </div>
+
+                                            <div>
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Nombre Emisor</label>
+                                                <input type="text" :value="item.data.nombre_emisor" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                            </div>
+                                            <div>
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Fecha Emisión</label>
+                                                <input type="text" :value="item.data.fecha" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                            </div>
+
+                                            <div class="border-t border-gray-50 dark:border-gray-700/50 pt-4 col-span-1 md:col-span-2"></div>
+
+                                            <div>
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">RFC Receptor</label>
+                                                <input type="text" :value="item.data.rfc_receptor" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                            </div>
+                                            <div>
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Nombre Receptor</label>
+                                                <input type="text" :value="item.data.nombre_receptor" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs mb-3" readonly>
+                                                <!-- RESTORED CONFIRMATION -->
+                                                <div class="flex items-center">
+                                                    <input type="checkbox" :name="'items['+index+'][confirm_company]'" class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" required>
+                                                    <label class="ml-2 text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase italic">
+                                                        Confirmo mi empresa *
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <div class="border-t border-gray-50 dark:border-gray-700/50 pt-4 col-span-1 md:col-span-2"></div>
+
+                                            <div>
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2 text-indigo-600">Subtotal</label>
+                                                <input type="text" :value="item.data.subtotal ? ('$ ' + parseFloat(item.data.subtotal).toLocaleString('es-MX', {minimumFractionDigits: 2})) : '$ 0.00'" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-indigo-600" readonly>
+                                            </div>
+                                            <div>
+                                                <label class="block text-[10px] font-black text-white bg-indigo-600 rounded-t-lg px-2 py-1 uppercase mb-0 tracking-widest inline-block">Total del Gasto</label>
+                                                <input type="text" :value="item.data.total ? ('$ ' + parseFloat(item.data.total).toLocaleString('es-MX', {minimumFractionDigits: 2}) + ' ' + item.data.moneda) : '$ 0.00 MXN'" class="w-full bg-indigo-50 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-800 rounded-xl rounded-tl-none text-xl font-black text-indigo-700 dark:text-indigo-300 py-3" readonly>
+                                            </div>
+                                        </div>
+
+                                        @if($type === 'comida')
+                                            <div class="bg-orange-50 dark:bg-orange-900/20 p-8 rounded-3xl border border-orange-100 dark:border-orange-800 grid grid-cols-1 md:grid-cols-2 gap-8 mt-10 animate-slideDown">
+                                                <h4 class="col-span-2 text-xs font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest border-b border-orange-200 pb-2">Detalles Comida</h4>
+                                                <div>
+                                                    <label class="block text-sm font-bold text-orange-800 dark:text-orange-300 mb-2">Asistentes *</label>
+                                                    <input type="number" :name="'items['+index+'][attendees_count]'" min="1" class="w-full border-orange-200 dark:border-orange-800 dark:bg-gray-900 rounded-xl" :required="type === 'comida'">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-bold text-orange-800 dark:text-orange-300 mb-2">Lugar *</label>
+                                                    <input type="text" :name="'items['+index+'][location]'" class="w-full border-orange-200 dark:border-orange-800 dark:bg-gray-900 rounded-xl" :required="type === 'comida'" placeholder="Restaurante...">
+                                                </div>
+                                                <div class="col-span-2">
+                                                    <label class="block text-sm font-bold text-orange-800 dark:text-orange-300 mb-2">Invitados (Nombres)</label>
+                                                    <textarea :name="'items['+index+'][attendees_names]'" rows="2" class="w-full border-orange-200 dark:border-orange-800 dark:bg-gray-900 rounded-xl"></textarea>
+                                                </div>
+                                            </div>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <div class="flex flex-col items-center">
+                        <button type="button" x-on:click="addItem()" class="group flex items-center justify-center p-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[2rem] hover:shadow-2xl transition-all transform hover:scale-105">
+                            <div class="bg-white dark:bg-gray-800 px-12 py-6 rounded-[1.9rem] flex items-center">
+                                <div class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center mr-4 group-hover:rotate-180 transition-transform duration-500">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                </div>
+                                <span class="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">AGREGAR FACTURA</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="mt-24 border-t border-gray-100 dark:border-gray-700 pt-12 pb-32 flex flex-col md:flex-row items-center justify-between gap-10">
+                    <a href="{{ route('reimbursements.index') }}" class="text-[10px] font-black text-gray-400 hover:text-gray-900 dark:hover:text-white uppercase tracking-[0.3em] transition-all">CANCELAR TODO</a>
+                    
+                    <div class="flex items-center space-x-12">
+                        <div x-show="type !== 'viaje' && items.length > 0" class="text-right hidden sm:block">
+                            <span class="block text-[10px] font-black text-indigo-400 uppercase mb-1">Total Acumulado</span>
+                            <span class="block text-4xl font-black text-gray-900 dark:text-white" x-text="'$ ' + calculateTotal().toLocaleString('es-MX', {minimumFractionDigits: 2})"></span>
+                        </div>
+                        
+                        <button type="submit" class="group inline-flex items-center px-16 py-8 bg-indigo-600 text-white rounded-[2rem] font-black text-2xl uppercase italic hover:bg-indigo-700 shadow-2xl transition-all transform hover:scale-105">
+                            <span>REGISTRAR TODO</span>
+                            <svg class="w-8 h-8 ml-4 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
 
     @push('scripts')
     <script>
-        const xmlInput = document.getElementById('xml_file');
-        const pdfInput = document.getElementById('pdf_file');
-        
-        const noPdfCheckbox = document.getElementById('no_pdf');
-        const loadingOverlay = document.getElementById('loading-overlay');
-        
-        noPdfCheckbox.addEventListener('change', function() {
-            if (this.checked) {
-                pdfInput.disabled = true;
-                pdfInput.value = ''; // Clear file
-                pdfInput.classList.add('opacity-50', 'cursor-not-allowed');
-                // Re-trigger parse if XML exists to clear validation messages about PDF
-                if (xmlInput.files.length > 0) parseFiles();
-            } else {
-                pdfInput.disabled = false;
-                pdfInput.classList.remove('opacity-50', 'cursor-not-allowed');
-            }
-        });
-
-        function parseFiles() {
-            const xmlFile = xmlInput.files[0];
-            const pdfFile = !noPdfCheckbox.checked ? pdfInput.files[0] : null;
-            
-            if (!xmlFile) return;
-
-            // Show Loading
-            loadingOverlay.classList.remove('hidden');
-
-            const formData = new FormData();
-            formData.append('xml_file', xmlFile);
-            if (pdfFile) {
-                formData.append('pdf_file', pdfFile);
-            }
-            formData.append('_token', '{{ csrf_token() }}');
-
-            // Clear previous validation messages
-            const existingMsg = document.getElementById('pdf-validation-msg');
-            if(existingMsg) existingMsg.remove();
-
-            fetch('{{ route("reimbursements.parse") }}', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                loadingOverlay.classList.add('hidden'); // Hide Loading
-
-                if (data.error) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error de Validación',
-                        text: data.error,
-                        confirmButtonText: 'Entendido'
+        function reimbursementForm() {
+            return {
+                type: '{{ $type }}',
+                items: [],
+                init() { if (this.type !== 'viaje') this.addItem(); },
+                addItem() {
+                    this.items.push({
+                        id: Date.now() + Math.random(),
+                        fileName: '',
+                        xmlParsed: false,
+                        noPdf: false,
+                        data: { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0 }
                     });
-                    // Clear the invalid file input to allow re-upload
-                    xmlInput.value = ''; 
-                } else {
-                    // Populate fields
-                    document.getElementById('uuid').value = data.uuid || '';
-                    document.getElementById('folio').value = data.folio || '';
-                    document.getElementById('rfc_emisor').value = data.rfc_emisor || '';
-                    document.getElementById('nombre_emisor').value = data.nombre_emisor || '';
-                    document.getElementById('rfc_receptor').value = data.rfc_receptor || '';
-                    document.getElementById('nombre_receptor').value = data.nombre_receptor || '';
-                    document.getElementById('fecha').value = data.fecha || '';
-                    document.getElementById('moneda').value = data.moneda || '';
-                    document.getElementById('subtotal').value = data.subtotal || '';
-                    document.getElementById('total').value = data.total || '';
-                    document.getElementById('tipo_comprobante').value = data.tipo_comprobante || '';
-                    
-                    // Handle PDF Validation Feedback
-                    if (data.pdf_validation) {
-                        // Store validation data in hidden input
-                        document.getElementById('validation_data_input').value = JSON.stringify(data.pdf_validation);
-
-                        const msgDiv = document.createElement('div');
-                        msgDiv.id = 'pdf-validation-msg';
-                        msgDiv.className = 'mt-4 p-4 rounded-md ' + (data.pdf_validation.uuid_match ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700');
-                        
-                        let html = '';
-                        if (data.pdf_validation.error) {
-                             html = `<p class="font-bold">Error PDF:</p><p>${data.pdf_validation.error}</p>`;
-                        } else {
-                            html = `<p class="font-bold">Validación PDF:</p>
-                                    <ul class="list-disc list-inside">
-                                        <li>UUID en PDF: ${data.pdf_validation.uuid_match ? '✅ Encontrado' : '❌ NO Encontrado'}</li>
-                                        <li>Total en PDF: ${data.pdf_validation.total_match ? '✅ Encontrado' : '⚠️ NO Encontrado (puede ser formato)'}</li>
-                                    </ul>`;
-                        }
-                        msgDiv.innerHTML = html;
-                        
-                        // Insert after the file inputs container
-                        document.querySelector('.grid.grid-cols-1.md\\:grid-cols-2.gap-6.mb-6').insertAdjacentElement('afterend', msgDiv);
-                    }
-
-                    // Success Toast
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Información Extraída',
-                        text: 'Los datos del XML han sido cargados correctamente.',
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 3000
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                loadingOverlay.classList.add('hidden');
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error del Sistema',
-                    text: 'Hubo un problema al comunicarse con el servidor.',
-                });
-            });
-        }
-
-        xmlInput.addEventListener('change', parseFiles);
-        pdfInput.addEventListener('change', parseFiles);
-
-        // Initialize Tom Select for Category
-        if (document.getElementById('category')) {
-            new TomSelect("#category", {
-                create: true, // Allow user to type new values
-                sortField: {
-                    field: "text",
-                    direction: "asc"
                 },
-                maxItems: 1, // Ensure only one category can be selected/typed
-                render: {
-                    option_create: function(data, escape) {
-                        return '<div class="create">Crear nueva categoría: <strong>' + escape(data.input) + '</strong>&hellip;</div>';
-                    },
-                    no_results: function(data, escape) {
-                        return '<div class="no-results">No hay resultados. Escribe para crear.</div>';
+                removeItem(index) { if (this.items.length > 1) this.items.splice(index, 1); else Swal.fire('Atención', 'Mínimo un comprobante.', 'info'); },
+                handleXmlChange(e, index) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    this.items[index].fileName = 'Leyendo...';
+                    this.validateFiles(index);
+                },
+                handlePdfChange(e, index) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    this.validateFiles(index);
+                },
+                validateFiles(index) {
+                    const item = this.items[index];
+                    const xmlInput = document.querySelector(`input[name="items[${index}][xml_file]"]`);
+                    const pdfInput = document.querySelector(`input[name="items[${index}][pdf_file]"]`);
+                    
+                    if (!xmlInput || !xmlInput.files[0]) return;
+
+                    const formData = new FormData();
+                    formData.append('xml_file', xmlInput.files[0]);
+                    if (pdfInput && pdfInput.files[0]) {
+                        formData.append('pdf_file', pdfInput.files[0]);
                     }
-                }
-            });
+                    formData.append('_token', '{{ csrf_token() }}');
+
+                    fetch('{{ route("reimbursements.parse") }}', { 
+                        method: 'POST', 
+                        body: formData, 
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' } 
+                    })
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.error) { 
+                            Swal.fire('Error', d.error, 'error'); 
+                            item.xmlParsed = false; 
+                            if (!d.error.includes('CFDI')) xmlInput.value = ''; 
+                            item.fileName = ''; 
+                        }
+                        else { 
+                            item.xmlParsed = true; 
+                            item.data = d; 
+                            item.fileName = 'Factura: ' + (d.folio || d.uuid.substring(0, 8));
+                            
+                            if (d.pdf_validation && !d.pdf_validation.uuid_match && !item.noPdf) {
+                                Swal.fire({
+                                    icon: 'warning',
+                                    title: 'PDF no coincide',
+                                    text: 'El UUID del XML no se encuentra en el archivo PDF seleccionado.',
+                                    confirmButtonColor: '#4f46e5'
+                                });
+                            }
+                        }
+                    });
+                },
+                calculateTotal() { return this.items.reduce((acc, i) => acc + (parseFloat(i.data.total) || 0), 0); },
+                handleSubmit() { document.getElementById('loading-overlay').classList.remove('hidden'); }
+            }
         }
     </script>
+
+    <style>
+        .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-slideDown { animation: slideDown 0.4s ease forwards; }
+        @keyframes slideDown { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    </style>
     @endpush
 </x-app-layout>
