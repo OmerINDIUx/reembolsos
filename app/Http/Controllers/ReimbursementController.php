@@ -152,7 +152,13 @@ class ReimbursementController extends Controller
      */
     public function create(Request $request)
     {
-        $type = $request->query('type');
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        if ($user->isCxp() || $user->isTreasury()) {
+            abort(403, 'Tu rol (CXP/Tesorería) no tiene permisos para crear reembolsos, solo para aprobarlos y pagarlos.');
+        }
+
+        $type = $request->get('type', 'reembolso');
         $allowedTypes = ['reembolso', 'fondo_fijo', 'comida', 'viaje'];
 
         if (!$type || !in_array($type, $allowedTypes)) {
@@ -160,8 +166,20 @@ class ReimbursementController extends Controller
         }
 
         $user = Auth::user();
-        // Allow all users to select from all cost centers
-        $costCenters = CostCenter::orderBy('name')->get();
+        
+        // Filter cost centers based on role
+        if ($user->isAdmin()) {
+            $costCenters = CostCenter::orderBy('name')->get();
+        } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
+            $costCenters = CostCenter::where(function($q) use ($user) {
+                if ($user->isDirector()) $q->orWhere('director_id', $user->id);
+                if ($user->isControlObra()) $q->orWhere('control_obra_id', $user->id);
+                if ($user->isExecutiveDirector()) $q->orWhere('director_ejecutivo_id', $user->id);
+            })->orderBy('name')->get();
+        } else {
+            // Standard users see all for now (unless specified otherwise)
+            $costCenters = CostCenter::orderBy('name')->get();
+        }
         
         // Auto-fill week: WeekNumber-Year (e.g., 08-2026)
         $currentWeek = now()->format('W-Y');
@@ -184,6 +202,12 @@ class ReimbursementController extends Controller
      */
     public function bulkStore(Request $request)
     {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        if ($user->isCxp() || $user->isTreasury()) {
+            abort(403, 'Tu rol no tiene permisos para registrar reembolsos.');
+        }
+
         $request->validate([
             'type' => 'required|in:reembolso,fondo_fijo,comida',
             'cost_center_id' => 'required|exists:cost_centers,id',
@@ -200,8 +224,53 @@ class ReimbursementController extends Controller
         $type = $request->type;
         $costCenterId = $request->cost_center_id;
         $week = $request->week;
-        $user = Auth::user();
         $costCenter = CostCenter::find($costCenterId);
+
+        // Ownership Validation: N1, N2, N3 can only register in their own cost centers
+        if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
+            $isAuthorized = false;
+            if ($user->isDirector() && $costCenter->director_id === $user->id) $isAuthorized = true;
+            if ($user->isControlObra() && $costCenter->control_obra_id === $user->id) $isAuthorized = true;
+            if ($user->isExecutiveDirector() && $costCenter->director_ejecutivo_id === $user->id) $isAuthorized = true;
+
+            if (!$isAuthorized && !$user->isAdmin()) {
+                abort(403, 'No tienes permiso para registrar gastos en este centro de costos.');
+            }
+        }
+
+        // Auto-approval logic based on creator's role
+        $initialStatus = 'pendiente';
+        $autoNote = "";
+        $approvalData = [];
+
+        if ($user->isExecutiveDirector()) {
+            $initialStatus = 'aprobado_ejecutivo';
+            $autoNote = "\n[AUTO-APROBACIÓN SISTEMA: Ingresado por Director Ejecutivo]";
+            $approvalData = [
+                'approved_by_director_id' => $user->id,
+                'approved_by_director_at' => now(),
+                'approved_by_control_id' => $user->id,
+                'approved_by_control_at' => now(),
+                'approved_by_executive_id' => $user->id,
+                'approved_by_executive_at' => now(),
+            ];
+        } elseif ($user->isControlObra()) {
+            $initialStatus = 'aprobado_control';
+            $autoNote = "\n[AUTO-APROBACIÓN SISTEMA: Ingresado por Control de Obra]";
+            $approvalData = [
+                'approved_by_director_id' => $user->id,
+                'approved_by_director_at' => now(),
+                'approved_by_control_id' => $user->id,
+                'approved_by_control_at' => now(),
+            ];
+        } elseif ($user->isDirector()) {
+            $initialStatus = 'aprobado_director';
+            $autoNote = "\n[AUTO-APROBACIÓN SISTEMA: Ingresado por Director]";
+            $approvalData = [
+                'approved_by_director_id' => $user->id,
+                'approved_by_director_at' => now(),
+            ];
+        }
 
         $createdCount = 0;
         $failedCount = 0;
@@ -228,7 +297,9 @@ class ReimbursementController extends Controller
                 $xmlPath = $item['xml_file']->store('xmls');
                 $pdfPath = $pdfFile ? $pdfFile->store('pdfs') : null;
 
-                $reimbursement = Reimbursement::create([
+                $finalObs = ($item['observaciones'] ?? "") . $autoNote;
+
+                $reimbursementData = array_merge([
                     'type' => $type,
                     'cost_center_id' => $costCenterId,
                     'week' => $week,
@@ -246,15 +317,17 @@ class ReimbursementController extends Controller
                     'tipo_comprobante' => $xmlData['tipo_comprobante'],
                     'xml_path' => $xmlPath,
                     'pdf_path' => $pdfPath,
-                    'status' => 'pendiente',
-                    'observaciones' => $item['observaciones'] ?? null,
+                    'status' => $initialStatus,
+                    'observaciones' => trim($finalObs),
                     'attendees_count' => $item['attendees_count'] ?? null,
                     'attendees_names' => $item['attendees_names'] ?? null,
                     'location' => $item['location'] ?? null,
                     'user_id' => $user->id,
                     'company_confirmed' => true,
                     'validation_data' => $validationData, // Saving validation for the table
-                ]);
+                ], $approvalData);
+
+                $reimbursement = Reimbursement::create($reimbursementData);
 
                 $prefix = strtoupper(substr($type, 0, 3));
                 $reimbursement->folio = $prefix . '-' . str_pad($reimbursement->id, 6, '0', STR_PAD_LEFT);
@@ -269,12 +342,31 @@ class ReimbursementController extends Controller
             }
         }
 
-        if ($createdCount > 0 && $costCenter && $costCenter->director) {
-            $costCenter->director->notify(new ReimbursementNotification(
-                null, 
-                "Se cargaron {$createdCount} reembolsos. Revísalos en tu listado de reembolsos.", 
-                "info"
-            ));
+        // Notify NEXT person in line
+        if ($createdCount > 0 && $costCenter) {
+            $targetUser = null;
+            $notifMsg = "Se cargaron {$createdCount} reembolsos. Revísalos en tu listado de reembolsos.";
+
+            if ($initialStatus === 'aprobado_ejecutivo') {
+                // To CXP
+                $cxpUsers = User::where('role', 'accountant')->get();
+                foreach($cxpUsers as $cxp) {
+                    $cxp->notify(new ReimbursementNotification(null, $notifMsg, "info"));
+                }
+            } elseif ($initialStatus === 'aprobado_control') {
+                // To N3
+                $targetUser = $costCenter->directorEjecutivo;
+            } elseif ($initialStatus === 'aprobado_director') {
+                // To N2
+                $targetUser = $costCenter->controlObra;
+            } else {
+                // Standard case: To N1
+                $targetUser = $costCenter->director;
+            }
+
+            if ($targetUser) {
+                $targetUser->notify(new ReimbursementNotification(null, $notifMsg, "info"));
+            }
         }
 
         $message = "Se han creado {$createdCount} reembolsos exitosamente.";
@@ -411,6 +503,12 @@ class ReimbursementController extends Controller
      */
     public function store(Request $request)
     {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        if ($user->isCxp() || $user->isTreasury()) {
+            abort(403, 'Tu rol no tiene permisos para registrar reembolsos.');
+        }
+
         $request->validate([
             'type' => 'required|in:reembolso,fondo_fijo,comida,viaje',
             'cost_center_id' => 'required|exists:cost_centers,id',
@@ -453,7 +551,56 @@ class ReimbursementController extends Controller
         $xmlPath = $request->file('xml_file') ? $request->file('xml_file')->store('xmls') : null;
         $pdfPath = $request->file('pdf_file') ? $request->file('pdf_file')->store('pdfs') : null;
 
-        $reimbursement = Reimbursement::create([
+        // Ownership Validation
+        $costCenter = CostCenter::findOrFail($request->cost_center_id);
+        if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
+            $isAuthorized = false;
+            if ($user->isDirector() && $costCenter->director_id === $user->id) $isAuthorized = true;
+            if ($user->isControlObra() && $costCenter->control_obra_id === $user->id) $isAuthorized = true;
+            if ($user->isExecutiveDirector() && $costCenter->director_ejecutivo_id === $user->id) $isAuthorized = true;
+
+            if (!$isAuthorized && !$user->isAdmin()) {
+                abort(403, 'No tienes permiso para registrar gastos en este centro de costos.');
+            }
+        }
+
+        // Auto-approval logic
+        $initialStatus = 'pendiente';
+        $autoNote = "";
+        $approvalData = [];
+
+        if ($user->isExecutiveDirector()) {
+            $initialStatus = 'aprobado_ejecutivo';
+            $autoNote = "\n[AUTO-APROBACIÓN SISTEMA: Ingresado por Director Ejecutivo]";
+            $approvalData = [
+                'approved_by_director_id' => $user->id,
+                'approved_by_director_at' => now(),
+                'approved_by_control_id' => $user->id,
+                'approved_by_control_at' => now(),
+                'approved_by_executive_id' => $user->id,
+                'approved_by_executive_at' => now(),
+            ];
+        } elseif ($user->isControlObra()) {
+            $initialStatus = 'aprobado_control';
+            $autoNote = "\n[AUTO-APROBACIÓN SISTEMA: Ingresado por Control de Obra]";
+            $approvalData = [
+                'approved_by_director_id' => $user->id,
+                'approved_by_director_at' => now(),
+                'approved_by_control_id' => $user->id,
+                'approved_by_control_at' => now(),
+            ];
+        } elseif ($user->isDirector()) {
+            $initialStatus = 'aprobado_director';
+            $autoNote = "\n[AUTO-APROBACIÓN SISTEMA: Ingresado por Director]";
+            $approvalData = [
+                'approved_by_director_id' => $user->id,
+                'approved_by_director_at' => now(),
+            ];
+        }
+
+        $finalObs = ($request->observaciones ?? "") . $autoNote;
+
+        $reimbursementData = array_merge([
             'type' => $request->type,
             'cost_center_id' => $request->cost_center_id,
             'week' => $request->week,
@@ -471,8 +618,8 @@ class ReimbursementController extends Controller
             'tipo_comprobante' => $request->tipo_comprobante,
             'xml_path' => $xmlPath,
             'pdf_path' => $pdfPath,
-            'status' => 'pendiente',
-            'observaciones' => $request->observaciones,
+            'status' => $initialStatus,
+            'observaciones' => trim($finalObs),
             'attendees_count' => $request->attendees_count,
             'attendees_names' => $request->attendees_names,
             'location' => $request->location,
@@ -486,7 +633,9 @@ class ReimbursementController extends Controller
             'company_confirmed' => $request->has('confirm_company') ? true : false,
             'validation_data' => $request->validation_data ? json_decode($request->validation_data, true) : null,
             'user_id' => Auth::id(),
-        ]);
+        ], $approvalData);
+
+        $reimbursement = Reimbursement::create($reimbursementData);
 
         // Generate Custom Folio: XXX-000000
         // Type Map: REE, FON, COM, VIA
@@ -494,13 +643,27 @@ class ReimbursementController extends Controller
         $reimbursement->folio = $prefix . '-' . str_pad($reimbursement->id, 6, '0', STR_PAD_LEFT);
         $reimbursement->save();
 
-        // Notify Director
-        if ($reimbursement->costCenter && $reimbursement->costCenter->director) {
-            $reimbursement->costCenter->director->notify(new ReimbursementNotification(
-                $reimbursement, 
-                "Nueva solicitud ({$reimbursement->folio}) pendiente de tu aprobación.", 
-                "info"
-            ));
+        // Notify NEXT person in line
+        if ($reimbursement->costCenter) {
+            $notifMsg = "Nueva solicitud ({$reimbursement->folio}) pendiente de tu aprobación.";
+            $targetUser = null;
+
+            if ($initialStatus === 'aprobado_ejecutivo') {
+                $cxpUsers = User::where('role', 'accountant')->get();
+                foreach($cxpUsers as $cxp) {
+                    $cxp->notify(new ReimbursementNotification($reimbursement, $notifMsg, "info"));
+                }
+            } elseif ($initialStatus === 'aprobado_control') {
+                $targetUser = $reimbursement->costCenter->directorEjecutivo;
+            } elseif ($initialStatus === 'aprobado_director') {
+                $targetUser = $reimbursement->costCenter->controlObra;
+            } else {
+                $targetUser = $reimbursement->costCenter->director;
+            }
+
+            if ($targetUser) {
+                $targetUser->notify(new ReimbursementNotification($reimbursement, $notifMsg, "info"));
+            }
         }
 
         // Handle International Trip Files
@@ -519,7 +682,7 @@ class ReimbursementController extends Controller
         // Redirect logic
         if ($request->type === 'viaje') {
              return redirect()->route('reimbursements.show', $reimbursement)
-                         ->with('success', 'Viaje creado exitosamente. Ahora puede agregar gastos.');
+                         ->with('success', 'Viaje creado exitosamente.');
         }
         
         // If it was added to a parent trip
