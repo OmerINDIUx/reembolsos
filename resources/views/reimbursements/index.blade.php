@@ -32,8 +32,11 @@
 
                     <!-- Search & Filter Form -->
                     <div class="mb-6 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                        <form id="filter-form" action="{{ route('reimbursements.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <form id="filter-form" action="{{ route('reimbursements.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4">
                             <input type="hidden" name="tab" value="{{ request('tab', 'active') }}">
+                            <input type="hidden" name="sort_by" id="input-sort-by" value="{{ request('sort_by', 'created_at') }}">
+                            <input type="hidden" name="sort_order" id="input-sort-order" value="{{ request('sort_order', 'desc') }}">
+                            
                             <!-- Search Input -->
                             <div class="col-span-1 md:col-span-2">
                                 <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar (Folio, UUID, Emisor, Título)</label>
@@ -64,8 +67,20 @@
                                 </select>
                             </div>
 
+                            <!-- Date From -->
+                            <div>
+                                <label for="from_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Desde</label>
+                                <input type="date" name="from_date" id="from_date" value="{{ request('from_date') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            </div>
+
+                            <!-- Date To -->
+                            <div>
+                                <label for="to_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hasta</label>
+                                <input type="date" name="to_date" id="to_date" value="{{ request('to_date') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            </div>
+
                             <!-- Buttons -->
-                            <div class="col-span-1 md:col-span-4 flex justify-end space-x-2 mt-2">
+                            <div class="col-span-1 md:col-span-6 flex justify-end space-x-2 mt-2">
                                 <a href="{{ route('reimbursements.index') }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
                                     Limpiar
                                 </a>
@@ -80,11 +95,86 @@
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Folio / UUID</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fecha</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Emisor</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Total</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="folio">
+                                            Folio / UUID
+                                            <span class="ml-1">
+                                                @if(request('sort_by') == 'folio')
+                                                    @if(request('sort_order', 'desc') == 'asc')
+                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                    @else
+                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                    @endif
+                                                @else
+                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                @endif
+                                            </span>
+                                        </button>
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="fecha">
+                                            Fecha
+                                            <span class="ml-1">
+                                                @if(request('sort_by') == 'fecha')
+                                                    @if(request('sort_order', 'desc') == 'asc')
+                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                    @else
+                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                    @endif
+                                                @else
+                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                @endif
+                                            </span>
+                                        </button>
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="nombre_emisor">
+                                            Emisor
+                                            <span class="ml-1">
+                                                @if(request('sort_by') == 'nombre_emisor')
+                                                    @if(request('sort_order', 'desc') == 'asc')
+                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                    @else
+                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                    @endif
+                                                @else
+                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                @endif
+                                            </span>
+                                        </button>
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="total">
+                                            Total
+                                            <span class="ml-1">
+                                                @if(request('sort_by') == 'total')
+                                                    @if(request('sort_order', 'desc') == 'asc')
+                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                    @else
+                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                    @endif
+                                                @else
+                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                @endif
+                                            </span>
+                                        </button>
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="status">
+                                            Status
+                                            <span class="ml-1">
+                                                @if(request('sort_by') == 'status')
+                                                    @if(request('sort_order', 'desc') == 'asc')
+                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                    @else
+                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                    @endif
+                                                @else
+                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                @endif
+                                            </span>
+                                        </button>
+                                    </th>
                                     <th scope="col" class="relative px-6 py-3">
                                         <span class="sr-only">Acciones</span>
                                     </th>
@@ -239,7 +329,6 @@
             
             // Function to handle fetching and updating
             function fetchResults(url) {
-                // simple opacity fade for feedback
                 container.style.opacity = '0.5';
                 
                 fetch(url, {
@@ -255,11 +344,10 @@
                     container.innerHTML = newContent;
                     container.style.opacity = '1';
                     
-                    // Update URL without reload
                     window.history.pushState({}, '', url);
                     
-                    // Re-attach pagination listeners
                     attachPaginationListeners();
+                    attachSortListeners();
                 })
                 .catch(error => {
                     console.error('Error:', error);
@@ -286,23 +374,49 @@
             // Listen to inputs
             form.querySelectorAll('input').forEach(input => {
                 input.addEventListener('input', function() {
+                    if (this.type === 'date') return;
                     clearTimeout(debounceTimer);
                     debounceTimer = setTimeout(() => {
                         submitFilter();
-                    }, 500); // 500ms delay
+                    }, 500);
+                });
+                
+                input.addEventListener('change', function() {
+                    submitFilter();
                 });
             });
 
-            // Listen to selects (immediate trigger)
+            // Listen to selects
             form.querySelectorAll('select').forEach(select => {
                 select.addEventListener('change', function() {
                     submitFilter();
                 });
             });
             
+            // Handle Sorting
+            function attachSortListeners() {
+                container.querySelectorAll('.sort-header').forEach(header => {
+                    header.addEventListener('click', function() {
+                        const sortBy = this.getAttribute('data-sort');
+                        const sortByInput = document.getElementById('input-sort-by');
+                        const sortOrderInput = document.getElementById('input-sort-order');
+                        
+                        let newOrder = 'asc';
+                        if (sortBy === sortByInput.value) {
+                            newOrder = sortOrderInput.value === 'asc' ? 'desc' : 'asc';
+                        }
+                        
+                        sortByInput.value = sortBy;
+                        sortOrderInput.value = newOrder;
+                        
+                        submitFilter();
+                    });
+                });
+            }
+            
             // Handle Pagination Clicks
             function attachPaginationListeners() {
-                const links = container.querySelectorAll('a.page-link, .pagination a'); // Adapt selector to Laravel's pagination classes
+                const links = container.querySelectorAll('a.page-link, .pagination a'); 
                 links.forEach(link => {
                      link.addEventListener('click', function(e) {
                          e.preventDefault();
@@ -313,6 +427,7 @@
             
             // Initial attach
             attachPaginationListeners();
+            attachSortListeners();
         });
     </script>
 </x-app-layout>

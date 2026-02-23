@@ -67,7 +67,7 @@ class ReimbursementController extends Controller
             $historyStatuses[] = 'aprobado_cxp';
         }
         if ($user->isDirector()) {
-            $historyStatuses[] = 'aprobado_director'; // Also hide what director already approved from their active list
+            $historyStatuses[] = 'aprobado_director'; 
         }
 
         if ($tab === 'history') {
@@ -82,6 +82,28 @@ class ReimbursementController extends Controller
 
         if ($request->filled('type')) {
             $query->where('type', $request->type);
+        }
+
+        if ($request->filled('from_date')) {
+            $query->whereDate('fecha', '>=', $request->from_date);
+        }
+
+        if ($request->filled('to_date')) {
+            $query->whereDate('fecha', '<=', $request->to_date);
+        }
+
+        $sortField = $request->input('sort_by', 'created_at');
+        $sortOrder = $request->input('sort_order', 'desc');
+        
+        $allowedSortFields = ['folio', 'fecha', 'nombre_emisor', 'total', 'status', 'created_at'];
+        
+        // Remove the default orderBy to apply custom sorting
+        $query->getQuery()->orders = null;
+
+        if (in_array($sortField, $allowedSortFields)) {
+            $query->orderBy($sortField, $sortOrder === 'asc' ? 'asc' : 'desc');
+        } else {
+            $query->orderBy('created_at', 'desc');
         }
 
         $reimbursements = $query->paginate(10)->appends($request->all());
@@ -119,6 +141,10 @@ class ReimbursementController extends Controller
 
         return view('reimbursements.create', compact('type', 'costCenters', 'currentWeek', 'categories', 'parentReimbursement'));
     }
+
+
+
+
 
     /**
      * Parse XML and return data as JSON.
