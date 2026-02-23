@@ -32,4 +32,9 @@ class CostCenter extends Model
     {
         return $this->belongsTo(User::class, 'director_ejecutivo_id');
     }
+
+    public function reimbursements()
+    {
+        return $this->hasMany(Reimbursement::class);
+    }
 }

@@ -25,32 +25,83 @@ class ReimbursementController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        $tab = $request->input('tab', 'active');
         $query = Reimbursement::orderBy('created_at', 'desc');
 
-        // Permissions Logic
+        // Permissions & Stage Visibility Logic
         if ($user->isAdmin()) {
-            // Admins see all
+            if ($tab === 'active') {
+                $query->whereNotIn('status', ['aprobado', 'rechazado']);
+            } else {
+                $query->whereIn('status', ['aprobado', 'rechazado']);
+            }
         } elseif ($user->isTreasury()) {
-            // Tesorería sees CXP approved or final
-            $query->whereIn('status', ['aprobado_cxp', 'aprobado']);
+            if ($tab === 'active') {
+                $query->where('status', 'aprobado_cxp');
+            } else {
+                // History: Approved by CXP once, but not currently in Treasury's active hand
+                $query->whereNotNull('approved_by_cxp_at')
+                      ->where('status', '!=', 'aprobado_cxp');
+            }
         } elseif ($user->isCxp()) {
-            // CXP sees Executive approved, CXP approved, or final
-            $query->whereIn('status', ['aprobado_ejecutivo', 'aprobado_cxp', 'aprobado']);
+            if ($tab === 'active') {
+                $query->where('status', 'aprobado_ejecutivo');
+            } else {
+                // History: Approved by Executive once, but not currently in CXP's active hand
+                $query->whereNotNull('approved_by_executive_at')
+                      ->where('status', '!=', 'aprobado_ejecutivo');
+            }
         } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
-            // Assigned roles see: 
-            // 1. Their own 
-            // 2. Their assigned CCs
-            $query->where(function($q) use ($user) {
-                $q->where('user_id', $user->id)
-                  ->orWhereHas('costCenter', function($q2) use ($user) {
-                      if ($user->isDirector()) $q2->where('director_id', $user->id);
-                      if ($user->isControlObra()) $q2->where('control_obra_id', $user->id);
-                      if ($user->isExecutiveDirector()) $q2->where('director_ejecutivo_id', $user->id);
-                  });
+            $query->where(function($q) use ($user, $tab) {
+                // 1. Visibilidad como Creador (Dueño)
+                $q->where(function($ownerQuery) use ($user, $tab) {
+                    $ownerQuery->where('user_id', $user->id);
+                    if ($tab === 'active') {
+                        $ownerQuery->whereNotIn('status', ['aprobado', 'rechazado']);
+                    } else {
+                        $ownerQuery->whereIn('status', ['aprobado', 'rechazado']);
+                    }
+                });
+
+                // 2. Visibilidad como Aprobador (Rol designado en el Centro de Costos)
+                $q->orWhere(function($approverQuery) use ($user, $tab) {
+                    // Primero, restringir por Centro de Costos donde soy el aprobador designado
+                    $approverQuery->whereHas('costCenter', function($cc) use ($user) {
+                        if ($user->isDirector()) $cc->where('director_id', $user->id);
+                        if ($user->isControlObra()) $cc->where('control_obra_id', $user->id);
+                        if ($user->isExecutiveDirector()) $cc->where('director_ejecutivo_id', $user->id);
+                    });
+
+                    if ($tab === 'active') {
+                        // En "Activos", solo veo lo que me toca aprobar ahora mismo
+                        if ($user->isDirector()) $approverQuery->where('status', 'pendiente');
+                        if ($user->isControlObra()) $approverQuery->where('status', 'aprobado_director');
+                        if ($user->isExecutiveDirector()) $approverQuery->where('status', 'aprobado_control');
+                    } else {
+                        // En "Historial", veo lo que ya pasó por mis manos o fue rechazado/corregido
+                        if ($user->isDirector()) {
+                            $approverQuery->where('status', '!=', 'pendiente');
+                        }
+                        if ($user->isControlObra()) {
+                            $approverQuery->whereNotNull('approved_by_director_at')
+                                         ->where('status', '!=', 'aprobado_director');
+                        }
+                        if ($user->isExecutiveDirector()) {
+                            $approverQuery->whereNotNull('approved_by_control_at')
+                                         ->where('status', '!=', 'aprobado_control');
+                        }
+                    }
+                });
             });
-        } else {
+        }
+ else {
             // Standard Users see only their own
             $query->where('user_id', $user->id);
+            if ($tab === 'active') {
+                $query->whereNotIn('status', ['aprobado', 'rechazado']);
+            } else {
+                $query->whereIn('status', ['aprobado', 'rechazado']);
+            }
         }
 
         if ($request->filled('search')) {
@@ -62,25 +113,6 @@ class ReimbursementController extends Controller
                   ->orWhere('title', 'like', "%{$search}%");
             });
         }
-
-        $tab = $request->input('tab', 'active');
-        
-        $historyStatuses = ['aprobado', 'rechazado'];
-        if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->isCxp()) {
-            $historyStatuses[] = 'aprobado_cxp';
-        }
-        if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
-            $historyStatuses[] = 'aprobado_ejecutivo';
-            $historyStatuses[] = 'aprobado_control';
-            $historyStatuses[] = 'aprobado_director'; 
-        }
-
-        if ($tab === 'history') {
-            $query->whereIn('status', $historyStatuses);
-        } else {
-            $query->whereNotIn('status', $historyStatuses);
-        }
-
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
@@ -481,6 +513,39 @@ class ReimbursementController extends Controller
      */
     public function show(Reimbursement $reimbursement)
     {
+        $user = Auth::user();
+
+        // Admin & Owner always see
+        if ($user->isAdmin() || $user->id === $reimbursement->user_id) {
+            return view('reimbursements.show', compact('reimbursement'));
+        }
+
+        // Strict Sequential Visibility
+        $cc = $reimbursement->costCenter;
+        $status = $reimbursement->status;
+
+        $canSee = false;
+        if ($user->isDirector() && $cc->director_id === $user->id) {
+            // Directors see everything once submitted
+            $canSee = true; 
+        } elseif ($user->isControlObra() && $cc->control_obra_id === $user->id) {
+            // Control sees only if Director already approved
+            $canSee = !in_array($status, ['pendiente', 'requiere_correccion']);
+        } elseif ($user->isExecutiveDirector() && $cc->director_ejecutivo_id === $user->id) {
+            // Executive sees only if Control already approved
+            $canSee = !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director']);
+        } elseif ($user->isCxp()) {
+            // CXP sees only if Executive already approved
+            $canSee = !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control']);
+        } elseif ($user->isTreasury()) {
+            // Treasury sees only if CXP already approved
+            $canSee = !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo']);
+        }
+
+        if (!$canSee) {
+            abort(403, 'Aún no tienes permiso para ver este reembolso. Está en una etapa anterior de aprobación.');
+        }
+
         $reimbursement->load(['files', 'children', 'parent', 'costCenter']);
         return view('reimbursements.show', compact('reimbursement'));
     }
@@ -570,17 +635,17 @@ class ReimbursementController extends Controller
             $newObs = "CORREGIDO por " . $user->name . " el " . now()->format('d/m/Y H:i') . ": " . $request->user_correction_comment;
             $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
 
-            // Route back appropriately in the correction flow
+            // Direct routing rule: Return to the level that was currently reviewing it
             if ($reimbursement->approved_by_cxp_id !== null) {
-                $data['status'] = 'aprobado_cxp'; // To Treasury
+                $data['status'] = 'aprobado_cxp'; // Back to Treasury
             } elseif ($reimbursement->approved_by_executive_id !== null) {
-                $data['status'] = 'aprobado_ejecutivo'; // To CXP
+                $data['status'] = 'aprobado_ejecutivo'; // Back to CXP
             } elseif ($reimbursement->approved_by_control_id !== null) {
-                $data['status'] = 'aprobado_control'; // To Executive
+                $data['status'] = 'aprobado_control'; // Back to Executive
             } elseif ($reimbursement->approved_by_director_id !== null) {
-                $data['status'] = 'aprobado_director'; // To Control
+                $data['status'] = 'aprobado_director'; // Back to Control
             } else {
-                $data['status'] = 'pendiente'; // To Director
+                $data['status'] = 'pendiente'; // Back to Director
             }
         } else {
             $request->validate([
