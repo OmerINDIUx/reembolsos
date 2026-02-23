@@ -28,23 +28,24 @@ class ReimbursementController extends Controller
         $query = Reimbursement::orderBy('created_at', 'desc');
 
         // Permissions Logic
-        // Permissions Logic
         if ($user->isAdmin()) {
             // Admins see all
         } elseif ($user->isTreasury()) {
-            // Tesorería ve solo lo aprobado por CXP o final (historial)
+            // Tesorería sees CXP approved or final
             $query->whereIn('status', ['aprobado_cxp', 'aprobado']);
         } elseif ($user->isCxp()) {
-            // Cuentas por pagar (CXP) ven solo aprobado_director o lo que ellos aprobaron (aprobado_cxp) o final
-            $query->whereIn('status', ['aprobado_director', 'aprobado_cxp', 'aprobado']);
-        } elseif ($user->isDirector()) {
-            // Directors see:
-            // 1. Their own reimbursements
-            // 2. Reimbursements from Cost Centers they direct
+            // CXP sees Executive approved, CXP approved, or final
+            $query->whereIn('status', ['aprobado_ejecutivo', 'aprobado_cxp', 'aprobado']);
+        } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
+            // Assigned roles see: 
+            // 1. Their own 
+            // 2. Their assigned CCs
             $query->where(function($q) use ($user) {
                 $q->where('user_id', $user->id)
                   ->orWhereHas('costCenter', function($q2) use ($user) {
-                      $q2->where('director_id', $user->id);
+                      if ($user->isDirector()) $q2->where('director_id', $user->id);
+                      if ($user->isControlObra()) $q2->where('control_obra_id', $user->id);
+                      if ($user->isExecutiveDirector()) $q2->where('director_ejecutivo_id', $user->id);
                   });
             });
         } else {
@@ -65,10 +66,12 @@ class ReimbursementController extends Controller
         $tab = $request->input('tab', 'active');
         
         $historyStatuses = ['aprobado', 'rechazado'];
-        if ($user->isDirector() || $user->isCxp()) {
+        if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->isCxp()) {
             $historyStatuses[] = 'aprobado_cxp';
         }
-        if ($user->isDirector()) {
+        if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
+            $historyStatuses[] = 'aprobado_ejecutivo';
+            $historyStatuses[] = 'aprobado_control';
             $historyStatuses[] = 'aprobado_director'; 
         }
 
@@ -496,7 +499,9 @@ class ReimbursementController extends Controller
         $canApprove = $user->isAdmin() || 
                       $user->isTreasury() || 
                       $user->isCxp() || 
-                      ($user->isDirector() && $reimbursement->costCenter->director_id === $user->id);
+                      ($user->isDirector() && $reimbursement->costCenter->director_id === $user->id) ||
+                      ($user->isControlObra() && $reimbursement->costCenter->control_obra_id === $user->id) ||
+                      ($user->isExecutiveDirector() && $reimbursement->costCenter->director_ejecutivo_id === $user->id);
 
         // Owner can update if it requires correction
         $isOwnerCorrecting = $user->id === $reimbursement->user_id && $reimbursement->status === 'requiere_correccion';
@@ -565,16 +570,17 @@ class ReimbursementController extends Controller
             $newObs = "CORREGIDO por " . $user->name . " el " . now()->format('d/m/Y H:i') . ": " . $request->user_correction_comment;
             $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
 
-            // Route back appropriately
+            // Route back appropriately in the correction flow
             if ($reimbursement->approved_by_cxp_id !== null) {
-                // Was rejected by Treasury
-                $data['status'] = 'aprobado_cxp';
+                $data['status'] = 'aprobado_cxp'; // To Treasury
+            } elseif ($reimbursement->approved_by_executive_id !== null) {
+                $data['status'] = 'aprobado_ejecutivo'; // To CXP
+            } elseif ($reimbursement->approved_by_control_id !== null) {
+                $data['status'] = 'aprobado_control'; // To Executive
             } elseif ($reimbursement->approved_by_director_id !== null) {
-                // Was rejected by CXP
-                $data['status'] = 'aprobado_director';
+                $data['status'] = 'aprobado_director'; // To Control
             } else {
-                // Was rejected by Director
-                $data['status'] = 'pendiente';
+                $data['status'] = 'pendiente'; // To Director
             }
         } else {
             $request->validate([
@@ -597,22 +603,38 @@ class ReimbursementController extends Controller
                  $data['status'] = $request->status;
                  
             } elseif ($request->status === 'aprobado') {
-                // Logic: Director -> aprobado_director -> CXP -> aprobado_cxp -> Tesoreria -> aprobado (Final)
-                if ($user->isDirector() && $reimbursement->costCenter->director_id === $user->id) {
+                // SEQUENTIAL APPROVAL LOGIC
+                
+                // 1. Director
+                if ($user->isDirector() && $reimbursement->costCenter->director_id === $user->id && $reimbursement->status === 'pendiente') {
                     $data['status'] = 'aprobado_director';
                     $data['approved_by_director_id'] = $user->id;
                     $data['approved_by_director_at'] = now();
                 }
 
-                // CXP 
-                if ($user->isCxp()) {
+                // 2. Control de Obra
+                if ($user->isControlObra() && $reimbursement->costCenter->control_obra_id === $user->id && $reimbursement->status === 'aprobado_director') {
+                    $data['status'] = 'aprobado_control';
+                    $data['approved_by_control_id'] = $user->id;
+                    $data['approved_by_control_at'] = now();
+                }
+
+                // 3. Director Ejecutivo
+                if ($user->isExecutiveDirector() && $reimbursement->costCenter->director_ejecutivo_id === $user->id && $reimbursement->status === 'aprobado_control') {
+                    $data['status'] = 'aprobado_ejecutivo';
+                    $data['approved_by_executive_id'] = $user->id;
+                    $data['approved_by_executive_at'] = now();
+                }
+
+                // 4. CXP (Cuentas por Pagar)
+                if ($user->isCxp() && $reimbursement->status === 'aprobado_ejecutivo') {
                     $data['status'] = 'aprobado_cxp';
                     $data['approved_by_cxp_id'] = $user->id;
                     $data['approved_by_cxp_at'] = now();
                 }
 
-                // Treasury or Admin can verify/finalize. 
-                if ($user->isTreasury() || $user->isAdmin()) {
+                // 5. Tesorería (Final)
+                if (($user->isTreasury() || $user->isAdmin()) && $reimbursement->status === 'aprobado_cxp') {
                     $data['status'] = 'aprobado';
                     $data['approved_by_treasury_id'] = $user->id;
                     $data['approved_by_treasury_at'] = now();
@@ -625,58 +647,32 @@ class ReimbursementController extends Controller
         // Notify based on status change
         if (isset($data['status'])) {
             $owner = $reimbursement->user;
-            
+
             if ($data['status'] === 'aprobado_director') {
-                if ($isOwnerCorrecting) {
-                    $cxpUsers = User::where('role', 'accountant')->get();
-                    foreach($cxpUsers as $cxp) {
-                        $cxp->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio} corregido y reenviado a CXP.", "info"));
-                    }
-                } else {
-                    // Notify CXP
-                    $cxpUsers = User::where('role', 'accountant')->get();
-                    foreach($cxpUsers as $cxp) {
-                        $cxp->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio} aprobado por Director, pendiente de CXP.", "warning"));
-                    }
-                    // Notify Owner
-                    if ($owner) {
-                        $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido aprobado por el Director.", "info"));
-                    }
-                }
+                $target = $reimbursement->costCenter->controlObra;
+                if ($target) $target->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: pendiente de revisión de Control de Obra.", "warning"));
+                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado por Director, pasa a Control de Obra.", "info"));
+            } elseif ($data['status'] === 'aprobado_control') {
+                $target = $reimbursement->costCenter->directorEjecutivo;
+                if ($target) $target->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: pendiente de revisión de Director Ejecutivo.", "warning"));
+                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado por Control de Obra, pasa a Dir. Ejecutivo.", "info"));
+            } elseif ($data['status'] === 'aprobado_ejecutivo') {
+                $cxpUsers = User::where('role', 'accountant')->get();
+                foreach($cxpUsers as $cxp) $cxp->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: pendiente de revisión de CXP.", "warning"));
+                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado por Dir. Ejecutivo, pasa a CXP.", "info"));
             } elseif ($data['status'] === 'aprobado_cxp') {
-                if ($isOwnerCorrecting) {
-                    // Resubmitted directly to Treasury
-                    $treasuryUsers = User::where('role', 'tesoreria')->get();
-                    foreach($treasuryUsers as $treasury) {
-                        $treasury->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio} corregido y reenviado a Tesorería.", "info"));
-                    }
-                } else {
-                    // Notify Treasury
-                    $treasuryUsers = User::where('role', 'tesoreria')->get();
-                    foreach($treasuryUsers as $treasury) {
-                        $treasury->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio} revisado por CXP, pendiente de pago.", "warning"));
-                    }
-                    // Notify Owner
-                    if ($owner) {
-                        $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido revisado por CXP.", "info"));
-                    }
-                }
+                $treasuryUsers = User::where('role', 'tesoreria')->get();
+                foreach($treasuryUsers as $treasury) $treasury->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: aprobado por CXP, pendiente de pago.", "warning"));
+                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} revisado por CXP.", "info"));
             } elseif ($data['status'] === 'aprobado') {
-                if ($owner) {
-                    $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido aprobado finalmente y está listo para pago.", "success"));
-                }
+                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado finalmente.", "success"));
             } elseif ($data['status'] === 'rechazado') {
-                if ($owner) {
-                    $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido rechazado definitivamente.", "danger"));
-                }
+                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} RECHAZADO.", "danger"));
             } elseif ($data['status'] === 'requiere_correccion') {
-                if ($owner) {
-                    $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} requiere corrección.", "warning"));
-                }
+                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} requiere corrección.", "warning"));
             } elseif ($data['status'] === 'pendiente' && $isOwnerCorrecting) {
-                // Resubmitted to Director
                 if ($reimbursement->costCenter && $reimbursement->costCenter->director) {
-                    $reimbursement->costCenter->director->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio} corregido y reenviado.", "info"));
+                    $reimbursement->costCenter->director->notify(new ReimbursementNotification($reimbursement, "Reembolso corregido y reenviado.", "info"));
                 }
             }
         }

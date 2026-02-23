@@ -143,10 +143,13 @@
                                     {{ $reimbursement->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
                                     {{ $reimbursement->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
                                     {{ $reimbursement->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
+                                    {{ $reimbursement->status === 'aprobado_director' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
+                                    {{ $reimbursement->status === 'aprobado_control' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : '' }}
+                                    {{ $reimbursement->status === 'aprobado_ejecutivo' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
                                     {{ $reimbursement->status === 'aprobado_cxp' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
-                                    {{ !in_array($reimbursement->status, ['aprobado', 'rechazado', 'requiere_correccion', 'aprobado_cxp']) ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
+                                    {{ $reimbursement->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
                                 ">
-                                    {{ ucfirst(str_replace('_', ' ', $reimbursement->status)) }}
+                                    @if($reimbursement->status === 'aprobado') Pagado @else {{ ucfirst(str_replace('_', ' ', $reimbursement->status)) }} @endif
                                 </span>
                             </dd>
                         </div>
@@ -155,31 +158,25 @@
                             <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Aprobaciones</dt>
                             <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
                                 <ul class="list-disc list-inside">
-                                    @if($reimbursement->approved_by_director_id)
-                                        <li class="text-green-600">
-                                            Director: {{ $reimbursement->directorApprover->name ?? 'Director' }} 
-                                            <span class="text-gray-500 text-xs text-nowrap">({{ $reimbursement->approved_by_director_at ? $reimbursement->approved_by_director_at->format('d/m/Y H:i') : '' }})</span>
-                                        </li>
-                                    @else
-                                        <li class="text-gray-500">Director: Pendiente</li>
-                                    @endif
+                                    @php $steps = [
+                                        ['label' => 'Director', 'id' => $reimbursement->approved_by_director_id, 'name' => $reimbursement->directorApprover->name ?? 'Director', 'at' => $reimbursement->approved_by_director_at],
+                                        ['label' => 'Control de Obra', 'id' => $reimbursement->approved_by_control_id, 'name' => $reimbursement->controlApprover->name ?? 'Control de Obra', 'at' => $reimbursement->approved_by_control_at],
+                                        ['label' => 'Dir. Ejecutivo', 'id' => $reimbursement->approved_by_executive_id, 'name' => $reimbursement->executiveApprover->name ?? 'Dir. Ejecutivo', 'at' => $reimbursement->approved_by_executive_at],
+                                        ['label' => 'CXP', 'id' => $reimbursement->approved_by_cxp_id, 'name' => $reimbursement->cxpApprover->name ?? 'CXP', 'at' => $reimbursement->approved_by_cxp_at],
+                                        ['label' => 'Tesorería', 'id' => $reimbursement->approved_by_treasury_id, 'name' => $reimbursement->treasuryApprover->name ?? 'Tesorería', 'at' => $reimbursement->approved_by_treasury_at],
+                                    ]; @endphp
 
-                                    @if($reimbursement->approved_by_cxp_id)
-                                        <li class="text-green-600 mt-1">
-                                            Cuentas por Pagar: {{ $reimbursement->cxpApprover->name ?? 'CXP' }}
-                                            <span class="text-gray-500 text-xs text-nowrap">({{ $reimbursement->approved_by_cxp_at ? $reimbursement->approved_by_cxp_at->format('d/m/Y H:i') : '' }})</span>
-                                        </li>
-                                    @else
-                                        <li class="text-gray-500">Cuentas por Pagar: Pendiente</li>
-                                    @endif
-                                    @if($reimbursement->approved_by_treasury_id)
-                                        <li class="text-green-600 mt-1">
-                                            Tesorería: {{ $reimbursement->treasuryApprover->name ?? 'Tesorería' }}
-                                            <span class="text-gray-500 text-xs text-nowrap">({{ $reimbursement->approved_by_treasury_at ? $reimbursement->approved_by_treasury_at->format('d/m/Y H:i') : '' }})</span>
-                                        </li>
-                                    @else
-                                        <li class="text-gray-500">Tesorería: Pendiente</li>
-                                    @endif
+                                    @foreach($steps as $step)
+                                        @if($step['id'])
+                                            <li class="text-green-600 {{ !$loop->first ? 'mt-1' : '' }}">
+                                                {{ $step['label'] }}: {{ $step['name'] }}
+                                                <span class="text-gray-500 text-xs text-nowrap">({{ $step['at'] ? $step['at']->format('d/m/Y H:i') : '' }})</span>
+                                            </li>
+                                        @else
+                                            <li class="text-gray-500 {{ !$loop->first ? 'mt-1' : '' }}">{{ $step['label'] }}: Pendiente</li>
+                                        @break
+                                        @endif
+                                    @endforeach
                                 </ul>
                             </dd>
                         </div>
@@ -386,19 +383,29 @@
                 <!-- Approval Actions -->
                 @php
                     $user = Auth::user();
-                    $canApproveDirector = ($user->isAdmin() || ($user->isDirector() && $user->id === $reimbursement->costCenter->director_id)) && $reimbursement->status === 'pendiente';
-                    $canApproveCXP = ($user->isAdmin() || $user->isCxp()) && $reimbursement->status === 'aprobado_director';
+                    $cc = $reimbursement->costCenter;
+                    $canApproveDirector = ($user->isAdmin() || ($user->isDirector() && $user->id === $cc->director_id)) && $reimbursement->status === 'pendiente';
+                    $canApproveControl = ($user->isAdmin() || ($user->isControlObra() && $user->id === $cc->control_obra_id)) && $reimbursement->status === 'aprobado_director';
+                    $canApproveExecutive = ($user->isAdmin() || ($user->isExecutiveDirector() && $user->id === $cc->director_ejecutivo_id)) && $reimbursement->status === 'aprobado_control';
+                    $canApproveCXP = ($user->isAdmin() || $user->isCxp()) && $reimbursement->status === 'aprobado_ejecutivo';
                     $canApproveTreasury = ($user->isAdmin() || $user->isTreasury()) && $reimbursement->status === 'aprobado_cxp';
+                    
+                    $canApproveAny = $canApproveDirector || $canApproveControl || $canApproveExecutive || $canApproveCXP || $canApproveTreasury;
                 @endphp
 
-                @if($canApproveDirector || $canApproveCXP || $canApproveTreasury)
+                @if($canApproveAny)
                     <div class="bg-gray-100 dark:bg-gray-900 p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-4">
                         <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST">
                             @csrf
                             @method('PUT')
                             <input type="hidden" name="status" value="aprobado">
                             <button type="submit" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition ease-in-out duration-150">
-                                {{ $canApproveTreasury ? 'Aprobar Final/Pago' : ($canApproveCXP ? 'Revisado y Listo para Pago' : 'Aprobar') }}
+                                @if($canApproveTreasury) Aprobar Final (Pago)
+                                @elseif($canApproveCXP) Validar CXP
+                                @elseif($canApproveExecutive) Aprobar N3 (Dir. Ejecutivo)
+                                @elseif($canApproveControl) Aprobar N2 (Control Obra)
+                                @else Aprobar N1 (Director)
+                                @endif
                             </button>
                         </form>
 

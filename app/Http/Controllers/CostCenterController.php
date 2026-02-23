@@ -18,10 +18,14 @@ class CostCenterController extends Controller
         $user = Auth::user();
 
         // Base query
-        $query = CostCenter::with('director')->orderBy('code');
+        $query = CostCenter::with(['director', 'controlObra', 'directorEjecutivo'])->orderBy('code');
 
         if ($user->role === 'director') {
             $query->where('director_id', $user->id);
+        } elseif ($user->role === 'control_obra') {
+            $query->where('control_obra_id', $user->id);
+        } elseif ($user->role === 'director_ejecutivo') {
+            $query->where('director_ejecutivo_id', $user->id);
         }
 
         if ($request->filled('search')) {
@@ -42,14 +46,15 @@ class CostCenterController extends Controller
      */
     public function create()
     {
-        // Only Admin usually creates cost centers, maybe Director?
-        // Let's allow Admin.
         if (!Auth::user()->isAdmin()) {
             abort(403, 'Unauthorized action.');
         }
 
         $directors = User::whereIn('role', ['admin', 'director'])->orderBy('name')->get();
-        return view('cost_centers.create', compact('directors'));
+        $controlObras = User::where('role', 'control_obra')->orderBy('name')->get();
+        $executives = User::where('role', 'director_ejecutivo')->orderBy('name')->get();
+        
+        return view('cost_centers.create', compact('directors', 'controlObras', 'executives'));
     }
 
     /**
@@ -64,14 +69,12 @@ class CostCenterController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:cost_centers,name'],
             'director_id' => ['required', 'exists:users,id'],
+            'control_obra_id' => ['required', 'exists:users,id'],
+            'director_ejecutivo_id' => ['required', 'exists:users,id'],
         ]);
 
         $data = $request->all();
-        // Auto-generate code from name
         $data['code'] = strtoupper(\Illuminate\Support\Str::slug($request->name));
-        // Ensure code uniqueness by appending random string if needed? 
-        // For now assume names are unique enough or let db fail on duplicate code constraint 
-        // (but we validated name as unique).
 
         CostCenter::create($data);
 
@@ -88,7 +91,10 @@ class CostCenterController extends Controller
         }
 
         $directors = User::whereIn('role', ['admin', 'director'])->orderBy('name')->get();
-        return view('cost_centers.edit', compact('costCenter', 'directors'));
+        $controlObras = User::where('role', 'control_obra')->orderBy('name')->get();
+        $executives = User::where('role', 'director_ejecutivo')->orderBy('name')->get();
+
+        return view('cost_centers.edit', compact('costCenter', 'directors', 'controlObras', 'executives'));
     }
 
     /**
@@ -103,6 +109,8 @@ class CostCenterController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('cost_centers')->ignore($costCenter->id)],
             'director_id' => ['required', 'exists:users,id'],
+            'control_obra_id' => ['required', 'exists:users,id'],
+            'director_ejecutivo_id' => ['required', 'exists:users,id'],
         ]);
 
         $data = $request->all();

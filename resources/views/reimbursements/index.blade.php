@@ -48,8 +48,12 @@
                                 <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label>
                                 <select name="status" id="status" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                     <option value="">Todos</option>
-                                    <option value="pendiente" {{ request('status') == 'pendiente' ? 'selected' : '' }}>Pendiente</option>
-                                    <option value="aprobado" {{ request('status') == 'aprobado' ? 'selected' : '' }}>Aprobado</option>
+                                    <option value="pendiente" {{ request('status') == 'pendiente' ? 'selected' : '' }}>1. Pendiente Director</option>
+                                    <option value="aprobado_director" {{ request('status') == 'aprobado_director' ? 'selected' : '' }}>2. Aprobado Director</option>
+                                    <option value="aprobado_control" {{ request('status') == 'aprobado_control' ? 'selected' : '' }}>3. Aprobado Control de Obra</option>
+                                    <option value="aprobado_ejecutivo" {{ request('status') == 'aprobado_ejecutivo' ? 'selected' : '' }}>4. Aprobado Dir. Ejecutivo</option>
+                                    <option value="aprobado_cxp" {{ request('status') == 'aprobado_cxp' ? 'selected' : '' }}>5. Aprobado CXP</option>
+                                    <option value="aprobado" {{ request('status') == 'aprobado' ? 'selected' : '' }}>6. Pagado (Final)</option>
                                     <option value="requiere_correccion" {{ request('status') == 'requiere_correccion' ? 'selected' : '' }}>Requiere Corrección</option>
                                     <option value="rechazado" {{ request('status') == 'rechazado' ? 'selected' : '' }}>Rechazado</option>
                                 </select>
@@ -205,17 +209,27 @@
                                             {{ $r->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
                                             {{ $r->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
                                             {{ $r->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
+                                            {{ $r->status === 'aprobado_director' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
+                                            {{ $r->status === 'aprobado_control' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : '' }}
+                                            {{ $r->status === 'aprobado_ejecutivo' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
                                             {{ $r->status === 'aprobado_cxp' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
-                                            {{ !in_array($r->status, ['aprobado', 'rechazado', 'requiere_correccion', 'aprobado_cxp']) ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
+                                            {{ $r->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
                                         ">
-                                            {{ ucfirst(str_replace('_', ' ', $r->status)) }}
+                                            @if($r->status === 'aprobado') Pagado @else {{ ucfirst(str_replace('_', ' ', $r->status)) }} @endif
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                         <a href="{{ route('reimbursements.show', $r->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Ver</a>
                                         
-                                        @if(Auth::user()->role === 'admin' || Auth::user()->role === 'director')
-                                            @if($r->status === 'pendiente')
+                                        @php
+                                            $canApproveCurr = (Auth::user()->isDirector() && $r->status === 'pendiente') ||
+                                                             (Auth::user()->isControlObra() && $r->status === 'aprobado_director') ||
+                                                             (Auth::user()->isExecutiveDirector() && $r->status === 'aprobado_control') ||
+                                                             (Auth::user()->isCxp() && $r->status === 'aprobado_ejecutivo') ||
+                                                             ((Auth::user()->isTreasury() || Auth::user()->isAdmin()) && $r->status === 'aprobado_cxp');
+                                        @endphp
+
+                                        @if($canApproveCurr)
                                             <form action="{{ route('reimbursements.update', $r->id) }}" method="POST" class="inline">
                                                 @csrf
                                                 @method('PUT')
@@ -223,7 +237,6 @@
                                                 <button type="submit" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-600 ml-2">Aprobar</button>
                                             </form>
                                             <button type="button" x-data @click="$dispatch('open-rejection-modal', { url: '{{ route('reimbursements.update', $r->id) }}' })" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Rechazar</button>
-                                            @endif
                                         @endif
                                     </td>
                                 </tr>

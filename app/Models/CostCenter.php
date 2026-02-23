@@ -13,11 +13,23 @@ class CostCenter extends Model
         'code',
         'name',
         'director_id',
+        'control_obra_id',
+        'director_ejecutivo_id',
         'description',
     ];
 
     public function director()
     {
         return $this->belongsTo(User::class, 'director_id');
+    }
+
+    public function controlObra()
+    {
+        return $this->belongsTo(User::class, 'control_obra_id');
+    }
+
+    public function directorEjecutivo()
+    {
+        return $this->belongsTo(User::class, 'director_ejecutivo_id');
     }
 }

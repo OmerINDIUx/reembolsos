@@ -39,10 +39,12 @@
                         <div class="mb-4">
                             <label for="role" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Rol</label>
                             <select name="role" id="role" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                <option value="user">Usuario (Requiere Director)</option>
-                                <option value="director">Director (Aprueba)</option>
-                                <option value="accountant">Cuentas por Pagar (Revisa)</option>
-                                <option value="tesoreria">Tesorería (Aprueba final)</option>
+                                <option value="user">Usuario (Solicitante)</option>
+                                <option value="director">Director (Nivel 1)</option>
+                                <option value="control_obra">Control de Obra (Nivel 2)</option>
+                                <option value="director_ejecutivo">Director Ejecutivo (Nivel 3)</option>
+                                <option value="accountant">Cuentas por Pagar (Nivel 4)</option>
+                                <option value="tesoreria">Tesorería (Nivel 5 - Pago)</option>
                                 <option value="admin">Administrador</option>
                             </select>
                             @error('role') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror

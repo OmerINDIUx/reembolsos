@@ -19,7 +19,7 @@
                         </div>
 
                         <div class="mb-4">
-                            <label for="director_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Director Responsable</label>
+                            <label for="director_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Director Responsable (Aprobadon Nivel 1)</label>
                             <select name="director_id" id="director_id" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" required>
                                 <option value="">Seleccione un director...</option>
                                 @foreach($directors as $director)
@@ -27,6 +27,28 @@
                                 @endforeach
                             </select>
                             @error('director_id') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="control_obra_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Control de Obra (Aprobación Nivel 2)</label>
+                            <select name="control_obra_id" id="control_obra_id" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" required>
+                                <option value="">Seleccione un control de obra...</option>
+                                @foreach($controlObras as $co)
+                                    <option value="{{ $co->id }}">{{ $co->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('control_obra_id') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="director_ejecutivo_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Director Ejecutivo (Aprobación Nivel 3)</label>
+                            <select name="director_ejecutivo_id" id="director_ejecutivo_id" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" required>
+                                <option value="">Seleccione un director ejecutivo...</option>
+                                @foreach($executives as $exec)
+                                    <option value="{{ $exec->id }}">{{ $exec->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('director_ejecutivo_id') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                         </div>
 
                         <div class="flex items-center justify-end">

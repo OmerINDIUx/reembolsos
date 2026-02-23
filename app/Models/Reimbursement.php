@@ -44,6 +44,10 @@ class Reimbursement extends Model
         'user_id',
         'approved_by_director_id',
         'approved_by_director_at',
+        'approved_by_control_id',
+        'approved_by_control_at',
+        'approved_by_executive_id',
+        'approved_by_executive_at',
         'approved_by_cxp_id',
         'approved_by_cxp_at',
         'approved_by_treasury_id',
@@ -56,6 +60,8 @@ class Reimbursement extends Model
         'trip_end_date' => 'date',
         'validation_data' => 'array',
         'approved_by_director_at' => 'datetime',
+        'approved_by_control_at' => 'datetime',
+        'approved_by_executive_at' => 'datetime',
         'approved_by_cxp_at' => 'datetime',
         'approved_by_treasury_at' => 'datetime',
     ];
@@ -63,6 +69,16 @@ class Reimbursement extends Model
     public function directorApprover()
     {
         return $this->belongsTo(User::class, 'approved_by_director_id');
+    }
+
+    public function controlApprover()
+    {
+        return $this->belongsTo(User::class, 'approved_by_control_id');
+    }
+
+    public function executiveApprover()
+    {
+        return $this->belongsTo(User::class, 'approved_by_executive_id');
     }
 
     public function cxpApprover()
