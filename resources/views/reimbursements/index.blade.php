@@ -27,8 +27,36 @@
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'history'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'history' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="history-tab" type="button" role="tab" aria-controls="history" aria-selected="false">Historial</a>
                             </li>
+                            @if(Auth::user()->isAdmin() || Auth::user()->isCxp() || Auth::user()->isTreasury() || Auth::user()->isDirector() || Auth::user()->isControlObra() || Auth::user()->isExecutiveDirector())
+                            <li class="mr-2" role="presentation">
+                                <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'global_history'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'global_history' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="global-history-tab" type="button" role="tab" aria-controls="global_history" aria-selected="false">Historial Global (Rechazados)</a>
+                            </li>
+                            @endif
                         </ul>
                     </div>
+
+                    <!-- Global Folio Search (Only in Global History) -->
+                    @if(request('tab') === 'global_history')
+                        <div class="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl flex flex-col md:flex-row items-center gap-4">
+                            <div class="flex-shrink-0">
+                                <span class="text-indigo-600 dark:text-indigo-400 font-bold text-sm uppercase tracking-wider">Rastreador de Folio:</span>
+                            </div>
+                            <form action="{{ route('reimbursements.index') }}" method="GET" class="flex-1 w-full flex gap-2">
+                                <input type="hidden" name="tab" value="global_history">
+                                <input type="text" name="global_search" value="{{ $globalSearch ?? '' }}" placeholder="Ingresa folio completo para rastrear..." class="flex-1 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-bold text-sm">BUSCAR</button>
+                                @if(isset($globalSearch))
+                                    <a href="{{ route('reimbursements.index', ['tab' => 'global_history']) }}" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 transition-colors font-bold text-sm uppercase">Limpiar</a>
+                                @endif
+                            </form>
+                        </div>
+                    @endif
+
+                    @if(isset($globalSearch))
+                        <div class="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                            Mostrando resultados para el folio buscado: <span class="font-bold text-indigo-600 dark:text-indigo-400">{{ $globalSearch }}</span>
+                        </div>
+                    @endif
 
                     <!-- Search & Filter Form -->
                     <div class="mb-6 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
@@ -164,8 +192,11 @@
                                         </button>
                                     </th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Solicitante / Centro de Costos
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                         <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="status">
-                                            Status
+                                            Status / Ubicación
                                             <span class="ml-1">
                                                 @if(request('sort_by') == 'status')
                                                     @if(request('sort_order', 'desc') == 'asc')
@@ -205,38 +236,74 @@
                                         ${{ number_format($r->total, 2) }} {{ $r->moneda }}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                            {{ $r->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
-                                            {{ $r->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
-                                            {{ $r->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
-                                            {{ $r->status === 'aprobado_director' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
-                                            {{ $r->status === 'aprobado_control' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : '' }}
-                                            {{ $r->status === 'aprobado_ejecutivo' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
-                                            {{ $r->status === 'aprobado_cxp' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
-                                            {{ $r->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
-                                        ">
-                                            @if($r->status === 'aprobado') Pagado @else {{ ucfirst(str_replace('_', ' ', $r->status)) }} @endif
-                                        </span>
+                                        <div class="flex flex-col">
+                                            <span class="font-bold">{{ $r->user->name ?? 'N/A' }}</span>
+                                            <span class="text-xs">{{ $r->costCenter->name ?? 'Sin C.C.' }}</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        <div class="flex flex-col space-y-1">
+                                            <span class="px-2 w-fit inline-flex text-xs leading-5 font-semibold rounded-full 
+                                                {{ $r->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
+                                                {{ $r->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
+                                                {{ $r->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
+                                                {{ $r->status === 'aprobado_director' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
+                                                {{ $r->status === 'aprobado_control' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : '' }}
+                                                {{ $r->status === 'aprobado_ejecutivo' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
+                                                {{ $r->status === 'aprobado_cxp' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
+                                                {{ $r->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
+                                            ">
+                                                @if($r->status === 'aprobado') Pagado @else {{ ucfirst(str_replace('_', ' ', $r->status)) }} @endif
+                                            </span>
+                                            <span class="text-[10px] text-gray-400 font-medium italic">
+                                                @if($r->status === 'pendiente') 
+                                                    En: {{ $r->costCenter->director->name ?? 'Director' }} (N1)
+                                                @elseif($r->status === 'aprobado_director') 
+                                                    En: {{ $r->costCenter->controlObra->name ?? 'Control de Obra' }} (N2)
+                                                @elseif($r->status === 'aprobado_control') 
+                                                    En: {{ $r->costCenter->directorEjecutivo->name ?? 'Dir. Ejecutivo' }} (N3)
+                                                @elseif($r->status === 'aprobado_ejecutivo') 
+                                                    En: Cuentas por Pagar (CXP)
+                                                @elseif($r->status === 'aprobado_cxp') 
+                                                    En: Tesorería
+                                                @elseif($r->status === 'aprobado') Finalizado
+                                                @else Rechazado/Corregir
+                                                @endif
+                                            </span>
+                                        </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                        <a href="{{ route('reimbursements.show', $r->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Ver</a>
-                                        
                                         @php
-                                            $canApproveCurr = (Auth::user()->isDirector() && $r->status === 'pendiente') ||
-                                                             (Auth::user()->isControlObra() && $r->status === 'aprobado_director') ||
-                                                             (Auth::user()->isExecutiveDirector() && $r->status === 'aprobado_control') ||
-                                                             (Auth::user()->isCxp() && $r->status === 'aprobado_ejecutivo') ||
-                                                             ((Auth::user()->isTreasury() || Auth::user()->isAdmin()) && $r->status === 'aprobado_cxp');
+                                            $user = Auth::user();
+                                            $isOwnerOrDesignatedApprover = $r->user_id === $user->id || 
+                                                ($user->isAdmin() || $user->isCxp() || $user->isTreasury()) ||
+                                                ($user->isDirector() && $r->costCenter->director_id === $user->id) ||
+                                                ($user->isControlObra() && $r->costCenter->control_obra_id === $user->id) ||
+                                                ($user->isExecutiveDirector() && $r->costCenter->director_ejecutivo_id === $user->id);
                                         @endphp
 
-                                        @if($canApproveCurr)
-                                            <form action="{{ route('reimbursements.update', $r->id) }}" method="POST" class="inline">
-                                                @csrf
-                                                @method('PUT')
-                                                <input type="hidden" name="status" value="aprobado">
-                                                <button type="submit" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-600 ml-2">Aprobar</button>
-                                            </form>
-                                            <button type="button" x-data @click="$dispatch('open-rejection-modal', { url: '{{ route('reimbursements.update', $r->id) }}' })" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Rechazar</button>
+                                        @if($isOwnerOrDesignatedApprover)
+                                            <a href="{{ route('reimbursements.show', $r->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Ver</a>
+                                            
+                                            @php
+                                                $canApproveCurr = ($user->isDirector() && $r->status === 'pendiente' && $r->costCenter->director_id === $user->id) ||
+                                                                 ($user->isControlObra() && $r->status === 'aprobado_director' && $r->costCenter->control_obra_id === $user->id) ||
+                                                                 ($user->isExecutiveDirector() && $r->status === 'aprobado_control' && $r->costCenter->director_ejecutivo_id === $user->id) ||
+                                                                 ($user->isCxp() && $r->status === 'aprobado_ejecutivo') ||
+                                                                 (($user->isTreasury() || $user->isAdmin()) && $r->status === 'aprobado_cxp');
+                                            @endphp
+
+                                            @if($canApproveCurr)
+                                                <form action="{{ route('reimbursements.update', $r->id) }}" method="POST" class="inline">
+                                                    @csrf
+                                                    @method('PUT')
+                                                    <input type="hidden" name="status" value="aprobado">
+                                                    <button type="submit" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-600 ml-2">Aprobar</button>
+                                                </form>
+                                                <button type="button" x-data @click="$dispatch('open-rejection-modal', { url: '{{ route('reimbursements.update', $r->id) }}' })" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Rechazar</button>
+                                            @endif
+                                        @else
+                                            <span class="text-gray-400 italic text-xs">Consulta (Sin Permiso)</span>
                                         @endif
                                     </td>
                                 </tr>

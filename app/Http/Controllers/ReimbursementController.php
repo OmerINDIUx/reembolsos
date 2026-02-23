@@ -26,10 +26,26 @@ class ReimbursementController extends Controller
     {
         $user = Auth::user();
         $tab = $request->input('tab', 'active');
+        $globalSearch = $request->input('global_search');
         $query = Reimbursement::orderBy('created_at', 'desc');
 
         // Permissions & Stage Visibility Logic
-        if ($user->isAdmin()) {
+        if ($tab === 'global_history') {
+            if ($globalSearch) {
+                // Tracking: Search ALL reimbursements by folio prefix
+                $query->where('folio', 'like', "%{$globalSearch}%");
+            } else {
+                // Normal Global History: Only Rejected
+                $query->where('status', 'rechazado');
+                if (!$user->isAdmin() && !$user->isTreasury() && !$user->isCxp()) {
+                    $query->whereHas('costCenter', function($q) use ($user) {
+                        $q->where('director_id', $user->id)
+                          ->orWhere('control_obra_id', $user->id)
+                          ->orWhere('director_ejecutivo_id', $user->id);
+                    });
+                }
+            }
+        } elseif ($user->isAdmin()) {
             if ($tab === 'active') {
                 $query->whereNotIn('status', ['aprobado', 'rechazado']);
             } else {
