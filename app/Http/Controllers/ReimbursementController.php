@@ -526,20 +526,21 @@ class ReimbursementController extends Controller
 
         $canSee = false;
         if ($user->isDirector() && $cc->director_id === $user->id) {
-            // Directors see everything once submitted
+            // Directors see everything once submitted (Level 1)
             $canSee = true; 
         } elseif ($user->isControlObra() && $cc->control_obra_id === $user->id) {
-            // Control sees only if Director already approved
-            $canSee = !in_array($status, ['pendiente', 'requiere_correccion']);
+            // Level 2 sees if it reached them once (even if currently in correction/rejected)
+            // They see if status != pendiente OR if there's any record of moving past N1
+            $canSee = $reimbursement->approved_by_director_at !== null || !in_array($status, ['pendiente', 'requiere_correccion']);
         } elseif ($user->isExecutiveDirector() && $cc->director_ejecutivo_id === $user->id) {
-            // Executive sees only if Control already approved
-            $canSee = !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director']);
+            // Level 3 sees if it reached them once
+            $canSee = $reimbursement->approved_by_control_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director']);
         } elseif ($user->isCxp()) {
-            // CXP sees only if Executive already approved
-            $canSee = !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control']);
+            // CXP sees if it reached them once
+            $canSee = $reimbursement->approved_by_executive_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control']);
         } elseif ($user->isTreasury()) {
-            // Treasury sees only if CXP already approved
-            $canSee = !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo']);
+            // Treasury sees if it reached them once
+            $canSee = $reimbursement->approved_by_cxp_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo']);
         }
 
         if (!$canSee) {
