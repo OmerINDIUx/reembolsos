@@ -28,6 +28,19 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        // Si la contraseña utilizada es la genérica, marcar para cambio obligatorio
+        if ($request->password === 'S20hg00146') {
+            /** @var \App\Models\User $user */
+            $user = Auth::user();
+            $user->must_change_password = true;
+            $user->save();
+        }
+
+        // Si el usuario tiene marcado el cambio obligatorio, redirigir a la pantalla de cambio
+        if (Auth::user()->must_change_password) {
+            return redirect()->route('password.force_change');
+        }
+
         return redirect()->intended(route('reimbursements.index', absolute: false));
     }
 

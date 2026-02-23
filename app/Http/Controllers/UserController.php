@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -58,6 +59,7 @@ class UserController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => $request->role,
+            'must_change_password' => ($request->password === 'S20hg00146'),
         ]);
 
         return redirect()->route('users.index')->with('success', 'Usuario creado exitosamente.');
@@ -103,6 +105,7 @@ class UserController extends Controller
                 'password' => ['required', 'string', 'min:8', 'confirmed'],
             ]);
             $data['password'] = Hash::make($request->password);
+            $data['must_change_password'] = ($request->password === 'S20hg00146');
         }
 
         $user->update($data);
@@ -115,7 +118,7 @@ class UserController extends Controller
      */
     public function destroy(User $user)
     {
-        if ($user->getKey() === auth()->id()) {
+        if ($user->getKey() === Auth::id()) {
             return back()->with('error', 'No puedes eliminar tu propia cuenta.');
         }
 

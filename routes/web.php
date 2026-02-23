@@ -5,17 +5,24 @@ use App\Http\Controllers\ReimbursementController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\CostCenterController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Auth\ForcePasswordChangeController;
+use App\Http\Middleware\ForcePasswordChange;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return redirect()->route('login');
 });
 
-Route::get('/dashboard', [App\Http\Controllers\DashboardController::class, 'index'])
-    ->middleware(['auth', 'verified'])
+Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified', \App\Http\Middleware\ForcePasswordChange::class])
     ->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::get('password/force-change', [\App\Http\Controllers\Auth\ForcePasswordChangeController::class, 'show'])->name('password.force_change');
+    Route::post('password/force-change', [\App\Http\Controllers\Auth\ForcePasswordChangeController::class, 'store'])->name('password.force_change.store');
+});
+
+Route::middleware(['auth', \App\Http\Middleware\ForcePasswordChange::class])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
