@@ -20,7 +20,7 @@
                     
                     <!-- Search & Filter Form -->
                     <div class="mb-6 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                        <form id="filter-form" action="{{ route('users.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <form id="filter-form" action="{{ route('users.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-5 gap-4">
                             <!-- Search Input -->
                             <div class="col-span-1 md:col-span-2">
                                 <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar (Nombre, Email)</label>
@@ -40,6 +40,16 @@
                                     <option value="direccion" {{ request('role') == 'direccion' ? 'selected' : '' }}>Dirección General</option>
                                     <option value="tesoreria" {{ request('role') == 'tesoreria' ? 'selected' : '' }}>Cuentas por Pagar</option>
                                     <option value="user" {{ request('role') == 'user' ? 'selected' : '' }}>Usuario</option>
+                                </select>
+                             </div>
+
+                            <!-- Status Filter -->
+                            <div>
+                                <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus (Acceso)</label>
+                                <select name="status" id="status" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    <option value="">Todos</option>
+                                    <option value="active" {{ request('status') == 'active' ? 'selected' : '' }}>Activos (Contraseña Cambiada)</option>
+                                    <option value="inactive" {{ request('status') == 'inactive' ? 'selected' : '' }}>Inactivos (Pendiente Cambio)</option>
                                 </select>
                             </div>
 
@@ -73,6 +83,9 @@
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nombre</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Rol</th>
+                                    @if(Auth::user()->isAdmin())
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estatus</th>
+                                    @endif
 
                                     <th scope="col" class="relative px-6 py-3">
                                         <span class="sr-only">Acciones</span>
@@ -106,6 +119,21 @@
                                             @endif
                                         </span>
                                     </td>
+                                    @if(Auth::user()->isAdmin())
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                        @if($user->must_change_password)
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                                                <span class="w-2 h-2 mr-1.5 rounded-full bg-red-500"></span>
+                                                Inactivo
+                                            </span>
+                                        @else
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                                <span class="w-2 h-2 mr-1.5 rounded-full bg-emerald-500"></span>
+                                                Activo
+                                            </span>
+                                        @endif
+                                    </td>
+                                    @endif
 
                                      <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                         @if(!Auth::user()->isAdminView())

@@ -145,7 +145,10 @@
                                                         $color = $statusColors[$reimbursement->status] ?? $statusColors['default'];
                                                     @endphp
                                                     <span class="px-3 py-1 inline-flex text-[10px] leading-4 font-black rounded-full uppercase tracking-widest {{ $color }}">
-                                                        {{ str_replace('_', ' ', $reimbursement->status) }}
+                                                        @if($reimbursement->status === 'aprobado') Pagado 
+                                                        @elseif($reimbursement->status === 'aprobado_cxp') Aprobado Subdirección
+                                                        @elseif($reimbursement->status === 'aprobado_direccion') Aprobado Dirección
+                                                        @else {{ str_replace('_', ' ', $reimbursement->status) }} @endif
                                                     </span>
                                                 </td>
                                             </tr>

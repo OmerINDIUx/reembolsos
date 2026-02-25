@@ -150,7 +150,10 @@
                                     {{ $reimbursement->status === 'aprobado_direccion' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
                                     {{ $reimbursement->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
                                 ">
-                                    @if($reimbursement->status === 'aprobado') Pagado @else {{ ucfirst(str_replace('_', ' ', $reimbursement->status)) }} @endif
+                                    @if($reimbursement->status === 'aprobado') Pagado 
+                                    @elseif($reimbursement->status === 'aprobado_cxp') Aprobado Subdirección
+                                    @elseif($reimbursement->status === 'aprobado_direccion') Aprobado Dirección
+                                    @else {{ ucfirst(str_replace('_', ' ', $reimbursement->status)) }} @endif
                                 </span>
                             </dd>
                         </div>

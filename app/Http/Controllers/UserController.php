@@ -29,6 +29,14 @@ class UserController extends Controller
             $query->where('role', $request->role);
         }
 
+        if ($request->filled('status')) {
+            if ($request->status === 'active') {
+                $query->where('must_change_password', 0);
+            } elseif ($request->status === 'inactive') {
+                $query->where('must_change_password', 1);
+            }
+        }
+
         $users = $query->paginate(10)->appends($request->all());
         return view('users.index', compact('users'));
     }
@@ -51,7 +59,7 @@ class UserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo'],
+            'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo,direccion'],
         ]);
 
         User::create([
@@ -91,7 +99,7 @@ class UserController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
-            'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo'],
+            'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo,direccion'],
         ]);
 
         $data = [

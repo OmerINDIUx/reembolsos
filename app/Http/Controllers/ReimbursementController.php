@@ -35,9 +35,12 @@ class ReimbursementController extends Controller
                 // Tracking: Search ALL reimbursements by folio prefix
                 $query->where('folio', 'like', "%{$globalSearch}%");
             } else {
-                // Normal Global History: Only Rejected
-                $query->where('status', 'rechazado');
-                if (!$user->isAdmin() && !$user->isTreasury() && !$user->isCxp()) {
+                // Normal Global History: Only Rejected for non-admins, everything for admins
+                if (!$user->isAdmin() && !$user->isAdminView()) {
+                    $query->where('status', 'rechazado');
+                }
+                
+                if (!$user->isAdmin() && !$user->isAdminView() && !$user->isTreasury() && !$user->isCxp() && !$user->isDireccion()) {
                     $query->whereHas('costCenter', function($q) use ($user) {
                         $q->where('director_id', $user->id)
                           ->orWhere('control_obra_id', $user->id)
@@ -55,24 +58,31 @@ class ReimbursementController extends Controller
             if ($tab === 'active') {
                 $query->where('status', 'aprobado_cxp');
             } else {
-                $query->whereNotNull('approved_by_direccion_at')
-                      ->where('status', '!=', 'aprobado_direccion');
+                // History: Anything passed Dirección or in final states
+                $query->where(function($q) {
+                    $q->whereNotNull('approved_by_direccion_at')
+                      ->orWhereIn('status', ['aprobado', 'rechazado']);
+                })->where('status', '!=', 'aprobado_cxp');
             }
         } elseif ($user->isTreasury()) {
             if ($tab === 'active') {
                 $query->where('status', 'aprobado_direccion');
             } else {
-                // History: Approved by Dirección once, but not currently in Treasury's active hand
-                $query->whereNotNull('approved_by_direccion_at')
-                      ->where('status', '!=', 'aprobado_direccion');
+                // History: Processed by Treasury (Paid) or Rejected/Correction
+                $query->where(function($q) {
+                    $q->whereNotNull('approved_by_treasury_at')
+                      ->orWhereIn('status', ['aprobado', 'rechazado']);
+                })->where('status', '!=', 'aprobado_direccion');
             }
         } elseif ($user->isCxp()) {
             if ($tab === 'active') {
                 $query->where('status', 'aprobado_ejecutivo');
             } else {
-                // History: Approved by Executive once, but not currently in CXP's active hand
-                $query->whereNotNull('approved_by_executive_at')
-                      ->where('status', '!=', 'aprobado_ejecutivo');
+                // History: Anything passed CXP
+                $query->where(function($q) {
+                    $q->whereNotNull('approved_by_cxp_at')
+                      ->orWhereIn('status', ['aprobado', 'rechazado']);
+                })->where('status', '!=', 'aprobado_ejecutivo');
             }
         } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
             $query->where(function($q) use ($user, $tab) {
@@ -900,35 +910,47 @@ class ReimbursementController extends Controller
                 // SEQUENTIAL APPROVAL LOGIC
                 
                 // 1. Director
-                if ($user->isDirector() && $reimbursement->costCenter->director_id === $user->id && $reimbursement->status === 'pendiente') {
+                if (($user->isDirector() || $user->isAdmin()) && $reimbursement->costCenter->director_id === $user->id && $reimbursement->status === 'pendiente') {
+                    $data['status'] = 'aprobado_director';
+                    $data['approved_by_director_id'] = $user->id;
+                    $data['approved_by_director_at'] = now();
+                } elseif ($user->isAdmin() && $reimbursement->status === 'pendiente') {
                     $data['status'] = 'aprobado_director';
                     $data['approved_by_director_id'] = $user->id;
                     $data['approved_by_director_at'] = now();
                 }
 
                 // 2. Control de Obra
-                if ($user->isControlObra() && $reimbursement->costCenter->control_obra_id === $user->id && $reimbursement->status === 'aprobado_director') {
+                if (($user->isControlObra() || $user->isAdmin()) && $reimbursement->costCenter->control_obra_id === $user->id && $reimbursement->status === 'aprobado_director') {
+                    $data['status'] = 'aprobado_control';
+                    $data['approved_by_control_id'] = $user->id;
+                    $data['approved_by_control_at'] = now();
+                } elseif ($user->isAdmin() && $reimbursement->status === 'aprobado_director') {
                     $data['status'] = 'aprobado_control';
                     $data['approved_by_control_id'] = $user->id;
                     $data['approved_by_control_at'] = now();
                 }
 
                 // 3. Director Ejecutivo
-                if ($user->isExecutiveDirector() && $reimbursement->costCenter->director_ejecutivo_id === $user->id && $reimbursement->status === 'aprobado_control') {
+                if (($user->isExecutiveDirector() || $user->isAdmin()) && $reimbursement->costCenter->director_ejecutivo_id === $user->id && $reimbursement->status === 'aprobado_control') {
+                    $data['status'] = 'aprobado_ejecutivo';
+                    $data['approved_by_executive_id'] = $user->id;
+                    $data['approved_by_executive_at'] = now();
+                } elseif ($user->isAdmin() && $reimbursement->status === 'aprobado_control') {
                     $data['status'] = 'aprobado_ejecutivo';
                     $data['approved_by_executive_id'] = $user->id;
                     $data['approved_by_executive_at'] = now();
                 }
 
-                // 4. CXP (Cuentas por Pagar)
-                if ($user->isCxp() && $reimbursement->status === 'aprobado_ejecutivo') {
+                // 4. Subdirección (CXP)
+                if (($user->isCxp() || $user->isAdmin()) && $reimbursement->status === 'aprobado_ejecutivo') {
                     $data['status'] = 'aprobado_cxp';
                     $data['approved_by_cxp_id'] = $user->id;
                     $data['approved_by_cxp_at'] = now();
                 }
 
                 // 5. Dirección (Dirección General)
-                if ($user->isDireccion() && $reimbursement->status === 'aprobado_cxp') {
+                if (($user->isDireccion() || $user->isAdmin()) && $reimbursement->status === 'aprobado_cxp') {
                     $data['status'] = 'aprobado_direccion';
                     $data['approved_by_direccion_id'] = $user->id;
                     $data['approved_by_direccion_at'] = now();
