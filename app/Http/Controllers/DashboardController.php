@@ -16,7 +16,7 @@ class DashboardController extends Controller
 
         // Admin, Accountant, or Director logic
         // Admin gets full visibility
-        if ($user->isAdmin()) {
+        if ($user->isAdmin() || $user->isAdminView()) {
             $stats['pending_count'] = Reimbursement::whereIn('status', ['pendiente', 'aprobado_director', 'requiere_correccion'])->count();
             $stats['approved_count'] = Reimbursement::where('status', 'aprobado')->count();
             $stats['rejected_count'] = Reimbursement::where('status', 'rechazado')->count();
@@ -38,21 +38,33 @@ class DashboardController extends Controller
                                     ->with('user', 'costCenter')
                                     ->latest()->take(5)->get();
 
-        } elseif ($user->isDirector()) {
-            // Director sees approvals for their cost centers AND their own requests
+        } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
+            // Managers (N1, N2, N3) see approvals for their cost centers AND their own requests
             
-            // Pending Approvals (where they are the director of the cost center)
+            // Pending Approvals
             $pendingApprovalsQuery = Reimbursement::whereHas('costCenter', function($q) use ($user) {
-                $q->where('director_id', $user->id);
-            })->where('status', 'pendiente');
+                if ($user->isDirector()) $q->where('director_id', $user->id);
+                if ($user->isControlObra()) $q->where('control_obra_id', $user->id);
+                if ($user->isExecutiveDirector()) $q->where('director_ejecutivo_id', $user->id);
+            });
+
+            // Status depends on level
+            if ($user->isDirector()) $pendingApprovalsQuery->where('status', 'pendiente');
+            if ($user->isControlObra()) $pendingApprovalsQuery->where('status', 'aprobado_director');
+            if ($user->isExecutiveDirector()) $pendingApprovalsQuery->where('status', 'aprobado_control');
+
+            $levelLabel = 'N/A';
+            if ($user->isDirector()) $levelLabel = 'N1';
+            if ($user->isControlObra()) $levelLabel = 'N2';
+            if ($user->isExecutiveDirector()) $levelLabel = 'N3';
 
             $stats['pending_approvals_count'] = $pendingApprovalsQuery->count();
             $stats['pending_approvals_amount'] = $pendingApprovalsQuery->sum('total');
+            $stats['approval_level_label'] = $levelLabel;
 
             // Their Own Requests
             $myRequestsQuery = Reimbursement::where('user_id', $user->id);
-            $stats['my_pending_count'] = (clone $myRequestsQuery)->where('status', 'pendiente')->count();
-            $stats['my_correction_count'] = (clone $myRequestsQuery)->where('status', 'requiere_correccion')->count();
+            $stats['my_pending_count'] = (clone $myRequestsQuery)->whereNotIn('status', ['aprobado', 'rechazado'])->count();
             $stats['my_approved_count'] = (clone $myRequestsQuery)->where('status', 'aprobado')->count();
             $stats['my_total_reimbursed'] = (clone $myRequestsQuery)->where('status', 'aprobado')->sum('total');
 
@@ -60,7 +72,9 @@ class DashboardController extends Controller
             $recentReimbursements = Reimbursement::where(function($q) use ($user) {
                 $q->where('user_id', $user->id)
                   ->orWhereHas('costCenter', function($q2) use ($user) {
-                      $q2->where('director_id', $user->id);
+                      if ($user->isDirector()) $q2->where('director_id', $user->id);
+                      if ($user->isControlObra()) $q2->where('control_obra_id', $user->id);
+                      if ($user->isExecutiveDirector()) $q2->where('director_ejecutivo_id', $user->id);
                   });
             })->with('user', 'costCenter')->latest()->take(5)->get();
 
@@ -78,6 +92,7 @@ class DashboardController extends Controller
             $recentReimbursements = $myRequestsQuery->with('costCenter')->latest()->take(5)->get();
         }
 
-        return view('dashboard', compact('stats', 'recentReimbursements'));
+        $notifications = $user->unreadNotifications()->latest()->take(5)->get();
+        return view('dashboard', compact('stats', 'recentReimbursements', 'notifications'));
     }
 }

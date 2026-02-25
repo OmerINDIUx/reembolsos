@@ -41,7 +41,7 @@ class AuthenticatedSessionController extends Controller
             return redirect()->route('password.force_change');
         }
 
-        return redirect()->intended(route('reimbursements.index', absolute: false));
+        return redirect()->intended(route('panel', absolute: false));
     }
 
     /**

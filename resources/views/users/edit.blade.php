@@ -48,6 +48,7 @@
                                 <option value="accountant" {{ $user->role === 'accountant' ? 'selected' : '' }}>Cuentas por Pagar</option>
                                 <option value="tesoreria" {{ $user->role === 'tesoreria' ? 'selected' : '' }}>Tesorería</option>
                                 <option value="admin" {{ $user->role === 'admin' ? 'selected' : '' }}>Administrador</option>
+                                <option value="admin_view" {{ $user->role === 'admin_view' ? 'selected' : '' }}>Administrador (Solo Lectura)</option>
                             </select>
                             @error('role') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                         </div>

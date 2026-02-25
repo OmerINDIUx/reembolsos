@@ -93,8 +93,8 @@ Sigue los siguientes pasos en la consola en la que te acabas de conectar (donde 
 
 2. **Migrar la Base de Datos (Generar Tablas):**
    Una vez dentro de `public_html`, ejecuta:
-   `php artisan migrate --force`
-   _(Nota: Si quieres crear el usuario administrador inicial, en su lugar corre `php artisan migrate:fresh --seed --force`)._
+   `/opt/alt/php84/usr/bin/php artisan migrate --force`
+   _(Nota: Si quieres crear el usuario administrador inicial, en su lugar corre `/opt/alt/php84/usr/bin/php artisan migrate:fresh --seed --force`)._
 3. **Vincular Archivos Públicos:**
    Para que se vean las imágenes y PDF correctamente, ejecuta:
    `/opt/alt/php84/usr/bin/php artisan storage:link`

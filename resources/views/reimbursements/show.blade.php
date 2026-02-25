@@ -8,7 +8,7 @@
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
             <!-- User Correction Panel -->
-            @if(Auth::user()->id === $reimbursement->user_id && $reimbursement->status === 'requiere_correccion')
+            @if(!Auth::user()->isAdminView() && Auth::user()->id === $reimbursement->user_id && $reimbursement->status === 'requiere_correccion')
                 <div class="bg-yellow-50 dark:bg-yellow-900/20 shadow sm:rounded-lg border-2 border-yellow-300 dark:border-yellow-600">
                     <div class="p-6">
                         <h4 class="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">Requiere Corrección</h4>
@@ -359,7 +359,7 @@
                 <!-- Footer with Action Buttons -->
                 <div class="bg-gray-50 dark:bg-gray-800 px-4 py-4 sm:px-6 flex justify-between items-center border-t border-gray-200 dark:border-gray-700">
                      <div class="flex space-x-3">
-                        @if($reimbursement->type === 'viaje' && $reimbursement->trip_type === 'nacional')
+                        @if(!Auth::user()->isAdminView() && $reimbursement->type === 'viaje' && $reimbursement->trip_type === 'nacional')
                             <a href="{{ route('reimbursements.create', ['type' => 'reembolso', 'trip_id' => $reimbursement->id]) }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:border-indigo-900 focus:ring ring-indigo-300 disabled:opacity-25 transition ease-in-out duration-150">
                                 + Agregar Reembolso
                             </a>
@@ -390,7 +390,7 @@
                     $canApproveCXP = ($user->isAdmin() || $user->isCxp()) && $reimbursement->status === 'aprobado_ejecutivo';
                     $canApproveTreasury = ($user->isAdmin() || $user->isTreasury()) && $reimbursement->status === 'aprobado_cxp';
                     
-                    $canApproveAny = $canApproveDirector || $canApproveControl || $canApproveExecutive || $canApproveCXP || $canApproveTreasury;
+                    $canApproveAny = !$user->isAdminView() && ($canApproveDirector || $canApproveControl || $canApproveExecutive || $canApproveCXP || $canApproveTreasury);
                 @endphp
 
                 @if($canApproveAny)
@@ -427,6 +427,24 @@
             if (pdfInput) {
                 pdfInput.addEventListener('change', function() {
                     if (this.files.length === 0) {
+                        validationResult.classList.add('hidden');
+                        return;
+                    }
+
+                    const extension = this.files[0].name.split('.').pop().toLowerCase();
+                    if (extension !== 'pdf') {
+                        Swal.fire({
+                            title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Archivo Inválido</span>',
+                            html: '<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">Este campo solo acepta archivos <b>PDF</b>.</p>',
+                            icon: 'error',
+                            confirmButtonText: 'ENTENDIDO',
+                            confirmButtonColor: '#ef4444',
+                            customClass: {
+                                popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                                confirmButton: 'rounded-xl px-8 py-3 font-black text-xs uppercase tracking-widest'
+                            }
+                        });
+                        this.value = '';
                         validationResult.classList.add('hidden');
                         return;
                     }

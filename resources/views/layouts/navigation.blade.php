@@ -12,18 +12,18 @@
 
                 <!-- Navigation Links -->
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
+                    <x-nav-link :href="route('panel')" :active="request()->routeIs('panel')">
                         {{ __('Panel') }}
                     </x-nav-link>
                     <x-nav-link :href="route('reimbursements.index')" :active="request()->routeIs('reimbursements.*')">
                         {{ __('Reembolsos') }}
                     </x-nav-link>
-                    @if(Auth::user()->role === 'admin')
+                    @if(Auth::user()->role === 'admin' || Auth::user()->role === 'admin_view')
                     <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                         {{ __('Usuarios') }}
                     </x-nav-link>
                     @endif
-                    @if(Auth::user()->role === 'admin' || Auth::user()->role === 'director' || Auth::user()->role === 'accountant')
+                    @if(Auth::user()->role === 'admin' || Auth::user()->role === 'admin_view' || Auth::user()->role === 'director' || Auth::user()->role === 'control_obra' || Auth::user()->role === 'director_ejecutivo' || Auth::user()->role === 'accountant')
                     <x-nav-link :href="route('cost_centers.index')" :active="request()->routeIs('cost_centers.*')">
                         {{ __('Centro de Costos') }}
                     </x-nav-link>
@@ -149,18 +149,18 @@
     <!-- Responsive Navigation Menu -->
     <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
         <div class="pt-2 pb-3 space-y-1">
-            <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
+            <x-responsive-nav-link :href="route('panel')" :active="request()->routeIs('panel')">
                 {{ __('Panel') }}
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('reimbursements.index')" :active="request()->routeIs('reimbursements.*')">
                 {{ __('Reembolsos') }}
             </x-responsive-nav-link>
-            @if(Auth::user()->role === 'admin')
+            @if(Auth::user()->role === 'admin' || Auth::user()->role === 'admin_view')
             <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                 {{ __('Usuarios') }}
             </x-responsive-nav-link>
             @endif
-            @if(Auth::user()->role === 'admin' || Auth::user()->role === 'director' || Auth::user()->role === 'accountant')
+            @if(Auth::user()->role === 'admin' || Auth::user()->role === 'admin_view' || Auth::user()->role === 'director' || Auth::user()->role === 'control_obra' || Auth::user()->role === 'director_ejecutivo' || Auth::user()->role === 'accountant')
             <x-responsive-nav-link :href="route('cost_centers.index')" :active="request()->routeIs('cost_centers.*')">
                 {{ __('Centro de Costos') }}
             </x-responsive-nav-link>

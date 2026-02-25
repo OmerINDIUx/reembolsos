@@ -31,10 +31,18 @@ class NotificationController extends Controller
 
         // Check if there is a URL to redirect to
         if (isset($notification->data['url'])) {
-            return redirect($notification->data['url']);
+            $url = $notification->data['url'];
+            
+            // If it's a "show" route and user is admin, they have access to everything
+            if (str_contains($url, '/reimbursements/') && $user->isAdmin()) {
+                return redirect($url);
+            }
+            
+            // For other users, the ReimbursementController@show already handles sequential visibility
+            return redirect($url);
         }
 
-        return back()->with('success', 'Notificación marcada como leída.');
+        return redirect()->route('reimbursements.index');
     }
 
     /**

@@ -20,11 +20,13 @@ class CostCenterController extends Controller
         // Base query
         $query = CostCenter::with(['director', 'controlObra', 'directorEjecutivo'])->orderBy('code');
 
-        if ($user->role === 'director') {
+        if ($user->isAdmin() || $user->isAdminView()) {
+            // Admin and AdminView see all
+        } elseif ($user->isDirector()) {
             $query->where('director_id', $user->id);
-        } elseif ($user->role === 'control_obra') {
+        } elseif ($user->isControlObra()) {
             $query->where('control_obra_id', $user->id);
-        } elseif ($user->role === 'director_ejecutivo') {
+        } elseif ($user->isExecutiveDirector()) {
             $query->where('director_ejecutivo_id', $user->id);
         }
 

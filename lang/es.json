@@ -18,5 +18,6 @@
     "Are you sure you want to delete your account?": "¿Estás seguro de que quieres eliminar tu cuenta?",
     "Once your account is deleted, all of its resources and data will be permanently deleted. Please enter your password to confirm you would like to permanently delete your account.": "Una vez que se elimine tu cuenta, todos sus recursos y datos se borrarán permanentemente. Por favor, introduce tu contraseña para confirmar que deseas eliminar tu cuenta de forma permanente.",
     "Password": "Contraseña",
-    "Cancel": "Cancelar"
+    "Cancel": "Cancelar",
+    "Dashboard": "Panel"
 }

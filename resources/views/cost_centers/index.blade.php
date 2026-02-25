@@ -53,7 +53,7 @@
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Aprobador N1 (Dir)</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Aprobador N2 (CO)</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Aprobador N3 (DE)</th>
-                                    @if(Auth::user()->isAdmin())
+                                    @if(Auth::user()->isAdmin() || Auth::user()->isAdminView())
                                     <th scope="col" class="relative px-6 py-3 text-right">Acciones</th>
                                     @endif
                                 </tr>
@@ -74,20 +74,27 @@
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                         {{ $cc->directorEjecutivo->name ?? 'N/A' }}
                                     </td>
-                                    @if(Auth::user()->isAdmin())
+                                     @if(Auth::user()->isAdmin() || Auth::user()->isAdminView())
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                        @if(Auth::user()->isAdmin())
                                         <a href="{{ route('cost_centers.edit', $cc->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Editar</a>
                                         <form action="{{ route('cost_centers.destroy', $cc->id) }}" method="POST" class="inline" onsubmit="return confirm('¿Estás seguro de eliminar este centro de costos?');">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Eliminar</button>
                                         </form>
+                                        @else
+                                        <span class="text-gray-400 italic">Solo lectura</span>
+                                        @endif
                                     </td>
                                     @endif
                                 </tr>
                                 @endforeach
                             </tbody>
                         </table>
+                        <div class="mt-4">
+                            {{ $costCenters->links() }}
+                        </div>
                     </div>
                     </div> <!-- End results-container -->
                 </div>

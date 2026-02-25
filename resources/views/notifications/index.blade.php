@@ -22,6 +22,7 @@
                         @endif
                     </div>
 
+                    @if($notifications->count() > 0)
                         <div class="space-y-6">
                             @php $lastDate = null; @endphp
                             @foreach($notifications as $notification)

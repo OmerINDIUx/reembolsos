@@ -46,6 +46,7 @@
                                 <option value="accountant">Cuentas por Pagar (Nivel 4)</option>
                                 <option value="tesoreria">Tesorería (Nivel 5 - Pago)</option>
                                 <option value="admin">Administrador</option>
+                                <option value="admin_view">Administrador (Solo Lectura)</option>
                             </select>
                             @error('role') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                         </div>

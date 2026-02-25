@@ -11,11 +11,13 @@
                 <div class="p-6 text-gray-900 dark:text-gray-100">
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
                         <h3 class="text-lg font-medium">Listado de Reembolsos</h3>
+                        @if(!Auth::user()->isAdminView())
                         <div class="flex space-x-2">
                              <a href="{{ route('reimbursements.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
                                 Nuevo Reembolso
                             </a>
                         </div>
+                        @endif
                     </div>
 
                     <!-- Tabs -->
@@ -101,13 +103,13 @@
 
                             <!-- Date From -->
                             <div>
-                                <label for="from_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Desde</label>
+                                <label for="from_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Desde (Creación/Expedición)</label>
                                 <input type="date" name="from_date" id="from_date" value="{{ request('from_date') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                             </div>
 
                             <!-- Date To -->
                             <div>
-                                <label for="to_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hasta</label>
+                                <label for="to_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hasta (Creación/Expedición)</label>
                                 <input type="date" name="to_date" id="to_date" value="{{ request('to_date') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                             </div>
 
@@ -118,6 +120,9 @@
                                 </a>
                                 <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
                                     Filtrar
+                                </button>
+                                <button type="button" onclick="exportData()" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
+                                    Exportar
                                 </button>
                             </div>
                         </form>
@@ -310,6 +315,9 @@
                                 @endforeach
                             </tbody>
                         </table>
+                        <div class="mt-4">
+                            {{ $reimbursements->links() }}
+                        </div>
                     </div>
                     
                     </div> <!-- End of results-container -->
@@ -406,6 +414,19 @@
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('filter-form');
             const container = document.getElementById('results-container');
+            
+            window.exportData = function() {
+                const fromDate = document.getElementById('from_date').value;
+                const toDate = document.getElementById('to_date').value;
+                
+                if (!fromDate || !toDate) {
+                    alert('Por favor selecciona un rango de fechas (Desde y Hasta) para exportar. \n\nNota: La búsqueda incluye tanto la fecha de creación del reembolso como la fecha de expedición del XML.');
+                    return;
+                }
+                
+                const params = new URLSearchParams(new FormData(form)).toString();
+                window.location.href = "{{ route('reimbursements.export') }}?" + params;
+            }
             
             // Function to handle fetching and updating
             function fetchResults(url) {

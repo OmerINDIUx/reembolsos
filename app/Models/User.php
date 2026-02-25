@@ -46,6 +46,11 @@ class User extends Authenticatable
         return $this->role === 'admin';
     }
 
+    public function isAdminView()
+    {
+        return $this->role === 'admin_view';
+    }
+
     public function isDirector()
     {
         return $this->role === 'director';

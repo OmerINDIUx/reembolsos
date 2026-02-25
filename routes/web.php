@@ -13,9 +13,9 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
-Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])
+Route::get('/panel', [\App\Http\Controllers\DashboardController::class, 'index'])
     ->middleware(['auth', 'verified', \App\Http\Middleware\ForcePasswordChange::class])
-    ->name('dashboard');
+    ->name('panel');
 
 Route::middleware('auth')->group(function () {
     Route::get('password/force-change', [\App\Http\Controllers\Auth\ForcePasswordChangeController::class, 'show'])->name('password.force_change');
@@ -28,10 +28,17 @@ Route::middleware(['auth', \App\Http\Middleware\ForcePasswordChange::class])->gr
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::post('reimbursements/bulk/store', [ReimbursementController::class, 'bulkStore'])->name('reimbursements.bulk_store');
+    Route::get('reimbursements/export', [ReimbursementController::class, 'export'])->name('reimbursements.export');
     Route::resource('reimbursements', ReimbursementController::class);
     Route::post('reimbursements/parse-xml', [ReimbursementController::class, 'parseCfdi'])->name('reimbursements.parse');
-    Route::resource('users', UserController::class);
-    Route::resource('cost_centers', CostCenterController::class);
+
+    Route::middleware('role:admin,admin_view')->group(function() {
+        Route::resource('users', UserController::class);
+    });
+
+    Route::middleware('role:admin,admin_view,director,control_obra,director_ejecutivo,accountant')->group(function() {
+        Route::resource('cost_centers', CostCenterController::class);
+    });
     
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');

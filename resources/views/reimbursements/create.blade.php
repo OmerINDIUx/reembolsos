@@ -370,12 +370,48 @@
                 handleXmlChange(e, index) {
                     const file = e.target.files[0];
                     if (!file) return;
+
+                    const extension = file.name.split('.').pop().toLowerCase();
+                    if (extension !== 'xml') {
+                        Swal.fire({
+                            title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Archivo Inválido</span>',
+                            html: '<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">Este campo solo acepta archivos <b>XML (CFDI)</b>.</p>',
+                            icon: 'error',
+                            confirmButtonText: 'ENTENDIDO',
+                            confirmButtonColor: '#ef4444',
+                            customClass: {
+                                popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                                confirmButton: 'rounded-xl px-8 py-3 font-black text-xs uppercase tracking-widest'
+                            }
+                        });
+                        e.target.value = '';
+                        return;
+                    }
+
                     this.items[index].fileName = 'Leyendo...';
                     this.validateFiles(index);
                 },
                 handlePdfChange(e, index) {
                     const file = e.target.files[0];
                     if (!file) return;
+
+                    const extension = file.name.split('.').pop().toLowerCase();
+                    if (extension !== 'pdf') {
+                        Swal.fire({
+                            title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Archivo Inválido</span>',
+                            html: '<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">Este campo solo acepta archivos <b>PDF</b>.</p>',
+                            icon: 'error',
+                            confirmButtonText: 'ENTENDIDO',
+                            confirmButtonColor: '#ef4444',
+                            customClass: {
+                                popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                                confirmButton: 'rounded-xl px-8 py-3 font-black text-xs uppercase tracking-widest'
+                            }
+                        });
+                        e.target.value = '';
+                        return;
+                    }
+
                     this.validateFiles(index);
                 },
                 validateFiles(index) {

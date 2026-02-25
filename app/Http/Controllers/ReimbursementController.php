@@ -45,7 +45,7 @@ class ReimbursementController extends Controller
                     });
                 }
             }
-        } elseif ($user->isAdmin()) {
+        } elseif ($user->isAdmin() || $user->isAdminView()) {
             if ($tab === 'active') {
                 $query->whereNotIn('status', ['aprobado', 'rechazado']);
             } else {
@@ -137,12 +137,22 @@ class ReimbursementController extends Controller
             $query->where('type', $request->type);
         }
 
-        if ($request->filled('from_date')) {
-            $query->whereDate('fecha', '>=', $request->from_date);
-        }
+        if ($request->filled('from_date') || $request->filled('to_date')) {
+            $fromDate = $request->from_date;
+            $toDate = $request->to_date;
 
-        if ($request->filled('to_date')) {
-            $query->whereDate('fecha', '<=', $request->to_date);
+            $query->where(function($q) use ($fromDate, $toDate) {
+                if ($fromDate && $toDate) {
+                    $q->whereBetween('created_at', [$fromDate . ' 00:00:00', $toDate . ' 23:59:59'])
+                      ->orWhereBetween('fecha', [$fromDate, $toDate]);
+                } elseif ($fromDate) {
+                    $q->whereDate('created_at', '>=', $fromDate)
+                      ->orWhereDate('fecha', '>=', $fromDate);
+                } elseif ($toDate) {
+                    $q->whereDate('created_at', '<=', $toDate)
+                      ->orWhereDate('fecha', '<=', $toDate);
+                }
+            });
         }
 
         $sortField = $request->input('sort_by', 'created_at');
@@ -170,8 +180,8 @@ class ReimbursementController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        if ($user->isCxp() || $user->isTreasury()) {
-            abort(403, 'Tu rol (CXP/Tesorería) no tiene permisos para crear reembolsos, solo para aprobarlos y pagarlos.');
+        if ($user->isCxp() || $user->isTreasury() || $user->isAdminView()) {
+            abort(403, 'Tu rol no tiene permisos para crear reembolsos.');
         }
 
         $type = $request->get('type');
@@ -197,8 +207,8 @@ class ReimbursementController extends Controller
             $costCenters = CostCenter::orderBy('name')->get();
         }
         
-        // Auto-fill week: WeekNumber-Year (e.g., 08-2026)
-        $currentWeek = now()->format('W-Y');
+        // Auto-fill week: WeekNumber-Year (Starts Saturday, Ends Friday)
+        $currentWeek = now()->addDays(2)->format('W-Y');
         
         $categories = $this->getCategories();
 
@@ -220,7 +230,7 @@ class ReimbursementController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        if ($user->isCxp() || $user->isTreasury()) {
+        if ($user->isCxp() || $user->isTreasury() || $user->isAdminView()) {
             abort(403, 'Tu rol no tiene permisos para registrar reembolsos.');
         }
 
@@ -716,8 +726,8 @@ class ReimbursementController extends Controller
     {
         $user = Auth::user();
 
-        // Admin & Owner always see
-        if ($user->isAdmin() || $user->id === $reimbursement->user_id) {
+        // Admin, AdminView & Owner always see
+        if ($user->isAdmin() || $user->isAdminView() || $user->id === $reimbursement->user_id) {
             return view('reimbursements.show', compact('reimbursement'));
         }
 
@@ -768,7 +778,11 @@ class ReimbursementController extends Controller
                       $user->isCxp() || 
                       ($user->isDirector() && $reimbursement->costCenter->director_id === $user->id) ||
                       ($user->isControlObra() && $reimbursement->costCenter->control_obra_id === $user->id) ||
-                      ($user->isExecutiveDirector() && $reimbursement->costCenter->director_ejecutivo_id === $user->id);
+                       ($user->isExecutiveDirector() && $reimbursement->costCenter->director_ejecutivo_id === $user->id);
+
+        if ($user->isAdminView()) {
+            abort(403, 'Tu rol es de solo consulta y no puede realizar modificaciones.');
+        }
 
         // Owner can update if it requires correction
         $isOwnerCorrecting = $user->id === $reimbursement->user_id && $reimbursement->status === 'requiere_correccion';
@@ -991,6 +1005,10 @@ class ReimbursementController extends Controller
      */
     public function destroy(Reimbursement $reimbursement)
     {
+        if (Auth::user()->isAdminView()) {
+            abort(403, 'Tu rol es de solo consulta.');
+        }
+
         if ($reimbursement->xml_path) Storage::delete($reimbursement->xml_path);
         if ($reimbursement->pdf_path) Storage::delete($reimbursement->pdf_path);
         
@@ -999,6 +1017,154 @@ class ReimbursementController extends Controller
         return redirect()->route('reimbursements.index')
                          ->with('success', 'Reembolso eliminado.');
     }
+
+    /**
+     * Export reimbursements to CSV for Excel.
+     */
+    public function export(Request $request)
+    {
+        $user = Auth::user();
+        $query = Reimbursement::with(['user', 'costCenter', 'directorApprover', 'controlApprover', 'executiveApprover', 'cxpApprover', 'treasuryApprover']);
+
+        // Mandatory date filtering for export as per request (Creation or Expedition)
+        if ($request->filled('from_date') || $request->filled('to_date')) {
+            $fromDate = $request->from_date;
+            $toDate = $request->to_date;
+
+            $query->where(function($q) use ($fromDate, $toDate) {
+                if ($fromDate && $toDate) {
+                    $q->whereBetween('created_at', [$fromDate . ' 00:00:00', $toDate . ' 23:59:59'])
+                      ->orWhereBetween('fecha', [$fromDate, $toDate]);
+                } elseif ($fromDate) {
+                    $q->whereDate('created_at', '>=', $fromDate)
+                      ->orWhereDate('fecha', '>=', $fromDate);
+                } elseif ($toDate) {
+                    $q->whereDate('created_at', '<=', $toDate)
+                      ->orWhereDate('fecha', '<=', $toDate);
+                }
+            });
+        }
+
+        // Apply role-based visibility
+        if (!$user->isAdmin() && !$user->isAdminView()) {
+            if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
+                 $query->whereHas('costCenter', function($q) use ($user) {
+                    if ($user->isDirector()) $q->where('director_id', $user->id);
+                    if ($user->isControlObra()) $q->where('control_obra_id', $user->id);
+                    if ($user->isExecutiveDirector()) $q->where('director_ejecutivo_id', $user->id);
+                });
+            } elseif ($user->isCxp() || $user->isTreasury()) {
+                // CXP and Treasury see all approved up to their level or beyond
+                 // No extra filter needed for now as they usually audit everything, 
+                 // but let's keep it consistent with their index view if needed.
+            } else {
+                $query->where('user_id', $user->id);
+            }
+        }
+
+        $reimbursements = $query->latest()->get();
+
+        $fileName = 'reembolsos_export_' . now()->format('Ymd_His') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"$fileName\"",
+        ];
+
+        return response()->streamDownload(function () use ($reimbursements) {
+            $file = fopen('php://output', 'w');
+            
+            // UTF-8 BOM for Excel compatibility
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            // Headers
+            fputcsv($file, [
+                'Folio',
+                'Emisor',
+                'Tipo de Solicitud',
+                'Centro de Costos',
+                'Categoría',
+                'Semana',
+                'Receptor',
+                'Fecha Expedición XML',
+                'Fecha Creación Reembolso',
+                'Total',
+                'Estatus',
+                'Aprobaciones',
+                'Observaciones',
+                'Validación XML vs PDF (UUID)',
+                'Validación XML vs PDF (Monto)'
+            ]);
+
+            foreach ($reimbursements as $r) {
+                // Formatting Aprobaciones
+                $approvals = [];
+                
+                // Director
+                if ($r->approved_by_director_at) {
+                    $approvals[] = "Director: " . ($r->directorApprover->name ?? 'N/A') . " (" . $r->approved_by_director_at->format('d/m/Y H:i') . ")";
+                } else {
+                    $approvals[] = "Director: Pendiente";
+                }
+
+                // Control
+                if ($r->approved_by_control_at) {
+                    $approvals[] = "Control de Obra: " . ($r->controlApprover->name ?? 'N/A') . " (" . $r->approved_by_control_at->format('d/m/Y H:i') . ")";
+                } else {
+                    $approvals[] = "Control de Obra: Pendiente";
+                }
+
+                // Executive
+                if ($r->approved_by_executive_at) {
+                    $approvals[] = "Dir. Ejecutivo: " . ($r->executiveApprover->name ?? 'N/A') . " (" . $r->approved_by_executive_at->format('d/m/Y H:i') . ")";
+                } else {
+                    $approvals[] = "Dir. Ejecutivo: Pendiente";
+                }
+
+                // CXP
+                if ($r->approved_by_cxp_at) {
+                    $approvals[] = "CXP: " . ($r->cxpApprover->name ?? 'N/A') . " (" . $r->approved_by_cxp_at->format('d/m/Y H:i') . ")";
+                }
+
+                // Treasury
+                if ($r->approved_by_treasury_at) {
+                    $approvals[] = "Tesorería: " . ($r->treasuryApprover->name ?? 'N/A') . " (" . $r->approved_by_treasury_at->format('d/m/Y H:i') . ")";
+                }
+
+                $approvalsStr = implode(" | ", $approvals);
+
+                // Validation info
+                $val = $r->validation_data;
+                $uuidMatch = "N/A";
+                $totalMatch = "N/A";
+                
+                if ($val) {
+                    if (isset($val['uuid_match'])) $uuidMatch = $val['uuid_match'] ? "Coincide" : "No Coincide";
+                    if (isset($val['total_match'])) $totalMatch = $val['total_match'] ? "Coincide" : "No Coincide";
+                }
+
+                fputcsv($file, [
+                    $r->folio ?? 'N/A',
+                    $r->nombre_emisor . " (" . $r->rfc_emisor . ")",
+                    ucfirst(str_replace('_', ' ', $r->type ?? 'Reembolso')),
+                    $r->costCenter->name ?? 'N/A',
+                    ucfirst($r->category ?? 'N/A'),
+                    $r->week ?? 'N/A',
+                    $r->nombre_receptor . " (" . $r->rfc_receptor . ")",
+                    $r->fecha ? $r->fecha->format('d/m/Y H:i') : 'N/A',
+                    $r->created_at ? $r->created_at->format('d/m/Y H:i') : 'N/A',
+                    "$ " . number_format((float)$r->total, 2) . " " . ($r->moneda ?? 'MXN'),
+                    ucwords(str_replace('_', ' ', $r->status)),
+                    $approvalsStr,
+                    $r->observaciones,
+                    $uuidMatch,
+                    $totalMatch
+                ]);
+            }
+
+            fclose($file);
+        }, $fileName, $headers);
+    }
+
     private function getCategories()
     {
         return [

@@ -11,9 +11,11 @@
                 <div class="p-6 text-gray-900 dark:text-gray-100">
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
                         <h3 class="text-lg font-medium">Lista de Usuarios</h3>
+                        @if(!Auth::user()->isAdminView())
                         <a href="{{ route('users.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
                             Nuevo Usuario
                         </a>
+                        @endif
                     </div>
                     
                     <!-- Search & Filter Form -->
@@ -94,12 +96,14 @@
                                             @if($user->role === 'accountant') Cuentas por Pagar 
                                             @elseif($user->role === 'tesoreria') Tesorería 
                                             @elseif($user->role === 'user') Usuario 
+                                            @elseif($user->role === 'admin_view') Admin (Lectura)
                                             @else {{ ucfirst($user->role) }} 
                                             @endif
                                         </span>
                                     </td>
 
-                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                        @if(!Auth::user()->isAdminView())
                                         <a href="{{ route('users.edit', $user->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Editar</a>
                                         
                                         @if($user->id !== auth()->id())
@@ -109,11 +113,17 @@
                                             <button type="submit" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Eliminar</button>
                                         </form>
                                         @endif
+                                        @else
+                                        <span class="text-gray-400 italic">Solo lectura</span>
+                                        @endif
                                     </td>
                                 </tr>
                                 @endforeach
                             </tbody>
                         </table>
+                        <div class="mt-4">
+                            {{ $users->links() }}
+                        </div>
                     </div>
                     </div> <!-- End results-container -->
                 </div>
