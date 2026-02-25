@@ -50,6 +50,8 @@ class Reimbursement extends Model
         'approved_by_executive_at',
         'approved_by_cxp_id',
         'approved_by_cxp_at',
+        'approved_by_direccion_id',
+        'approved_by_direccion_at',
         'approved_by_treasury_id',
         'approved_by_treasury_at',
     ];
@@ -63,6 +65,7 @@ class Reimbursement extends Model
         'approved_by_control_at' => 'datetime',
         'approved_by_executive_at' => 'datetime',
         'approved_by_cxp_at' => 'datetime',
+        'approved_by_direccion_at' => 'datetime',
         'approved_by_treasury_at' => 'datetime',
     ];
 
@@ -84,6 +87,11 @@ class Reimbursement extends Model
     public function cxpApprover()
     {
         return $this->belongsTo(User::class, 'approved_by_cxp_id');
+    }
+
+    public function direccionApprover()
+    {
+        return $this->belongsTo(User::class, 'approved_by_direccion_id');
     }
 
     public function treasuryApprover()

@@ -26,15 +26,39 @@ class DashboardController extends Controller
             $recentReimbursements = Reimbursement::with('user', 'costCenter')->latest()->take(5)->get();
 
         } elseif ($user->isCxp()) {
-            // Cuentas por Pagar (CXP)
-            // Pending for them is 'aprobado_director'
-            $stats['pending_count'] = Reimbursement::where('status', 'aprobado_director')->count();
+            // Subdirección
+            // Pending for them is 'aprobado_ejecutivo'
+            $stats['pending_count'] = Reimbursement::where('status', 'aprobado_ejecutivo')->count();
             $stats['approved_count'] = Reimbursement::where('status', 'aprobado')->count();
-            $stats['total_amount_pending'] = Reimbursement::where('status', 'aprobado_director')->sum('total');
+            $stats['total_amount_pending'] = Reimbursement::where('status', 'aprobado_ejecutivo')->sum('total');
             $stats['total_amount_approved'] = Reimbursement::where('status', 'aprobado')->sum('total');
 
-            // Only show items approved by director or finally approved
-            $recentReimbursements = Reimbursement::whereIn('status', ['aprobado_director', 'aprobado'])
+            // Show items pending for them or already approved
+            $recentReimbursements = Reimbursement::whereIn('status', ['aprobado_ejecutivo', 'aprobado_cxp', 'aprobado_direccion', 'aprobado'])
+                                    ->with('user', 'costCenter')
+                                    ->latest()->take(5)->get();
+
+        } elseif ($user->isDireccion()) {
+            // Dirección General
+            // Pending for them is 'aprobado_cxp'
+            $stats['pending_count'] = Reimbursement::where('status', 'aprobado_cxp')->count();
+            $stats['approved_count'] = Reimbursement::where('status', 'aprobado')->count();
+            $stats['total_amount_pending'] = Reimbursement::where('status', 'aprobado_cxp')->sum('total');
+            $stats['total_amount_approved'] = Reimbursement::where('status', 'aprobado')->sum('total');
+
+            $recentReimbursements = Reimbursement::whereIn('status', ['aprobado_cxp', 'aprobado_direccion', 'aprobado'])
+                                    ->with('user', 'costCenter')
+                                    ->latest()->take(5)->get();
+
+        } elseif ($user->isTreasury()) {
+            // Cuentas por Pagar
+            // Pending for them is 'aprobado_direccion'
+            $stats['pending_count'] = Reimbursement::where('status', 'aprobado_direccion')->count();
+            $stats['approved_count'] = Reimbursement::where('status', 'aprobado')->count();
+            $stats['total_amount_pending'] = Reimbursement::where('status', 'aprobado_direccion')->sum('total');
+            $stats['total_amount_approved'] = Reimbursement::where('status', 'aprobado')->sum('total');
+
+            $recentReimbursements = Reimbursement::whereIn('status', ['aprobado_direccion', 'aprobado'])
                                     ->with('user', 'costCenter')
                                     ->latest()->take(5)->get();
 

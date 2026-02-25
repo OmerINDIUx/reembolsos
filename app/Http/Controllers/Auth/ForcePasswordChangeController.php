@@ -35,6 +35,6 @@ class ForcePasswordChangeController extends Controller
             'must_change_password' => false,
         ]);
 
-        return redirect()->route('dashboard')->with('success', 'Contraseña actualizada correctamente. Bienvenido al sistema.');
+        return redirect()->route('panel')->with('success', 'Contraseña actualizada correctamente. Bienvenido al sistema.');
     }
 }

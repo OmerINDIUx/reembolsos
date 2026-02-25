@@ -34,8 +34,11 @@
                                     <option value="">Todos</option>
                                     <option value="admin" {{ request('role') == 'admin' ? 'selected' : '' }}>Admin</option>
                                     <option value="director" {{ request('role') == 'director' ? 'selected' : '' }}>Director</option>
-                                    <option value="accountant" {{ request('role') == 'accountant' ? 'selected' : '' }}>Cuentas por Pagar</option>
-                                    <option value="tesoreria" {{ request('role') == 'tesoreria' ? 'selected' : '' }}>Tesorería</option>
+                                    <option value="control_obra" {{ request('role') == 'control_obra' ? 'selected' : '' }}>Control de Obra</option>
+                                    <option value="director_ejecutivo" {{ request('role') == 'director_ejecutivo' ? 'selected' : '' }}>Director Ejecutivo</option>
+                                    <option value="accountant" {{ request('role') == 'accountant' ? 'selected' : '' }}>Subdirección</option>
+                                    <option value="direccion" {{ request('role') == 'direccion' ? 'selected' : '' }}>Dirección General</option>
+                                    <option value="tesoreria" {{ request('role') == 'tesoreria' ? 'selected' : '' }}>Cuentas por Pagar</option>
                                     <option value="user" {{ request('role') == 'user' ? 'selected' : '' }}>Usuario</option>
                                 </select>
                             </div>
@@ -90,11 +93,13 @@
                                             {{ $user->role === 'admin' ? 'bg-purple-100 text-purple-800' : '' }}
                                             {{ $user->role === 'director' ? 'bg-blue-100 text-blue-800' : '' }}
                                             {{ $user->role === 'accountant' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : '' }}
+                                            {{ $user->role === 'direccion' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300' : '' }}
                                             {{ $user->role === 'tesoreria' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300' : '' }}
                                             {{ $user->role === 'user' ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' : '' }}"
                                         >
-                                            @if($user->role === 'accountant') Cuentas por Pagar 
-                                            @elseif($user->role === 'tesoreria') Tesorería 
+                                            @if($user->role === 'accountant') Subdirección 
+                                            @elseif($user->role === 'direccion') Dirección General
+                                            @elseif($user->role === 'tesoreria') Cuentas por Pagar 
                                             @elseif($user->role === 'user') Usuario 
                                             @elseif($user->role === 'admin_view') Admin (Lectura)
                                             @else {{ ucfirst($user->role) }} 

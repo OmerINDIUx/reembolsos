@@ -82,8 +82,9 @@
                                     <option value="aprobado_director" {{ request('status') == 'aprobado_director' ? 'selected' : '' }}>2. Aprobado Director</option>
                                     <option value="aprobado_control" {{ request('status') == 'aprobado_control' ? 'selected' : '' }}>3. Aprobado Control de Obra</option>
                                     <option value="aprobado_ejecutivo" {{ request('status') == 'aprobado_ejecutivo' ? 'selected' : '' }}>4. Aprobado Dir. Ejecutivo</option>
-                                    <option value="aprobado_cxp" {{ request('status') == 'aprobado_cxp' ? 'selected' : '' }}>5. Aprobado CXP</option>
-                                    <option value="aprobado" {{ request('status') == 'aprobado' ? 'selected' : '' }}>6. Pagado (Final)</option>
+                                    <option value="aprobado_cxp" {{ request('status') == 'aprobado_cxp' ? 'selected' : '' }}>5. Aprobado Subdirección</option>
+                                    <option value="aprobado_direccion" {{ request('status') == 'aprobado_direccion' ? 'selected' : '' }}>6. Aprobado Dirección</option>
+                                    <option value="aprobado" {{ request('status') == 'aprobado' ? 'selected' : '' }}>7. Pagado (Final)</option>
                                     <option value="requiere_correccion" {{ request('status') == 'requiere_correccion' ? 'selected' : '' }}>Requiere Corrección</option>
                                     <option value="rechazado" {{ request('status') == 'rechazado' ? 'selected' : '' }}>Rechazado</option>
                                 </select>
@@ -255,7 +256,8 @@
                                                 {{ $r->status === 'aprobado_director' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
                                                 {{ $r->status === 'aprobado_control' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : '' }}
                                                 {{ $r->status === 'aprobado_ejecutivo' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
-                                                {{ $r->status === 'aprobado_cxp' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
+                                                {{ $r->status === 'aprobado_cxp' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300' : '' }}
+                                                {{ $r->status === 'aprobado_direccion' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
                                                 {{ $r->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
                                             ">
                                                 @if($r->status === 'aprobado') Pagado @else {{ ucfirst(str_replace('_', ' ', $r->status)) }} @endif
@@ -268,9 +270,11 @@
                                                 @elseif($r->status === 'aprobado_control') 
                                                     En: {{ $r->costCenter->directorEjecutivo->name ?? 'Dir. Ejecutivo' }} (N3)
                                                 @elseif($r->status === 'aprobado_ejecutivo') 
-                                                    En: Cuentas por Pagar (CXP)
+                                                    En: Subdirección
                                                 @elseif($r->status === 'aprobado_cxp') 
-                                                    En: Tesorería
+                                                    En: Dirección
+                                                @elseif($r->status === 'aprobado_direccion') 
+                                                    En: Cuentas por Pagar
                                                 @elseif($r->status === 'aprobado') Finalizado
                                                 @else Rechazado/Corregir
                                                 @endif
@@ -281,7 +285,7 @@
                                         @php
                                             $user = Auth::user();
                                             $isOwnerOrDesignatedApprover = $r->user_id === $user->id || 
-                                                ($user->isAdmin() || $user->isCxp() || $user->isTreasury()) ||
+                                                ($user->isAdmin() || $user->isCxp() || $user->isDireccion() || $user->isTreasury()) ||
                                                 ($user->isDirector() && $r->costCenter->director_id === $user->id) ||
                                                 ($user->isControlObra() && $r->costCenter->control_obra_id === $user->id) ||
                                                 ($user->isExecutiveDirector() && $r->costCenter->director_ejecutivo_id === $user->id);
@@ -295,7 +299,8 @@
                                                                  ($user->isControlObra() && $r->status === 'aprobado_director' && $r->costCenter->control_obra_id === $user->id) ||
                                                                  ($user->isExecutiveDirector() && $r->status === 'aprobado_control' && $r->costCenter->director_ejecutivo_id === $user->id) ||
                                                                  ($user->isCxp() && $r->status === 'aprobado_ejecutivo') ||
-                                                                 (($user->isTreasury() || $user->isAdmin()) && $r->status === 'aprobado_cxp');
+                                                                 ($user->isDireccion() && $r->status === 'aprobado_cxp') ||
+                                                                 (($user->isTreasury() || $user->isAdmin()) && $r->status === 'aprobado_direccion');
                                             @endphp
 
                                             @if($canApproveCurr)

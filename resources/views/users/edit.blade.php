@@ -45,8 +45,9 @@
                                 <option value="director" {{ $user->role === 'director' ? 'selected' : '' }}>Director</option>
                                 <option value="control_obra" {{ $user->role === 'control_obra' ? 'selected' : '' }}>Control de Obra</option>
                                 <option value="director_ejecutivo" {{ $user->role === 'director_ejecutivo' ? 'selected' : '' }}>Director Ejecutivo</option>
-                                <option value="accountant" {{ $user->role === 'accountant' ? 'selected' : '' }}>Cuentas por Pagar</option>
-                                <option value="tesoreria" {{ $user->role === 'tesoreria' ? 'selected' : '' }}>Tesorería</option>
+                                <option value="accountant" {{ $user->role === 'accountant' ? 'selected' : '' }}>Subdirección</option>
+                                <option value="direccion" {{ $user->role === 'direccion' ? 'selected' : '' }}>Dirección General</option>
+                                <option value="tesoreria" {{ $user->role === 'tesoreria' ? 'selected' : '' }}>Cuentas por Pagar</option>
                                 <option value="admin" {{ $user->role === 'admin' ? 'selected' : '' }}>Administrador</option>
                                 <option value="admin_view" {{ $user->role === 'admin_view' ? 'selected' : '' }}>Administrador (Solo Lectura)</option>
                             </select>

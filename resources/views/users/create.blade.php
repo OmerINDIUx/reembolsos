@@ -43,8 +43,9 @@
                                 <option value="director">Director (Nivel 1)</option>
                                 <option value="control_obra">Control de Obra (Nivel 2)</option>
                                 <option value="director_ejecutivo">Director Ejecutivo (Nivel 3)</option>
-                                <option value="accountant">Cuentas por Pagar (Nivel 4)</option>
-                                <option value="tesoreria">Tesorería (Nivel 5 - Pago)</option>
+                                <option value="accountant">Subdirección (Nivel 4)</option>
+                                <option value="direccion">Dirección General (Nivel 5)</option>
+                                <option value="tesoreria">Cuentas por Pagar (Nivel 6 - Pago)</option>
                                 <option value="admin">Administrador</option>
                                 <option value="admin_view">Administrador (Solo Lectura)</option>
                             </select>

@@ -146,7 +146,8 @@
                                     {{ $reimbursement->status === 'aprobado_director' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
                                     {{ $reimbursement->status === 'aprobado_control' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : '' }}
                                     {{ $reimbursement->status === 'aprobado_ejecutivo' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
-                                    {{ $reimbursement->status === 'aprobado_cxp' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
+                                    {{ $reimbursement->status === 'aprobado_cxp' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300' : '' }}
+                                    {{ $reimbursement->status === 'aprobado_direccion' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
                                     {{ $reimbursement->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
                                 ">
                                     @if($reimbursement->status === 'aprobado') Pagado @else {{ ucfirst(str_replace('_', ' ', $reimbursement->status)) }} @endif
@@ -162,8 +163,9 @@
                                         ['label' => 'Director', 'id' => $reimbursement->approved_by_director_id, 'name' => $reimbursement->directorApprover->name ?? 'Director', 'at' => $reimbursement->approved_by_director_at],
                                         ['label' => 'Control de Obra', 'id' => $reimbursement->approved_by_control_id, 'name' => $reimbursement->controlApprover->name ?? 'Control de Obra', 'at' => $reimbursement->approved_by_control_at],
                                         ['label' => 'Dir. Ejecutivo', 'id' => $reimbursement->approved_by_executive_id, 'name' => $reimbursement->executiveApprover->name ?? 'Dir. Ejecutivo', 'at' => $reimbursement->approved_by_executive_at],
-                                        ['label' => 'CXP', 'id' => $reimbursement->approved_by_cxp_id, 'name' => $reimbursement->cxpApprover->name ?? 'CXP', 'at' => $reimbursement->approved_by_cxp_at],
-                                        ['label' => 'Tesorería', 'id' => $reimbursement->approved_by_treasury_id, 'name' => $reimbursement->treasuryApprover->name ?? 'Tesorería', 'at' => $reimbursement->approved_by_treasury_at],
+                                        ['label' => 'Subdirección', 'id' => $reimbursement->approved_by_cxp_id, 'name' => $reimbursement->cxpApprover->name ?? 'Subdirección', 'at' => $reimbursement->approved_by_cxp_at],
+                                        ['label' => 'Dirección', 'id' => $reimbursement->approved_by_direccion_id, 'name' => $reimbursement->direccionApprover->name ?? 'Dirección', 'at' => $reimbursement->approved_by_direccion_at],
+                                        ['label' => 'Cuentas por Pagar', 'id' => $reimbursement->approved_by_treasury_id, 'name' => $reimbursement->treasuryApprover->name ?? 'Cuentas por Pagar', 'at' => $reimbursement->approved_by_treasury_at],
                                     ]; @endphp
 
                                     @foreach($steps as $step)
@@ -181,9 +183,81 @@
                             </dd>
                         </div>
 
-                        <div class="bg-gray-50 dark:bg-gray-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Observaciones</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2 whitespace-pre-wrap">{{ $reimbursement->observaciones ?? 'Ninguna' }}</dd>
+                        <div class="bg-gray-50 dark:bg-gray-700 px-4 py-8 sm:px-6">
+                            <dt class="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-6 flex items-center">
+                                <span class="bg-indigo-100 dark:bg-indigo-900/50 p-1.5 rounded-lg mr-3">
+                                    <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>
+                                </span>
+                                Bitácora de Observaciones
+                            </dt>
+                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                                @if($reimbursement->observaciones)
+                                    <div class="space-y-4 max-h-[400px] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
+                                        @foreach(array_reverse(explode("\n", $reimbursement->observaciones)) as $observation)
+                                            @if(trim($observation))
+                                                @php
+                                                    $isRejection = str_contains($observation, 'RECHAZADO');
+                                                    $isCorrection = str_contains($observation, 'REQUIERE CORRECCIÓN');
+                                                    $isUserFix = str_contains($observation, 'CORREGIDO por');
+                                                    
+                                                    $bgColor = 'bg-white dark:bg-gray-800';
+                                                    $borderColor = 'border-gray-100 dark:border-gray-700';
+                                                    $iconColor = 'text-gray-400';
+                                                    
+                                                    if($isRejection) {
+                                                        $bgColor = 'bg-red-50 dark:bg-red-900/10';
+                                                        $borderColor = 'border-red-100 dark:border-red-900/30';
+                                                        $iconColor = 'text-red-500';
+                                                    } elseif ($isCorrection) {
+                                                        $bgColor = 'bg-orange-50 dark:bg-orange-900/10';
+                                                        $borderColor = 'border-orange-100 dark:border-orange-900/30';
+                                                        $iconColor = 'text-orange-500';
+                                                    } elseif ($isUserFix) {
+                                                        $bgColor = 'bg-emerald-50 dark:bg-emerald-900/10';
+                                                        $borderColor = 'border-emerald-100 dark:border-emerald-900/30';
+                                                        $iconColor = 'text-emerald-500';
+                                                    }
+                                                @endphp
+                                                <div class="relative pl-8 pb-1 group">
+                                                    <!-- Timeline Line -->
+                                                    <div class="absolute left-3 top-6 -bottom-4 w-px bg-gray-200 dark:bg-gray-700 group-last:hidden"></div>
+                                                    
+                                                    <!-- Timeline Node -->
+                                                    <div class="absolute left-0 top-1 w-6 h-6 rounded-full {{ $bgColor }} border-2 {{ $borderColor }} flex items-center justify-center z-10">
+                                                        <div class="w-1.5 h-1.5 rounded-full bg-current {{ $iconColor }}"></div>
+                                                    </div>
+
+                                                    <div class="p-4 rounded-2xl border {{ $borderColor }} {{ $bgColor }} shadow-sm transition-all hover:shadow-md">
+                                                        <p class="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                                                            @php
+                                                                $content = $observation;
+                                                                // Extract date/time if exists (e.g. el 25/02/2026 13:20)
+                                                                preg_match('/el \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/', $content, $matches);
+                                                                $timestamp = $matches[0] ?? '';
+                                                                if($timestamp) $content = str_replace($timestamp, '', $content);
+
+                                                                $content = str_replace('RECHAZADO', '<span class="font-black text-red-600 dark:text-red-400">RECHAZADO</span>', $content);
+                                                                $content = str_replace('REQUIERE CORRECCIÓN', '<span class="font-black text-orange-600 dark:text-orange-400">REQUIERE CORRECCIÓN</span>', $content);
+                                                                $content = str_replace('CORREGIDO por', '<span class="font-black text-emerald-600 dark:text-emerald-400">CORREGIDO por</span>', $content);
+                                                            @endphp
+                                                            {!! $content !!}
+                                                        </p>
+                                                        @if($timestamp)
+                                                            <span class="inline-block mt-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                                {{ str_replace('el ', '', $timestamp) }}
+                                                            </span>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        @endforeach
+                                    </div>
+                                @else
+                                    <div class="text-center py-6 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-2xl">
+                                        <p class="text-gray-400 text-xs font-medium italic">Sin observaciones o comentarios hasta el momento.</p>
+                                    </div>
+                                @endif
+                            </dd>
                         </div>
 
                          <!-- Validation Status Row -->
@@ -388,9 +462,10 @@
                     $canApproveControl = ($user->isAdmin() || ($user->isControlObra() && $user->id === $cc->control_obra_id)) && $reimbursement->status === 'aprobado_director';
                     $canApproveExecutive = ($user->isAdmin() || ($user->isExecutiveDirector() && $user->id === $cc->director_ejecutivo_id)) && $reimbursement->status === 'aprobado_control';
                     $canApproveCXP = ($user->isAdmin() || $user->isCxp()) && $reimbursement->status === 'aprobado_ejecutivo';
-                    $canApproveTreasury = ($user->isAdmin() || $user->isTreasury()) && $reimbursement->status === 'aprobado_cxp';
+                    $canApproveDireccion = ($user->isAdmin() || $user->isDireccion()) && $reimbursement->status === 'aprobado_cxp';
+                    $canApproveTreasury = ($user->isAdmin() || $user->isTreasury()) && $reimbursement->status === 'aprobado_direccion';
                     
-                    $canApproveAny = !$user->isAdminView() && ($canApproveDirector || $canApproveControl || $canApproveExecutive || $canApproveCXP || $canApproveTreasury);
+                    $canApproveAny = !$user->isAdminView() && ($canApproveDirector || $canApproveControl || $canApproveExecutive || $canApproveCXP || $canApproveDireccion || $canApproveTreasury);
                 @endphp
 
                 @if($canApproveAny)
@@ -400,8 +475,9 @@
                             @method('PUT')
                             <input type="hidden" name="status" value="aprobado">
                             <button type="submit" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition ease-in-out duration-150">
-                                @if($canApproveTreasury) Aprobar Final (Pago)
-                                @elseif($canApproveCXP) Validar CXP
+                                @if($canApproveTreasury) Marcar como Pagado (Cuentas por Pagar)
+                                @elseif($canApproveDireccion) Aprobar Dirección
+                                @elseif($canApproveCXP) Validar Subdirección
                                 @elseif($canApproveExecutive) Aprobar N3 (Dir. Ejecutivo)
                                 @elseif($canApproveControl) Aprobar N2 (Control Obra)
                                 @else Aprobar N1 (Director)

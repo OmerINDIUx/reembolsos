@@ -76,6 +76,11 @@ class User extends Authenticatable
         return $this->role === 'director_ejecutivo';
     }
 
+    public function isDireccion()
+    {
+        return $this->role === 'direccion';
+    }
+
     /**
      * The attributes that should be hidden for serialization.
      *

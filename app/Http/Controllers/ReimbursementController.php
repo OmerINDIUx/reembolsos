@@ -51,13 +51,20 @@ class ReimbursementController extends Controller
             } else {
                 $query->whereIn('status', ['aprobado', 'rechazado']);
             }
-        } elseif ($user->isTreasury()) {
+        } elseif ($user->isDireccion()) {
             if ($tab === 'active') {
                 $query->where('status', 'aprobado_cxp');
             } else {
-                // History: Approved by CXP once, but not currently in Treasury's active hand
-                $query->whereNotNull('approved_by_cxp_at')
-                      ->where('status', '!=', 'aprobado_cxp');
+                $query->whereNotNull('approved_by_direccion_at')
+                      ->where('status', '!=', 'aprobado_direccion');
+            }
+        } elseif ($user->isTreasury()) {
+            if ($tab === 'active') {
+                $query->where('status', 'aprobado_direccion');
+            } else {
+                // History: Approved by Dirección once, but not currently in Treasury's active hand
+                $query->whereNotNull('approved_by_direccion_at')
+                      ->where('status', '!=', 'aprobado_direccion');
             }
         } elseif ($user->isCxp()) {
             if ($tab === 'active') {
@@ -749,9 +756,12 @@ class ReimbursementController extends Controller
         } elseif ($user->isCxp()) {
             // CXP sees if it reached them once
             $canSee = $reimbursement->approved_by_executive_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control']);
+        } elseif ($user->isDireccion()) {
+            // Dirección sees if it reached them once
+            $canSee = $reimbursement->approved_by_cxp_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo']);
         } elseif ($user->isTreasury()) {
             // Treasury sees if it reached them once
-            $canSee = $reimbursement->approved_by_cxp_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo']);
+            $canSee = $reimbursement->approved_by_direccion_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp']);
         }
 
         if (!$canSee) {
@@ -776,6 +786,7 @@ class ReimbursementController extends Controller
         $canApprove = $user->isAdmin() || 
                       $user->isTreasury() || 
                       $user->isCxp() || 
+                      $user->isDireccion() ||
                       ($user->isDirector() && $reimbursement->costCenter->director_id === $user->id) ||
                       ($user->isControlObra() && $reimbursement->costCenter->control_obra_id === $user->id) ||
                        ($user->isExecutiveDirector() && $reimbursement->costCenter->director_ejecutivo_id === $user->id);
@@ -852,8 +863,10 @@ class ReimbursementController extends Controller
             $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
 
             // Direct routing rule: Return to the level that was currently reviewing it
-            if ($reimbursement->approved_by_cxp_id !== null) {
-                $data['status'] = 'aprobado_cxp'; // Back to Treasury
+            if ($reimbursement->approved_by_direccion_id !== null) {
+                $data['status'] = 'aprobado_direccion'; // Back to Treasury
+            } elseif ($reimbursement->approved_by_cxp_id !== null) {
+                $data['status'] = 'aprobado_cxp'; // Back to Dirección
             } elseif ($reimbursement->approved_by_executive_id !== null) {
                 $data['status'] = 'aprobado_ejecutivo'; // Back to CXP
             } elseif ($reimbursement->approved_by_control_id !== null) {
@@ -914,8 +927,15 @@ class ReimbursementController extends Controller
                     $data['approved_by_cxp_at'] = now();
                 }
 
-                // 5. Tesorería (Final)
-                if (($user->isTreasury() || $user->isAdmin()) && $reimbursement->status === 'aprobado_cxp') {
+                // 5. Dirección (Dirección General)
+                if ($user->isDireccion() && $reimbursement->status === 'aprobado_cxp') {
+                    $data['status'] = 'aprobado_direccion';
+                    $data['approved_by_direccion_id'] = $user->id;
+                    $data['approved_by_direccion_at'] = now();
+                }
+
+                // 6. Tesorería (Final)
+                if (($user->isTreasury() || $user->isAdmin()) && $reimbursement->status === 'aprobado_direccion') {
                     $data['status'] = 'aprobado';
                     $data['approved_by_treasury_id'] = $user->id;
                     $data['approved_by_treasury_at'] = now();
@@ -939,12 +959,16 @@ class ReimbursementController extends Controller
                 if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado por Control de Obra, pasa a Dir. Ejecutivo.", "info"));
             } elseif ($data['status'] === 'aprobado_ejecutivo') {
                 $cxpUsers = User::where('role', 'accountant')->get();
-                foreach($cxpUsers as $cxp) $cxp->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: pendiente de revisión de CXP.", "warning"));
-                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado por Dir. Ejecutivo, pasa a CXP.", "info"));
+                foreach($cxpUsers as $cxp) $cxp->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: pendiente de revisión de Subdirección.", "warning"));
+                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado por Dir. Ejecutivo, pasa a Subdirección.", "info"));
             } elseif ($data['status'] === 'aprobado_cxp') {
+                $direccionUsers = User::where('role', 'direccion')->get();
+                foreach($direccionUsers as $direccion) $direccion->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: revisado por Subdirección, pendiente de aprobación de Dirección.", "warning"));
+                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} revisado por Subdirección, pasa a Dirección.", "info"));
+            } elseif ($data['status'] === 'aprobado_direccion') {
                 $treasuryUsers = User::where('role', 'tesoreria')->get();
-                foreach($treasuryUsers as $treasury) $treasury->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: aprobado por CXP, pendiente de pago.", "warning"));
-                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} revisado por CXP.", "info"));
+                foreach($treasuryUsers as $treasury) $treasury->notify(new ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: aprobado por Dirección, pendiente de pago.", "warning"));
+                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado por Dirección, pasa a Cuentas por Pagar.", "info"));
             } elseif ($data['status'] === 'aprobado') {
                 if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado finalmente.", "success"));
             } elseif ($data['status'] === 'rechazado') {
@@ -1024,7 +1048,7 @@ class ReimbursementController extends Controller
     public function export(Request $request)
     {
         $user = Auth::user();
-        $query = Reimbursement::with(['user', 'costCenter', 'directorApprover', 'controlApprover', 'executiveApprover', 'cxpApprover', 'treasuryApprover']);
+        $query = Reimbursement::with(['user', 'costCenter', 'directorApprover', 'controlApprover', 'executiveApprover', 'cxpApprover', 'direccionApprover', 'treasuryApprover']);
 
         // Mandatory date filtering for export as per request (Creation or Expedition)
         if ($request->filled('from_date') || $request->filled('to_date')) {
@@ -1053,7 +1077,7 @@ class ReimbursementController extends Controller
                     if ($user->isControlObra()) $q->where('control_obra_id', $user->id);
                     if ($user->isExecutiveDirector()) $q->where('director_ejecutivo_id', $user->id);
                 });
-            } elseif ($user->isCxp() || $user->isTreasury()) {
+            } elseif ($user->isCxp() || $user->isDireccion() || $user->isTreasury()) {
                 // CXP and Treasury see all approved up to their level or beyond
                  // No extra filter needed for now as they usually audit everything, 
                  // but let's keep it consistent with their index view if needed.
@@ -1120,14 +1144,19 @@ class ReimbursementController extends Controller
                     $approvals[] = "Dir. Ejecutivo: Pendiente";
                 }
 
-                // CXP
+                // Subdirección
                 if ($r->approved_by_cxp_at) {
-                    $approvals[] = "CXP: " . ($r->cxpApprover->name ?? 'N/A') . " (" . $r->approved_by_cxp_at->format('d/m/Y H:i') . ")";
+                    $approvals[] = "Subdirección: " . ($r->cxpApprover->name ?? 'N/A') . " (" . $r->approved_by_cxp_at->format('d/m/Y H:i') . ")";
                 }
 
-                // Treasury
+                // Dirección
+                if ($r->approved_by_direccion_at) {
+                    $approvals[] = "Dirección: " . ($r->direccionApprover->name ?? 'N/A') . " (" . $r->approved_by_direccion_at->format('d/m/Y H:i') . ")";
+                }
+
+                // Cuentas por Pagar
                 if ($r->approved_by_treasury_at) {
-                    $approvals[] = "Tesorería: " . ($r->treasuryApprover->name ?? 'N/A') . " (" . $r->approved_by_treasury_at->format('d/m/Y H:i') . ")";
+                    $approvals[] = "Cuentas por Pagar: " . ($r->treasuryApprover->name ?? 'N/A') . " (" . $r->approved_by_treasury_at->format('d/m/Y H:i') . ")";
                 }
 
                 $approvalsStr = implode(" | ", $approvals);

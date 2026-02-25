@@ -57,7 +57,7 @@
                     </div>
 
                 @else
-                    <!-- Admin / Accountant (CXP) / Standard User Stats -->
+                    <!-- Admin / Subdirección / Standard User Stats -->
                     <div class="bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-900/10 dark:to-gray-800 p-6 rounded-2xl shadow-sm border border-indigo-100 dark:border-indigo-900/30 relative overflow-hidden group">
                         <div class="relative z-10">
                             <p class="text-indigo-600 dark:text-indigo-400 text-xs font-black uppercase tracking-widest mb-1">En Proceso</p>
