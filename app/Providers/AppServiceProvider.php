@@ -22,6 +22,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \Illuminate\Pagination\Paginator::useTailwind();
         Schema::defaultStringLength(191);
         
         if (app()->environment('production') || env('APP_ENV') === 'production') {

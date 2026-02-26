@@ -118,6 +118,7 @@
                                             <th class="px-6 py-4 text-left font-black text-gray-400 uppercase tracking-widest text-[10px]">Solicitante</th>
                                             <th class="px-6 py-4 text-left font-black text-gray-400 uppercase tracking-widest text-[10px]">Total</th>
                                             <th class="px-6 py-4 text-left font-black text-gray-400 uppercase tracking-widest text-[10px]">Estatus</th>
+                                            <th class="px-6 py-4 text-right font-black text-gray-400 uppercase tracking-widest text-[10px]">Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-50 dark:divide-gray-700">
@@ -125,7 +126,7 @@
                                             <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-900/50 transition-colors cursor-pointer" onclick="window.location='{{ route('reimbursements.show', $reimbursement) }}'">
                                                 <td class="px-6 py-4">
                                                     <div class="font-bold text-gray-900 dark:text-white">{{ $reimbursement->folio ?? Str::limit($reimbursement->uuid, 8) ?? 'S/F' }}</div>
-                                                    <div class="text-xs text-indigo-500 font-medium">{{ ucfirst($reimbursement->type) }}</div>
+                                                    <div class="text-xs text-indigo-500 font-medium">{{ ucfirst(str_replace('_', ' ', $reimbursement->type)) }}</div>
                                                 </td>
                                                 <td class="px-6 py-4">
                                                     <div class="text-gray-900 dark:text-white font-medium">{{ $reimbursement->user->name ?? 'Usuario' }}</div>
@@ -135,27 +136,38 @@
                                                     ${{ number_format($reimbursement->total, 2) }}
                                                 </td>
                                                 <td class="px-6 py-4">
-                                                    @php
-                                                        $statusColors = [
-                                                            'aprobado' => 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-                                                            'rechazado' => 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400',
-                                                            'requiere_correccion' => 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-                                                            'default' => 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-                                                        ];
-                                                        $color = $statusColors[$reimbursement->status] ?? $statusColors['default'];
-                                                    @endphp
-                                                    <span class="px-3 py-1 inline-flex text-[10px] leading-4 font-black rounded-full uppercase tracking-widest {{ $color }}">
-                                                        @if($reimbursement->status === 'aprobado') Pagado 
-                                                        @elseif($reimbursement->status === 'aprobado_cxp') Aprobado Subdirección
-                                                        @elseif($reimbursement->status === 'aprobado_direccion') Aprobado Dirección
-                                                        @else {{ str_replace('_', ' ', $reimbursement->status) }} @endif
-                                                    </span>
+                                                    <div class="flex flex-col space-y-1">
+                                                        <span class="px-2 w-fit inline-flex text-[10px] leading-4 font-semibold rounded-full 
+                                                            {{ $reimbursement->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
+                                                            {{ $reimbursement->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
+                                                            {{ $reimbursement->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
+                                                            {{ $reimbursement->status === 'aprobado_director' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
+                                                            {{ $reimbursement->status === 'aprobado_control' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : '' }}
+                                                            {{ $reimbursement->status === 'aprobado_ejecutivo' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
+                                                            {{ $reimbursement->status === 'aprobado_cxp' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300' : '' }}
+                                                            {{ $reimbursement->status === 'aprobado_direccion' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
+                                                            {{ $reimbursement->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
+                                                        ">
+                                                            @if($reimbursement->status === 'aprobado') Pagado 
+                                                            @elseif($reimbursement->status === 'aprobado_cxp') Aprobado Subdirección
+                                                            @elseif($reimbursement->status === 'aprobado_direccion') Aprobado Dirección
+                                                            @else {{ ucfirst(str_replace('_', ' ', $reimbursement->status)) }} @endif
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4 text-right whitespace-nowrap text-xs font-bold">
+                                                    <a href="{{ route('reimbursements.show', $reimbursement) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300">VER &rarr;</a>
                                                 </td>
                                             </tr>
                                         @endforeach
                                     </tbody>
                                 </table>
                             </div>
+                            @if($recentReimbursements instanceof \Illuminate\Pagination\LengthAwarePaginator)
+                            <div class="p-4 bg-gray-50 border-t border-gray-100 dark:bg-gray-700/50 dark:border-gray-700">
+                                {{ $recentReimbursements->links() }}
+                            </div>
+                            @endif
                         @else
                             <div class="p-12 text-center">
                                 <svg class="w-16 h-16 text-gray-200 dark:text-gray-700 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>

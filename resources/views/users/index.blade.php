@@ -77,7 +77,8 @@
                     @endif
 
                     <div id="results-container">
-                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <div class="overflow-x-auto relative shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nombre</th>
@@ -154,9 +155,9 @@
                                 @endforeach
                             </tbody>
                         </table>
-                        <div class="mt-4">
-                            {{ $users->links() }}
-                        </div>
+                    </div>
+                    <div class="mt-8 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 sm:rounded-b-lg">
+                        {{ $users->links() }}
                     </div>
                     </div> <!-- End results-container -->
                 </div>

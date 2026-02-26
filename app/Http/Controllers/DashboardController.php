@@ -23,7 +23,7 @@ class DashboardController extends Controller
             $stats['total_amount_pending'] = Reimbursement::whereIn('status', ['pendiente', 'aprobado_director', 'requiere_correccion'])->sum('total');
             $stats['total_amount_approved'] = Reimbursement::where('status', 'aprobado')->sum('total');
             
-            $recentReimbursements = Reimbursement::with('user', 'costCenter')->latest()->take(5)->get();
+            $recentReimbursements = Reimbursement::with('user', 'costCenter')->latest()->paginate(10);
 
         } elseif ($user->isCxp()) {
             // Subdirección
@@ -36,7 +36,7 @@ class DashboardController extends Controller
             // Show items pending for them or already approved
             $recentReimbursements = Reimbursement::whereIn('status', ['aprobado_ejecutivo', 'aprobado_cxp', 'aprobado_direccion', 'aprobado'])
                                     ->with('user', 'costCenter')
-                                    ->latest()->take(5)->get();
+                                    ->latest()->paginate(10);
 
         } elseif ($user->isDireccion()) {
             // Dirección General
@@ -48,7 +48,7 @@ class DashboardController extends Controller
 
             $recentReimbursements = Reimbursement::whereIn('status', ['aprobado_cxp', 'aprobado_direccion', 'aprobado'])
                                     ->with('user', 'costCenter')
-                                    ->latest()->take(5)->get();
+                                    ->latest()->paginate(10);
 
         } elseif ($user->isTreasury()) {
             // Cuentas por Pagar
@@ -60,7 +60,7 @@ class DashboardController extends Controller
 
             $recentReimbursements = Reimbursement::whereIn('status', ['aprobado_direccion', 'aprobado'])
                                     ->with('user', 'costCenter')
-                                    ->latest()->take(5)->get();
+                                    ->latest()->paginate(10);
 
         } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
             // Managers (N1, N2, N3) see approvals for their cost centers AND their own requests
@@ -100,7 +100,7 @@ class DashboardController extends Controller
                       if ($user->isControlObra()) $q2->where('control_obra_id', $user->id);
                       if ($user->isExecutiveDirector()) $q2->where('director_ejecutivo_id', $user->id);
                   });
-            })->with('user', 'costCenter')->latest()->take(5)->get();
+            })->with('user', 'costCenter')->latest()->paginate(10);
 
         } else {
             // Standard User
@@ -113,7 +113,7 @@ class DashboardController extends Controller
             $stats['total_pending_amount'] = (clone $myRequestsQuery)->whereIn('status', ['pendiente', 'requiere_correccion'])->sum('total');
             $stats['total_approved_amount'] = (clone $myRequestsQuery)->where('status', 'aprobado')->sum('total');
 
-            $recentReimbursements = $myRequestsQuery->with('costCenter')->latest()->take(5)->get();
+            $recentReimbursements = $myRequestsQuery->with('costCenter')->latest()->paginate(10);
         }
 
         $notifications = $user->unreadNotifications()->latest()->take(5)->get();

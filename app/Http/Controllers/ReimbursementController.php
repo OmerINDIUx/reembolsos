@@ -202,6 +202,7 @@ class ReimbursementController extends Controller
         }
 
         $type = $request->get('type');
+        $hasInvoice = $request->get('has_invoice', '1') !== '0';
         $allowedTypes = ['reembolso', 'fondo_fijo', 'comida', 'viaje'];
 
         if (!$type || !in_array($type, $allowedTypes)) {
@@ -237,7 +238,7 @@ class ReimbursementController extends Controller
             // For now, just pass it.
         }
 
-        return view('reimbursements.create', compact('type', 'costCenters', 'currentWeek', 'categories', 'parentReimbursement'));
+        return view('reimbursements.create', compact('type', 'costCenters', 'currentWeek', 'categories', 'parentReimbursement', 'hasInvoice'));
     }
 
     /**
@@ -245,21 +246,38 @@ class ReimbursementController extends Controller
      */
     public function bulkStore(Request $request)
     {
+        $hasInvoice = $request->get('has_invoice', '1') == '1';
+        Log::info("BULK_STORE_START: User=" . Auth::id() . " Mode=" . ($hasInvoice ? 'Invoice' : 'Manual'));
+
         /** @var \App\Models\User $user */
         $user = Auth::user();
         if ($user->isCxp() || $user->isTreasury() || $user->isAdminView()) {
             abort(403, 'Tu rol no tiene permisos para registrar reembolsos.');
         }
 
-        $request->validate([
+
+        $rules = [
             'type' => 'required|in:reembolso,fondo_fijo,comida',
             'cost_center_id' => 'required|exists:cost_centers,id',
             'week' => 'required|string',
             'items' => 'required|array|min:1',
             'items.*.category' => ['required', Rule::in($this->getCategories())],
-            'items.*.xml_file' => 'required|file|mimes:xml',
-            'items.*.pdf_file' => 'nullable|file|mimes:pdf',
-            'items.*.confirm_company' => 'required',
+            'items.*.xml_file' => $hasInvoice ? 'required|file|mimes:xml' : 'nullable',
+            'items.*.pdf_file' => $hasInvoice ? 'nullable|file|max:15360' : 'required|file|max:15360',
+            'items.*.confirm_company' => $hasInvoice ? 'required' : 'nullable',
+        ];
+
+        if (!$hasInvoice) {
+            $rules['items.*.nombre_emisor'] = 'required|string';
+            $rules['items.*.fecha'] = 'required|date|before_or_equal:today';
+            $rules['items.*.total'] = 'required|numeric|max:2000';
+            $rules['items.*.subtotal'] = 'required|numeric|lte:items.*.total';
+        }
+
+        $request->validate($rules, [
+            'items.*.total.max' => 'No se pueden hacer reembolsos mayores a $2,000 MXN sin factura. Comunícate con tu director.',
+            'items.*.fecha.before_or_equal' => 'La fecha de emisión no puede ser una fecha futura.',
+            'items.*.subtotal.lte' => 'El subtotal no puede ser mayor al total del comprobante.',
         ]);
 
         set_time_limit(300); // Higher limit for bulk processing
@@ -322,22 +340,43 @@ class ReimbursementController extends Controller
 
         foreach ($request->items as $index => $item) {
             try {
-                $xmlContent = file_get_contents($item['xml_file']->getRealPath());
-                $xmlData = $this->extractXmlData($xmlContent);
-                $uuid = $xmlData['uuid'];
-
-                // Check for duplicate in DB or current batch
-                if (in_array($uuid, $processedUuids) || Reimbursement::where('uuid', $uuid)->exists()) {
-                    $errors[] = "Ítem #" . ($index + 1) . ": El CFDI con UUID {$uuid} ya está registrado o duplicado en esta carga.";
-                    $failedCount++;
-                    continue;
-                }
-                $processedUuids[] = $uuid;
-                
+                $xmlData = null;
+                $uuid = null;
+                $xmlPath = null;
                 $pdfFile = $item['pdf_file'] ?? null;
-                $validationData = $this->getValidationData($xmlData, $pdfFile);
+                $validationData = null;
 
-                $xmlPath = $item['xml_file']->store('xmls');
+                if ($hasInvoice) {
+                    $xmlContent = file_get_contents($item['xml_file']->getRealPath());
+                    $xmlData = $this->extractXmlData($xmlContent);
+                    $uuid = $xmlData['uuid'];
+
+                    // Check for duplicate in DB or current batch
+                    if (in_array($uuid, $processedUuids) || Reimbursement::where('uuid', $uuid)->exists()) {
+                        $errors[] = "Ítem #" . ($index + 1) . ": El CFDI con UUID {$uuid} ya está registrado o duplicado en esta carga.";
+                        $failedCount++;
+                        continue;
+                    }
+                    $processedUuids[] = $uuid;
+                    
+                    $validationData = $this->getValidationData($xmlData, $pdfFile);
+                    $xmlPath = $item['xml_file']->store('xmls');
+                } else {
+                    // Manual data
+                    $xmlData = [
+                        'rfc_emisor' => $item['rfc_emisor'] ?? 'N/A',
+                        'nombre_emisor' => $item['nombre_emisor'],
+                        'rfc_receptor' => $item['rfc_receptor'] ?? 'N/A',
+                        'nombre_receptor' => $item['nombre_receptor'] ?? 'N/A',
+                        'folio' => 'SIN-FACTURA',
+                        'fecha' => $item['fecha'],
+                        'total' => $item['total'],
+                        'subtotal' => $item['subtotal'],
+                        'moneda' => 'MXN',
+                        'tipo_comprobante' => 'I',
+                    ];
+                }
+
                 $pdfPath = $pdfFile ? $pdfFile->store('pdfs') : null;
 
                 $finalObs = ($item['observaciones'] ?? "") . $autoNote;
@@ -433,8 +472,8 @@ class ReimbursementController extends Controller
         set_time_limit(120);
 
         $request->validate([
-            'xml_file' => 'required|file|mimes:xml',
-            'pdf_file' => 'nullable|file|mimes:pdf',
+            'xml_file' => 'required|file',
+            'pdf_file' => 'nullable|file',
         ]);
 
         try {
@@ -555,7 +594,7 @@ class ReimbursementController extends Controller
             'cost_center_id' => 'required|exists:cost_centers,id',
             'week' => 'required|string',
             'category' => ['nullable', Rule::requiredIf($request->type !== 'viaje'), Rule::in($this->getCategories())], // strict validation
-            'xml_file' => 'nullable|file|mimes:xml', // handled manually below
+            'xml_file' => 'nullable|file', // handled manually below
             'uuid' => 'nullable|string', // handled manually
             'total' => 'nullable|numeric', // handled manually
             'attendees_count' => 'nullable|integer|required_if:type,comida',
@@ -814,7 +853,7 @@ class ReimbursementController extends Controller
 
         if ($isOwnerCorrecting && $request->has('is_resubmission')) {
             $request->validate([
-                'pdf_file' => 'nullable|file|mimes:pdf',
+                'pdf_file' => 'nullable|file',
                 'user_correction_comment' => 'required|string',
                 'attendees_count' => 'nullable|integer',
                 'location' => 'nullable|string',
@@ -824,12 +863,22 @@ class ReimbursementController extends Controller
                 'trip_nights' => 'nullable|integer',
                 'trip_start_date' => 'nullable|date',
                 'trip_end_date' => 'nullable|date',
+                'nombre_emisor' => 'nullable|string',
+                'fecha' => 'nullable|date',
+                'subtotal' => 'nullable|numeric',
+                'total' => 'nullable|numeric',
             ]);
             
             $data = array_filter($request->only([
                 'attendees_count', 'location', 'attendees_names',
-                'title', 'trip_destination', 'trip_nights', 'trip_start_date', 'trip_end_date'
+                'title', 'trip_destination', 'trip_nights', 'trip_start_date', 'trip_end_date',
+                'nombre_emisor', 'fecha', 'subtotal', 'total'
             ]), function($value) { return !is_null($value); });
+
+            // Safety: If reimbursement has a UUID, we MUST NOT allow changing core fiscal fields manually
+            if (!empty($reimbursement->uuid)) {
+                unset($data['nombre_emisor'], $data['fecha'], $data['subtotal'], $data['total']);
+            }
 
             if ($request->hasFile('pdf_file')) {
                 if ($reimbursement->pdf_path) Storage::delete($reimbursement->pdf_path);
@@ -1012,7 +1061,7 @@ class ReimbursementController extends Controller
         set_time_limit(120); // Increase time limit for slow PDF parsing
 
         $request->validate([
-            'pdf_file' => 'required|file|mimes:pdf',
+            'pdf_file' => 'required|file',
         ]);
 
         if (empty($reimbursement->uuid)) {
@@ -1252,6 +1301,37 @@ class ReimbursementController extends Controller
     /**
      * View a file (XML or PDF) in the browser.
      */
+    /**
+     * Download a file (XML or PDF/Image) with a clean name.
+     */
+    public function downloadFile(Reimbursement $reimbursement, $type)
+    {
+        if ($type === 'xml') {
+            if (!$reimbursement->xml_path || !Storage::exists($reimbursement->xml_path)) {
+                abort(404, 'Archivo XML no encontrado.');
+            }
+            return Storage::download($reimbursement->xml_path, 'factura-' . ($reimbursement->folio ?? 'archivo') . '.xml');
+        } elseif ($type === 'pdf') {
+            if (!$reimbursement->pdf_path || !Storage::exists($reimbursement->pdf_path)) {
+                abort(404, 'Archivo no encontrado.');
+            }
+            
+            $extension = pathinfo($reimbursement->pdf_path, PATHINFO_EXTENSION);
+            if ($extension === 'bin') {
+                $mime = Storage::mimeType($reimbursement->pdf_path);
+                if (str_contains($mime, 'pdf')) $extension = 'pdf';
+                elseif (str_contains($mime, 'image/jpeg')) $extension = 'jpg';
+                elseif (str_contains($mime, 'image/png')) $extension = 'png';
+                else $extension = 'file';
+            }
+
+            $cleanName = 'comprobante-' . ($reimbursement->folio ?? 'gasto') . '.' . $extension;
+            return Storage::download($reimbursement->pdf_path, $cleanName);
+        }
+        
+        abort(404);
+    }
+
     public function viewFile(Reimbursement $reimbursement, $type)
     {
         if ($type === 'xml') {
@@ -1264,10 +1344,14 @@ class ReimbursementController extends Controller
             ]);
         } elseif ($type === 'pdf') {
             if (!$reimbursement->pdf_path || !Storage::exists($reimbursement->pdf_path)) {
-                abort(404, 'Archivo PDF no encontrado.');
+                abort(404, 'Archivo no encontrado.');
             }
-            return response()->file(Storage::path($reimbursement->pdf_path), [
-                'Content-Type' => 'application/pdf',
+            
+            $path = Storage::path($reimbursement->pdf_path);
+            $mimeType = Storage::mimeType($reimbursement->pdf_path);
+            
+            return response()->file($path, [
+                'Content-Type' => $mimeType,
                 'Content-Disposition' => 'inline; filename="' . basename($reimbursement->pdf_path) . '"'
             ]);
         }

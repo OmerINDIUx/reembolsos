@@ -1,71 +1,97 @@
-# Guía de Despliegue en Hostinger (Laravel)
+# Guía de Despliegue Final en Hostinger (PHP 8.4)
 
-Esta guía te ayudará a subir tu sistema de reembolsos a un servidor de Hostinger paso a paso, diseñado para que funcione de manera segura.
+Esta guía contiene los pasos finales para subir la versión actualizada del sistema de reembolsos a Hostinger.
 
 ---
 
-## 🏗️ Fase 1: Preparación Local (Lo que haces en tu computadora)
+## 🏗️ Fase 1: Preparación Local
 
-1. **Compilar el Diseño (Ya lo hice por ti):**
-    - Acabo de ejecutar el comando `npm run build` en tu computadora para "empaquetar" todos los colores, estilos e imágenes para que pesen poco y carguen rápido en producción.
+1. **Compilar el Diseño (RECIÉN COMPLETADO):**
+    - Acabo de ejecutar `npm run build`. Todos los nuevos cambios visuales (Bitácora de Observaciones, tabla de usuarios mejorada, etc.) ya están empaquetados en la carpeta `public/build`.
 2. **Crear el Archivo Comprimido (ZIP):**
-    - Ve a la carpeta de tu proyecto local (`c:\laragon\www\reembolsos`).
+    - Ve a `c:\laragon\www\reembolsos`.
     - Selecciona **todos** los archivos y carpetas, EXCEPTO:
-        - ❌ `node_modules` (esta carpeta es solo de desarrollo y pesa muchísimo).
-        - ❌ `tests` (opcional).
-    - **Es importante incluir las carpetas ocultas** como `.env` y el archivo `.gitattributes`.
-    - Haz clic derecho y comprime todo en un archivo `.zip` (por ejemplo: `reembolsos_app.zip`).
+        - ❌ `node_modules`
+        - ❌ `tests`
+        - ❌ `.git`
+    - **Asegúrate de incluir el archivo `.env`**.
+    - Comprime todo en un archivo llamado `reembolsos_final.zip`.
 
 ---
 
-## 🌐 Fase 2: Preparación en Hostinger (hPanel)
+## 🌐 Fase 2: Configuración en Hostinger (hPanel)
 
-1. **Crear la Base de Datos:**
-    - Inicia sesión en **hPanel** de Hostinger.
-    - Ve a **Bases de Datos** > **Gestión de Bases de Datos**.
-    - Crea una nueva Base de Datos, con Usuario y Contraseña.
-    - 📌 **Guarda bien estos tres datos** (Nombre de BD, Usuario, Contraseña) los usaremos enseguida.
+1. **Base de Datos:**
+    - Asegúrate de tener creados el nombre de la BD, usuario y contraseña en hPanel.
 
 ---
 
 ## 🚀 Fase 3: Subida del Proyecto y Configuración
 
 1. **Subir los Archivos:**
-    - Ve a la sección **Archivos** > **Administrador de Archivos** en hPanel.
-    - Navega dentro de la carpeta principal de tu dominio (generalmente `public_html` si es el dominio principal, o una subcarpeta si es un subdominio).
-    - **Sube** el archivo `reembolsos_app.zip` que creaste en el paso 1.
-    - Haz clic derecho sobre el `.zip` y selecciona **Extraer** (Extract).
-    - _Importante: Asegúrate de que los archivos principales como `app`, `public`, `routes`, etc., queden directamente en la raíz de tu dominio o carpeta destinada, y no anidados dentro de otra carpeta llamada "reembolsos"._
-    - Una vez extraído, puedes borrar el archivo `.zip`.
+    - Ve a **Archivos** > **Administrador de Archivos** en hPanel.
+    - Sube y extrae tu `.zip`.
 
-2. **Ajustar el Archivo `.env` (Configuración):**
-    - En ese mismo administrador de archivos, busca el archivo `.env` (si no lo ves, asegúrate de activar la vista de archivos ocultos en la configuración). Ábrelo para editarlo.
-    - Cambia las siguientes variables para que coincidan con la base de datos que creaste en el paso 2:
+2. **Ajustar el Archivo `.env` (Configuración de Producción):**
+    - Abre el archivo `.env` en el servidor y asegúrate de que el disco de archivos sea el correcto:
 
         ```env
+        APP_NAME=Reembolsos
         APP_ENV=production
         APP_DEBUG=false
-        APP_URL=https://xn--diseoygestion-lkb.com/
+        APP_URL=https://reembolsosindi.com
+
+        FILESYSTEM_DISK=public  # <--- INDISPENSABLE para que se vean los archivos
 
         DB_CONNECTION=mysql
         DB_HOST=127.0.0.1
-        DB_PORT=3306
-        DB_DATABASE=ReembolsosGI
-        DB_USERNAME=ReembolsosOmer
-        DB_PASSWORD=Q7zNR|g&
+        DB_DATABASE=uXXX_XXXXX
+        DB_USERNAME=uXXX_XXXXX
+        DB_PASSWORD=xxxxxxxxxx
         ```
 
-    - Guarda los cambios.
+3. **Restaurar Archivos Existentes (Si ya habías subido reembolsos):**
+    - Si ya tenías archivos y no se ven, usa el Administrador de Archivos para **MOVER** las carpetas `xmls`, `pdfs` y `trips`:
+    - De: `storage/app/private/`
+    - A: `storage/app/public/`
+    - _Si la carpeta `public` ya tiene carpetas con el mismo nombre, solo mueve el contenido._
 
 ---
 
-## 🚪 Fase 4: Solucionar la Ruta de "Public" (El paso clave)
+## 💻 Fase 4: Comandos Críticos (SSH)
 
-Laravel por seguridad "esconde" su código central y solo expone la carpeta `public/`. Sin embargo, Hostinger carga por defecto la carpeta `public_html/`. Para solucionarlo, haz lo siguiente:
+**IMPORTANTE:** Debes usar la ruta completa a la versión 8.4 de PHP que configuramos en Hostinger: `/opt/alt/php84/usr/bin/php`
 
-1. **Crear regla de redirección (`.htaccess` en `public_html`):**
-    - En tu **Administrador de Archivos**, directamente en la carpeta raíz (`public_html` o donde hayas extraído todo), vas a crear un NUEVO archivo llamado `.htaccess`.
-    - Abre este nuevo `.htaccess` y pega el siguiente código para redirigir silenciosamente todo el tráfico hacia la carpeta `public`:
+1. **Navegar a la carpeta:**
+
+    ```bash
+    cd domains/reembolsosindi.com/public_html
+    ```
+
+2. **Actualizar la Base de Datos:**
+
+    ```bash
+    /opt/alt/php84/usr/bin/php artisan migrate --force
+    ```
+
+3. **Crear enlace de almacenamiento:**
+
+    ```bash
+    /opt/alt/php84/usr/bin/php artisan storage:link
+    ```
+
+4. **Optimizar para Producción:**
+    ```bash
+    /opt/alt/php84/usr/bin/php artisan config:cache
+    /opt/alt/php84/usr/bin/php artisan route:cache
+    /opt/alt/php84/usr/bin/php artisan view:cache
+    ```
+
+---
+
+## 🚪 Fase 4: Redirección .htaccess
+
+Si tu dominio apunta directamente a `public_html` pero el sistema está en una carpeta, asegúrate de que el `.htaccess` en la raíz de `public_html` tenga esto:
 
 ```apache
 <IfModule mod_rewrite.c>
@@ -74,38 +100,30 @@ Laravel por seguridad "esconde" su código central y solo expone la carpeta `pub
 </IfModule>
 ```
 
-- Guarda el archivo. Esto hará que al entrar a `tudominio.com` el servidor lea directamente lo que hay dentro de `public`.
+---
+
+## � ¿Borraste los archivos por accidente? (Recuperación)
+
+Si subiste el `.zip` y borraste las facturas que los clientes ya habían subido, **no entres en pánico**, Hostinger guarda respaldos automáticos:
+
+1.  En hPanel, ve a **Archivos** > **Copias de Seguridad** (Backups).
+2.  Busca la opción **Restauración de Archivos**.
+3.  Selecciona una fecha (de ayer o antes del error).
+4.  Busca la carpeta `domains/tu-dominio/public_html/storage` y dale a **Restaurar**.
+5.  Esto recuperará los XML y PDF perdidos sin afectar tu código nuevo.
 
 ---
 
-## 💻 Fase 5: Levantar la Base de Datos (Comandos de Laravel)
+## ⚠️ ADVERTENCIA DE SEGURIDAD (Regla de Oro)
 
-Sigue los siguientes pasos en la consola en la que te acabas de conectar (donde viste la carpeta `domains`):
+Para futuras actualizaciones, sigue este flujo para **NUNCA** perder datos de clientes:
 
-1. **Navegar a tu Proyecto:**
-   Primero debes entrar a tu dominio y luego a la carpeta pública donde subiste los archivos.
-    - Escribe: `cd domains` y presiona Enter.
-    - Escribe: `ls` y presiona Enter (verás el listado de tu dominio, en este caso `xn--diseoygestion-lkb.com`).
-      https://reembolsosindi.com/
-    - Escribe: `cd xn--diseoygestion-lkb.com` y presiona Enter.
-    - Escribe: `cd public_html` y presiona Enter.
-    - _(Para verificar que estás en el lugar correcto, escribe `ls` de nuevo y deberías ver todas las carpetas que subiste: `app`, `public`, `routes`, el archivo `artisan`, etc.)_
-
-2. **Migrar la Base de Datos (Generar Tablas):**
-   Una vez dentro de `public_html`, ejecuta:
-   `/opt/alt/php84/usr/bin/php artisan migrate --force`
-   _(Nota: Si quieres crear el usuario administrador inicial, en su lugar corre `/opt/alt/php84/usr/bin/php artisan migrate:fresh --seed --force`)._
-3. **Vincular Archivos Públicos:**
-   Para que se vean las imágenes y PDF correctamente, ejecuta:
-   `/opt/alt/php84/usr/bin/php artisan storage:link`
-4. **Limpiar Caché:**
-   Ejecuta esto para aplicar todas las configuraciones nuevas del `.env`:
-   `/opt/alt/php84/usr/bin/php artisan config:clear`
-   `/opt/alt/php84/usr/bin/php artisan cache:clear`
-   `/opt/alt/php84/usr/bin/php artisan view:clear`
+1.  **NO BORRES la carpeta `storage`** en el servidor.
+2.  Cuando subas tu nuevo `.zip`, extráelo. Si el administrador de archivos te pregunta si quieres "Sobrescribir" (Overwrite), dile que **SÍ**. Esto actualizará el código pero **mantendrá las carpetas de facturas** intactas.
+3.  **Excluye** tus archivos locales de prueba (toda tu carpeta `storage/app/public/xmls` y `pdfs`) del ZIP que subas, para no "ensuciar" el servidor con tus pruebas personales.
 
 ---
 
-## 🎉 Cierre
+## �🎉 ¡Listo!
 
-Tu sistema de Reembolsos debería estar completamente operativo si visitas tu dominio. ¡Cualquier carga de Facturas PDF, notificaciones y reglas de validación funcionarán como en tu ordenador local!
+El sistema ahora reflejará todos los cambios de roles (Subdirección, Cuentas por Pagar), las notificaciones de Dirección y la nueva bitácora de observaciones.

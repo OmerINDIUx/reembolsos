@@ -22,8 +22,10 @@
                             
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Actualizar archivo PDF (Opcional)</label>
-                                    <input type="file" id="pdf_file_input" name="pdf_file" accept=".pdf" class="mt-1 block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900 dark:file:text-indigo-300">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        {{ $reimbursement->uuid ? 'Actualizar archivo PDF (Opcional)' : 'Actualizar Comprobante (PDF, Imagen, Texto)' }}
+                                    </label>
+                                    <input type="file" id="pdf_file_input" name="pdf_file" accept="{{ $reimbursement->uuid ? '.pdf' : '.pdf,image/*,.txt' }}" class="mt-1 block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900 dark:file:text-indigo-300">
                                     <div id="pdf-validation-result" class="mt-2 text-sm hidden"></div>
                                 </div>
 
@@ -64,6 +66,30 @@
                                         <input type="date" name="trip_end_date" id="trip_end_date" value="{{ old('trip_end_date', $reimbursement->trip_end_date) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                     </div>
                                 @endif
+                                
+                                <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                                    @if(empty($reimbursement->uuid))
+                                    <div class="md:col-span-2">
+                                        <p class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-2 italic">Solo si es necesario corregir datos del comprobante:</p>
+                                    </div>
+                                    @endif
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="nombre_emisor">Nombre Emisor</label>
+                                        <input type="text" name="nombre_emisor" id="nombre_emisor" value="{{ old('nombre_emisor', $reimbursement->nombre_emisor) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm {{ $reimbursement->uuid ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-gray-500' : '' }}" {{ $reimbursement->uuid ? 'readonly' : '' }}>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="fecha">Fecha de Emisión</label>
+                                        <input type="date" name="fecha" id="fecha" value="{{ old('fecha', $reimbursement->fecha ? \Carbon\Carbon::parse($reimbursement->fecha)->format('Y-m-d') : '') }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm {{ $reimbursement->uuid ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-gray-500' : '' }}" {{ $reimbursement->uuid ? 'readonly' : '' }}>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="subtotal">Subtotal</label>
+                                        <input type="number" step="0.01" name="subtotal" id="subtotal" value="{{ old('subtotal', $reimbursement->subtotal) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm {{ $reimbursement->uuid ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-gray-500' : '' }}" {{ $reimbursement->uuid ? 'readonly' : '' }}>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="total">Total</label>
+                                        <input type="number" step="0.01" name="total" id="total" value="{{ old('total', $reimbursement->total) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm {{ $reimbursement->uuid ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-gray-500' : '' }}" {{ $reimbursement->uuid ? 'readonly' : '' }}>
+                                    </div>
+                                </div>
 
                                 <div class="md:col-span-2">
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="observaciones_update">Justificación / Información Adicional</label>
@@ -81,6 +107,25 @@
                 </div>
             @endif
 
+            @if(!$reimbursement->uuid || $reimbursement->folio === 'SIN-FACTURA')
+                <div class="bg-gradient-to-r from-orange-500 to-orange-600 shadow-lg rounded-2xl mb-6 overflow-hidden animate-fadeIn">
+                    <div class="px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="bg-white/20 p-2 rounded-xl mr-4">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                            </div>
+                            <div>
+                                <h4 class="text-lg font-black text-white uppercase tracking-tight">Registro Manual Sin Factura (Sin XML)</h4>
+                                <p class="text-orange-100 text-xs font-bold uppercase tracking-widest opacity-80">Este gasto se registró manualmente y solo cuenta con comprobante de pago/imagen.</p>
+                            </div>
+                        </div>
+                        <div class="hidden md:block">
+                            <span class="bg-white/20 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">Aprobación Especial Requerida</span>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             <div class="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
                 <div class="px-4 py-5 sm:px-6">
                     <div class="flex justify-between items-center">
@@ -94,8 +139,12 @@
                             Próximamente
                         </button>
                     </div>
-                    <p class="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
-                        UUID: {{ $reimbursement->uuid ?? 'N/A (Viaje/Solicitud)' }}
+                    <p class="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400 font-bold">
+                        @if($reimbursement->uuid)
+                            UUID: <span class="font-mono text-xs">{{ $reimbursement->uuid }}</span>
+                        @else
+                            <span class="text-orange-500 uppercase italic">Registro sin folio fiscal (XML)</span>
+                        @endif
                     </p>
                 </div>
                 <div class="border-t border-gray-200 dark:border-gray-700">
@@ -106,7 +155,12 @@
                         </div>
                         <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                             <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Emisor</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">{{ $reimbursement->nombre_emisor }} ({{ $reimbursement->rfc_emisor }})</dd>
+                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
+                                {{ $reimbursement->nombre_emisor }} 
+                                @if($reimbursement->rfc_emisor && $reimbursement->rfc_emisor !== 'N/A')
+                                    <span class="text-gray-500 font-mono ml-1">({{ $reimbursement->rfc_emisor }})</span>
+                                @endif
+                            </dd>
                         </div>
                         <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                             <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Tipo de Solicitud</dt>
@@ -124,15 +178,21 @@
                             <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Semana</dt>
                             <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">{{ $reimbursement->week ?? 'N/A' }}</dd>
                         </div>
+                        @if($reimbursement->uuid && $reimbursement->nombre_receptor)
                         <div class="bg-gray-50 dark:bg-gray-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                             <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Receptor</dt>
                             <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">{{ $reimbursement->nombre_receptor }} ({{ $reimbursement->rfc_receptor }})</dd>
                         </div>
+                        @endif
                         <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                             <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Fecha</dt>
                             <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">{{ \Carbon\Carbon::parse($reimbursement->fecha)->format('d/m/Y H:i') }}</dd>
                         </div>
                         <div class="bg-gray-50 dark:bg-gray-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Subtotal</dt>
+                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2 font-semibold">${{ number_format($reimbursement->subtotal, 2) }} {{ $reimbursement->moneda }}</dd>
+                        </div>
+                        <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                             <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Total</dt>
                             <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2 font-bold text-lg">${{ number_format($reimbursement->total, 2) }} {{ $reimbursement->moneda }}</dd>
                         </div>
@@ -263,6 +323,7 @@
                             </dd>
                         </div>
 
+                        @if($reimbursement->uuid)
                          <!-- Validation Status Row -->
                         <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                             <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Validación XML vs PDF</dt>
@@ -284,36 +345,47 @@
                                 @endif
                             </dd>
                         </div>
+                        @endif
                         
-                        <!-- Standard Files (XML/PDF) -->
                         <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Archivos Fiscales</dt>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Documentación Adjunta</dt>
                             <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
-                                <ul class="border border-gray-200 rounded-md divide-y divide-gray-200 dark:border-gray-600 dark:divide-gray-600">
+                                <ul class="border border-gray-200 rounded-xl divide-y divide-gray-200 dark:border-gray-700 dark:divide-gray-700 overflow-hidden shadow-sm">
                                     @if($reimbursement->xml_path)
-                                    <li class="pl-3 pr-4 py-3 flex items-center justify-between text-sm">
+                                    <li class="pl-3 pr-4 py-4 flex items-center justify-between text-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                         <div class="w-0 flex-1 flex items-center">
-                                            <span class="ml-2 flex-1 w-0 truncate">XML: {{ basename($reimbursement->xml_path) }}</span>
+                                            <div class="bg-indigo-100 dark:bg-indigo-900/50 p-2 rounded-lg mr-3">
+                                                <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                            </div>
+                                            <span class="ml-2 flex-1 w-0 truncate font-medium">Factura Fiscal (XML)</span>
                                         </div>
                                         <div class="ml-4 flex-shrink-0 flex space-x-4">
-                                            <a href="{{ route('reimbursements.view_file', ['reimbursement' => $reimbursement, 'type' => 'xml']) }}" target="_blank" class="font-medium text-indigo-600 hover:text-indigo-500">Ver</a>
-                                            <a href="{{ Storage::url($reimbursement->xml_path) }}" download class="font-medium text-gray-500 hover:text-gray-700">Descargar</a>
+                                            <a href="{{ route('reimbursements.view_file', ['reimbursement' => $reimbursement, 'type' => 'xml']) }}" target="_blank" class="font-black text-[10px] text-indigo-600 hover:text-indigo-800 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg transition-all">Ver XML</a>
+                                            <a href="{{ route('reimbursements.download_file', ['reimbursement' => $reimbursement, 'type' => 'xml']) }}" class="font-black text-[10px] text-gray-500 hover:text-gray-700 uppercase tracking-widest bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-lg transition-all">Bajar</a>
                                         </div>
                                     </li>
                                     @endif
                                     @if($reimbursement->pdf_path)
-                                    <li class="pl-3 pr-4 py-3 flex items-center justify-between text-sm">
+                                    <li class="pl-3 pr-4 py-4 flex items-center justify-between text-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                         <div class="w-0 flex-1 flex items-center">
-                                            <span class="ml-2 flex-1 w-0 truncate">PDF: {{ basename($reimbursement->pdf_path) }}</span>
+                                            <div class="bg-orange-100 dark:bg-orange-900/50 p-2 rounded-lg mr-3">
+                                                <svg class="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                            </div>
+                                            <span class="ml-2 flex-1 w-0 truncate font-medium">
+                                                {{ $reimbursement->uuid ? 'PDF de Factura' : 'Imagen / Comprobante de Pago' }}
+                                            </span>
                                         </div>
                                         <div class="ml-4 flex-shrink-0 flex space-x-4">
-                                            <a href="{{ route('reimbursements.view_file', ['reimbursement' => $reimbursement, 'type' => 'pdf']) }}" target="_blank" class="font-medium text-indigo-600 hover:text-indigo-500">Ver</a>
-                                            <a href="{{ Storage::url($reimbursement->pdf_path) }}" download class="font-medium text-gray-500 hover:text-gray-700">Descargar</a>
+                                            <a href="{{ route('reimbursements.view_file', ['reimbursement' => $reimbursement, 'type' => 'pdf']) }}" target="_blank" class="font-black text-[10px] text-orange-600 hover:text-orange-800 uppercase tracking-widest bg-orange-50 dark:bg-orange-900/30 px-3 py-1.5 rounded-lg transition-all">Ver Archivo</a>
+                                            <a href="{{ route('reimbursements.download_file', ['reimbursement' => $reimbursement, 'type' => 'pdf']) }}" class="font-black text-[10px] text-gray-500 hover:text-gray-700 uppercase tracking-widest bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-lg transition-all">Bajar</a>
                                         </div>
                                     </li>
                                     @endif
                                     @if(!$reimbursement->xml_path && !$reimbursement->pdf_path)
-                                        <li class="pl-3 pr-4 py-3 text-sm text-gray-500">Sin archivos fiscales adjuntos.</li>
+                                        <li class="pl-3 pr-4 py-4 text-sm text-gray-500 italic flex items-center">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                                            Sin archivos adjuntos.
+                                        </li>
                                     @endif
                                 </ul>
                                 
@@ -511,10 +583,13 @@
                     }
 
                     const extension = this.files[0].name.split('.').pop().toLowerCase();
-                    if (extension !== 'pdf') {
+                    const hasUuid = @json(!empty($reimbursement->uuid));
+                    const allowedExtensions = hasUuid ? ['pdf'] : ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'jfif', 'txt'];
+
+                    if (!allowedExtensions.includes(extension)) {
                         Swal.fire({
                             title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Archivo Inválido</span>',
-                            html: '<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">Este campo solo acepta archivos <b>PDF</b>.</p>',
+                            html: `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">Este campo solo acepta archivos <b>${allowedExtensions.join(', ').toUpperCase()}</b>.</p>`,
                             icon: 'error',
                             confirmButtonText: 'ENTENDIDO',
                             confirmButtonColor: '#ef4444',
@@ -542,8 +617,24 @@
                             'Accept': 'application/json'
                         }
                     })
-                    .then(response => response.json())
+                    .then(response => {
+                        // Skip validation if no UUID exists (Manual Reimbursement)
+                        @if(empty($reimbursement->uuid))
+                            validationResult.innerHTML = `
+                                <div class="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/50 flex items-start">
+                                    <svg class="w-5 h-5 text-indigo-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    <div>
+                                        <p class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1">Registro Manual</p>
+                                        <p class="text-sm font-medium text-indigo-700 dark:text-indigo-300">Archivo recibido. No se requiere validación fiscal (Sin XML).</p>
+                                    </div>
+                                </div>
+                            `;
+                            return null;
+                        @endif
+                        return response.json();
+                    })
                     .then(data => {
+                        if (!data) return; // Already handled manual mode
                         if (data.error) {
                             validationResult.innerHTML = `
                                 <div class="p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 flex items-start">
