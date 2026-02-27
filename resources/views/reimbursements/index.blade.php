@@ -64,7 +64,7 @@
 
                     <!-- Search & Filter Form -->
                     <div class="mb-6 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                        <form id="filter-form" action="{{ route('reimbursements.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                        <form id="filter-form" action="{{ route('reimbursements.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4" novalidate>
                             <input type="hidden" name="tab" value="{{ request('tab', 'active') }}">
                             <input type="hidden" name="sort_by" id="input-sort-by" value="{{ request('sort_by', 'created_at') }}">
                             <input type="hidden" name="sort_order" id="input-sort-order" value="{{ request('sort_order', 'desc') }}">

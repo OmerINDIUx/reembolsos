@@ -6,16 +6,19 @@ Esta guía contiene los pasos finales para subir la versión actualizada del sis
 
 ## 🏗️ Fase 1: Preparación Local
 
-1. **Compilar el Diseño (RECIÉN COMPLETADO):**
-    - Acabo de ejecutar `npm run build`. Todos los nuevos cambios visuales (Bitácora de Observaciones, tabla de usuarios mejorada, etc.) ya están empaquetados en la carpeta `public/build`.
-2. **Crear el Archivo Comprimido (ZIP):**
+1. **Compilar el Diseño (OBLIGATORIO):**
+    - Ejecuta `ls` en tu terminal local. Esto empaqueta todos los cambios visuales y validaciones en la carpeta `public/build`.
+2. **Crear el Archivo ZIP (MODO SEGURO):**
     - Ve a `c:\laragon\www\reembolsos`.
     - Selecciona **todos** los archivos y carpetas, EXCEPTO:
-        - ❌ `node_modules`
-        - ❌ `tests`
-        - ❌ `.git`
-    - **Asegúrate de incluir el archivo `.env`**.
-    - Comprime todo en un archivo llamado `reembolsos_final.zip`.
+        - ❌ `node_modules` (Demasiado pesado)
+        - ❌ `tests` (Solo para desarrollo)
+        - ❌ `.git` (Control de versiones)
+        - ❌ **`storage/app/public/xmls`** (NO subas tus XML de prueba)
+        - ❌ **`storage/app/public/pdfs`** (NO subas tus PDF de prueba)
+        - ❌ **`storage/app/public/trips`** (NO subas tus carpetas de prueba)
+    - **Asegúrate de incluir el archivo `.env`** (aunque en el servidor lo revisaremos).
+    - Comprime todo en un archivo llamado `reembolsos_update.zip`.
 
 ---
 
@@ -30,9 +33,10 @@ Esta guía contiene los pasos finales para subir la versión actualizada del sis
 
 1. **Subir los Archivos:**
     - Ve a **Archivos** > **Administrador de Archivos** en hPanel.
-    - Sube y extrae tu `.zip`.
+    - **IMPORTANTE:** No borres nada aún. Sube el archivo `reembolsos_update.zip`.
+    - Al extraerlo, Hostinger te preguntará si deseas **Sobrescribir (Overwrite)**. Dile que **SÍ**. Esto reemplazará el código viejo por el nuevo pero **mantendrá las facturas que ya existen en el servidor**.
 
-2. **Ajustar el Archivo `.env` (Configuración de Producción):**
+2. **Ajustar el Archivo `.env`:**
     - Abre el archivo `.env` en el servidor y asegúrate de que el disco de archivos sea el correcto:
 
         ```env
@@ -102,7 +106,18 @@ Si tu dominio apunta directamente a `public_html` pero el sistema está en una c
 
 ---
 
-## � ¿Borraste los archivos por accidente? (Recuperación)
+## 🛡️ Reglas de Oro para NO Perder Datos
+
+Para proteger los archivos que ya están en producción:
+
+1.  **Nunca borres la carpeta `storage` del servidor:** Esta carpeta contiene las facturas reales de los usuarios. El ZIP que subes debe ser solo para actualizar el código (`app`, `resources`, `public`, etc.).
+2.  **Base de Datos:** Nunca ejecutes `migrate:fresh`. Usa siempre `migrate --force`. El comando `fresh` borraría todas las tablas y datos existentes.
+3.  **Backups:** Antes de subir nada, Hostinger permite descargar un respaldo de la base de datos desde la sección "Bases de Datos MySQL". Hazlo por precaución.
+4.  **Vínculo Simbólico:** Si después de subir el código las facturas viejas no se ven (error 404), vuelve a ejecutar el comando `php artisan storage:link` por SSH.
+
+---
+
+## ¿Borraste los archivos por accidente? (Recuperación)
 
 Si subiste el `.zip` y borraste las facturas que los clientes ya habían subido, **no entres en pánico**, Hostinger guarda respaldos automáticos:
 

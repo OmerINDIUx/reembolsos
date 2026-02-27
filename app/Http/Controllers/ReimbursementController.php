@@ -262,7 +262,7 @@ class ReimbursementController extends Controller
             'week' => 'required|string',
             'items' => 'required|array|min:1',
             'items.*.category' => ['required', Rule::in($this->getCategories())],
-            'items.*.xml_file' => $hasInvoice ? 'required|file|mimes:xml' : 'nullable',
+            'items.*.xml_file' => $hasInvoice ? 'required|file' : 'nullable',
             'items.*.pdf_file' => $hasInvoice ? 'nullable|file|max:15360' : 'required|file|max:15360',
             'items.*.confirm_company' => $hasInvoice ? 'required' : 'nullable',
         ];
@@ -405,7 +405,7 @@ class ReimbursementController extends Controller
                     'attendees_names' => $item['attendees_names'] ?? null,
                     'location' => $item['location'] ?? null,
                     'user_id' => $user->id,
-                    'company_confirmed' => true,
+                    'company_confirmed' => isset($item['confirm_company']),
                     'validation_data' => $validationData, // Saving validation for the table
                 ], $approvalData);
 
@@ -553,6 +553,9 @@ class ReimbursementController extends Controller
         $moneda = (string)$xml['Moneda'];
         $folio = (string)$xml['Folio'];
         $fecha = (string)$xml['Fecha'];
+        if ($fecha) {
+            $fecha = date('Y-m-d', strtotime($fecha));
+        }
         $tipo = (string)$xml['TipoDeComprobante'];
 
         // Emisor / Receptor

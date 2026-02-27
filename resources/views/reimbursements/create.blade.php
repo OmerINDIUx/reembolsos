@@ -60,7 +60,7 @@
             @endif
 
             <!-- Global Form -->
-            <form :action="type === 'viaje' ? '{{ route('reimbursements.store') }}' : '{{ route('reimbursements.bulk_store') }}'" method="POST" enctype="multipart/form-data" x-on:submit="handleSubmit">
+            <form :action="type === 'viaje' ? '{{ route('reimbursements.store') }}' : '{{ route('reimbursements.bulk_store') }}'" method="POST" enctype="multipart/form-data" x-on:submit="handleSubmit" novalidate>
                 @csrf
                 <input type="hidden" name="type" value="{{ $type }}">
                 <input type="hidden" name="week" value="{{ $currentWeek }}">
@@ -188,7 +188,7 @@
                                             <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3">Clasificación</h4>
                                             <div>
                                                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Categoría *</label>
-                                                <select :name="'items['+index+'][category]'" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 text-sm py-3" required>
+                                                <select :name="'items['+index+'][category]'" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 text-sm py-3" :required="type !== 'viaje'">
                                                     <option value="">Selecciona...</option>
                                                     @foreach($categories as $cat)
                                                         <option value="{{ $cat }}">{{ $cat }}</option>
@@ -197,7 +197,7 @@
                                             </div>
                                             <div>
                                                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Justificación *</label>
-                                                <textarea :name="'items['+index+'][observaciones]'" rows="4" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm text-sm" required placeholder="Motivo del gasto..."></textarea>
+                                                <textarea :name="'items['+index+'][observaciones]'" rows="4" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm text-sm" :required="type !== 'viaje'" placeholder="Motivo del gasto..."></textarea>
                                             </div>
                                         </div>
                                     </div>
@@ -245,7 +245,7 @@
                                                         <div class="flex items-center">
                                                             <input type="checkbox" :name="'items['+index+'][confirm_company]'" class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" required>
                                                             <label class="ml-2 text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase italic">
-                                                                Confirmo que esta es la empresa en la que estoy dado de alta como colaborador(a). *
+                                                                Confirmo que esta es la empresa en la que estoy dado de alta como colaborador(a).
                                                             </label>
                                                         </div>
                                                     </div>
@@ -676,6 +676,53 @@
                     }, 0);
                 },
                 handleSubmit(e) { 
+                    const form = e.target;
+
+                    // Manual Validation Check
+                    if (!form.checkValidity()) {
+                        e.preventDefault();
+                        
+                        // Find the first invalid field to display its label in the error message
+                        const firstInvalid = form.querySelector(':invalid');
+                        let labelText = "Campos Obligatorios";
+                        let customError = "";
+                        
+                        // New: Check specifically for XML extension if it's an invoice upload
+                        if (this.hasInvoice) {
+                            const xmlInputs = form.querySelectorAll('input[type="file"][accept=".xml"]');
+                            xmlInputs.forEach(input => {
+                                if (input.files.length > 0) {
+                                    const ext = input.files[0].name.split('.').pop().toLowerCase();
+                                    if (ext !== 'xml') {
+                                        customError = "Los archivos de factura deben ser de tipo .XML";
+                                    }
+                                }
+                            });
+                        }
+
+                        if (firstInvalid && !customError) {
+                            // Try to find the label associated with the invalid field
+                            const container = firstInvalid.closest('div');
+                            const label = container ? container.querySelector('label') : null;
+                            if (label) {
+                                labelText = label.innerText.replace('*', '').trim();
+                            }
+                        }
+
+                        Swal.fire({
+                            title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Formulario Incompleto</span>',
+                            html: `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">Por favor completa todos los campos marcados con (*) antes de continuar.<br><br><span class="text-xs text-red-500 font-bold uppercase italic">FALTA: ${customError || labelText}</span></p>`,
+                            icon: 'warning',
+                            confirmButtonText: 'REVISAR',
+                            confirmButtonColor: '#4f46e5',
+                            customClass: {
+                                popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                                confirmButton: 'rounded-xl px-12 py-3 font-black text-xs uppercase tracking-widest'
+                            }
+                        });
+                        return;
+                    }
+
                     if (!this.hasInvoice) {
                         const hasFutureDate = this.items.some(i => i.data.fecha && new Date(i.data.fecha) > new Date());
                         const hasInvalidSubtotal = this.items.some(i => parseFloat(i.data.subtotal) > parseFloat(i.data.total));
