@@ -18,6 +18,7 @@ Esta guía contiene los pasos finales para subir la versión actualizada del sis
         - ❌ **`storage/app/public/pdfs`** (NO subas tus PDF de prueba)
         - ❌ **`storage/app/public/trips`** (NO subas tus carpetas de prueba)
     - **Asegúrate de incluir el archivo `.env`** (aunque en el servidor lo revisaremos).
+    elminamos el hot de public
     - Comprime todo en un archivo llamado `reembolsos_update.zip`.
 
 ---

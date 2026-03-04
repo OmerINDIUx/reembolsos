@@ -178,7 +178,7 @@
                                                 <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3">Comprobante</h4>
                                                 <div>
                                                     <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Archivo de Respaldado (PDF/Imagen) *</label>
-                                                    <input type="file" :name="'items['+index+'][pdf_file]'" accept=".pdf,image/*,.txt" class="block w-full text-xs text-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :required="!hasInvoice">
+                                                    <input type="file" :name="'items['+index+'][pdf_file]'" accept=".pdf,image/*,.txt" class="block w-full text-xs text-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :required="!hasInvoice" x-on:change="handlePdfChange($event, index)">
                                                 </div>
                                             </div>
                                         </template>
@@ -347,8 +347,24 @@
                         </div>
                     </template>
 
-                    <div class="flex flex-col items-center">
-                        <button type="button" x-on:click="addItem()" class="group flex items-center justify-center p-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[2rem] hover:shadow-2xl transition-all transform hover:scale-105">
+                    <div class="flex flex-col items-center space-y-4">
+                        <!-- Limits Indicator -->
+                        <div class="flex flex-wrap justify-center gap-6 mb-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Archivos:</span>
+                                <span :class="items.length >= maxItems ? 'text-red-600' : 'text-indigo-600'" class="text-xs font-bold" x-text="items.length + ' / ' + maxItems"></span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Peso Total:</span>
+                                <span :class="currentTotalSize >= maxTotalSize * 0.9 ? 'text-red-600' : 'text-indigo-600'" class="text-xs font-bold" x-text="(currentTotalSize / (1024*1024)).toFixed(2) + 'MB / ' + (maxTotalSize / (1024*1024)) + 'MB'"></span>
+                            </div>
+                        </div>
+
+                        <button type="button" 
+                            x-on:click="addItem()" 
+                            :disabled="items.length >= maxItems || currentTotalSize >= maxTotalSize"
+                            :class="(items.length >= maxItems || currentTotalSize >= maxTotalSize) ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:shadow-2xl transform hover:scale-105'"
+                            class="group flex items-center justify-center p-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[2rem] transition-all">
                             <div class="bg-white dark:bg-gray-800 px-12 py-6 rounded-[1.9rem] flex items-center">
                                 <div class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center mr-4 group-hover:rotate-180 transition-transform duration-500">
                                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
@@ -356,6 +372,13 @@
                                 <span class="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter" x-text="hasInvoice ? 'AGREGAR FACTURA' : 'AGREGAR COMPROBANTE'"></span>
                             </div>
                         </button>
+                        
+                        <template x-if="items.length >= maxItems">
+                            <p class="text-[10px] font-bold text-red-600 uppercase tracking-tight animate-shake">Límite de 20 facturas alcanzado por carga.</p>
+                        </template>
+                        <template x-if="currentTotalSize >= maxTotalSize">
+                            <p class="text-[10px] font-bold text-red-600 uppercase tracking-tight animate-shake">Límite de peso total (64MB) excedido. Por favor registra estas facturas y crea una nueva sesión.</p>
+                        </template>
                     </div>
                 </div>
 
@@ -451,9 +474,15 @@
                 type: '{{ $type }}',
                 tripType: 'nacional',
                 items: [],
+                maxItems: 20,
+                maxTotalSize: 64 * 1024 * 1024, // 64 MB
+                currentTotalSize: 0,
                 hasInvoice: {{ $hasInvoice ? 'true' : 'false' }},
-                init() { if (this.type !== 'viaje') this.addItem(); },
+                init() { 
+                    if (this.type !== 'viaje') this.addItem(); 
+                },
                 addItem() {
+                    if (this.items.length >= this.maxItems) return;
                     this.items.push({
                         id: Date.now() + Math.random(),
                         fileName: '',
@@ -466,6 +495,7 @@
                 removeItem(index) { 
                     if (this.items.length > 1) {
                         this.items.splice(index, 1); 
+                        this.$nextTick(() => this.calculateTotalFileSize());
                     } else {
                         Swal.fire({
                             title: '<span class="text-xl font-black uppercase tracking-tight">Atención</span>',
@@ -503,6 +533,7 @@
 
                     this.items[index].fileName = 'Leyendo...';
                     this.validateFiles(index);
+                    this.calculateTotalFileSize();
                 },
                 handlePdfChange(e, index) {
                     const file = e.target.files[0];
@@ -530,6 +561,20 @@
                     if (this.hasInvoice) {
                         this.validateFiles(index);
                     }
+
+                    this.calculateTotalFileSize();
+                },
+                calculateTotalFileSize() {
+                    let total = 0;
+                    const fileInputs = document.querySelectorAll('input[type="file"]');
+                    fileInputs.forEach(input => {
+                        if (input.files) {
+                            for (let j = 0; j < input.files.length; j++) {
+                                total += input.files[j].size;
+                            }
+                        }
+                    });
+                    this.currentTotalSize = total;
                 },
                 validateFiles(index) {
                     const item = this.items[index];
@@ -677,6 +722,23 @@
                 },
                 handleSubmit(e) { 
                     const form = e.target;
+
+                    // New: Validate total size before anything else
+                    if (this.currentTotalSize > this.maxTotalSize) {
+                        e.preventDefault();
+                        Swal.fire({
+                            title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Límite de Peso Excedido</span>',
+                            html: `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">El peso total de los archivos subidos es de <b>${(this.currentTotalSize / (1024*1024)).toFixed(2)} MB</b>, lo que supera el límite de <b>64 MB</b>. Por favor, realiza la carga en varias sesiones.</p>`,
+                            icon: 'error',
+                            confirmButtonText: 'ENTENDIDO',
+                            confirmButtonColor: '#ef4444',
+                            customClass: {
+                                popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                                confirmButton: 'rounded-xl px-12 py-3 font-black text-xs uppercase tracking-widest'
+                            }
+                        });
+                        return;
+                    }
 
                     // Manual Validation Check
                     if (!form.checkValidity()) {

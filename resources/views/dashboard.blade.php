@@ -12,7 +12,12 @@
             <div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h3 class="text-3xl font-extrabold text-gray-900 dark:text-white">¡Hola, {{ Auth::user()->name }}! 👋</h3>
-                    <p class="text-gray-500 dark:text-gray-400 mt-1">Hoy es {{ now()->locale('es')->isoFormat('dddd, D [de] MMMM [de] YYYY') }}</p>
+                    <div class="flex items-center gap-2 mt-1">
+                        <p class="text-gray-500 dark:text-gray-400 font-medium">Hoy es {{ now()->locale('es')->isoFormat('dddd, D [de] MMMM [de] YYYY') }}</p>
+                        <span class="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg text-[10px] font-black uppercase tracking-wider border border-indigo-100 dark:border-indigo-800">
+                            Semana {{ now()->addDays(2)->format('W') }}
+                        </span>
+                    </div>
                 </div>
                 
                 @if(!Auth::user()->isAdminView())
@@ -94,19 +99,208 @@
                         <div class="relative z-10">
                             <p class="text-rose-600 dark:text-rose-400 text-xs font-black uppercase tracking-widest mb-1">Rechazados</p>
                             <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $stats['rejected_count'] ?? 0 }}</h4>
+                            <p class="text-rose-700 dark:text-rose-300 font-bold mt-1 text-sm truncate">
+                                ${{ number_format($stats['total_amount_rejected'] ?? 0, 2) }}
+                            </p>
                         </div>
                         <svg class="absolute -right-4 -bottom-4 w-24 h-24 text-rose-500/10 group-hover:scale-110 transition-transform duration-500" fill="currentColor" viewBox="0 0 24 24"><path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     </div>
                 @endif
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <!-- Recent Activity Table -->
+            <!-- Enhanced Insights Section -->
+            <div class="mb-12">
+                <!-- Row 1: High Level Metrics -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-[1.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Crecimiento Semanal</p>
+                        <div class="flex items-center gap-3">
+                            <h5 class="text-2xl font-black text-gray-900 dark:text-white">{{ number_format($analytics['week_growth'], 1) }}%</h5>
+                            @if($analytics['week_growth'] > 0)
+                                <span class="bg-rose-100 text-rose-600 px-2 py-0.5 rounded-lg text-[10px] font-bold">▲ Subió</span>
+                            @else
+                                <span class="bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-lg text-[10px] font-bold">▼ Bajó</span>
+                            @endif
+                        </div>
+                        <p class="text-[9px] text-gray-400 mt-2">Vs. semana anterior</p>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-[1.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Ticket Promedio</p>
+                        <h5 class="text-2xl font-black text-gray-900 dark:text-white">${{ number_format($analytics['avg_ticket'], 2) }}</h5>
+                        <p class="text-[9px] text-gray-400 mt-2">Por cada comprobante</p>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-[1.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Recuperación de IVA/Imp</p>
+                        <h5 class="text-2xl font-black text-emerald-600">${{ number_format($analytics['tax_summary']->taxes ?? 0, 2) }}</h5>
+                        <p class="text-[9px] text-gray-400 mt-2">Deducible identificado</p>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-[1.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Total en Tránsito</p>
+                        <h5 class="text-2xl font-black text-indigo-600">${{ number_format($stats['total_amount_pending'] ?? 0, 2) }}</h5>
+                        <p class="text-[9px] text-gray-400 mt-2">Esperando aprobación final</p>
+                    </div>
+                </div>
+
+                <!-- Row 2: Deep Dive Analytics -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                    <!-- Main Trend Chart -->
+                    <div class="lg:col-span-2 bg-white dark:bg-gray-800 p-8 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700">
+                        <div class="flex items-center justify-between mb-8">
+                            <div>
+                                <h4 class="text-gray-900 dark:text-white font-black text-xl uppercase tracking-tighter">Tendencia de Dinámica de Gasto</h4>
+                                <p class="text-xs text-gray-400 font-bold uppercase tracking-widest">Actividad diaria vs semanal</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <span class="w-3 h-3 rounded-full bg-indigo-500"></span>
+                                <span class="w-3 h-3 rounded-full bg-indigo-200"></span>
+                            </div>
+                        </div>
+                        <div class="h-[350px]">
+                            <canvas id="dynamicsChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Status Doughnut Chart -->
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                        <div class="mb-4">
+                            <h4 class="text-gray-900 dark:text-white font-black text-lg uppercase tracking-tighter">Resumen por Estatus</h4>
+                            <p class="text-xs text-gray-400 font-bold uppercase tracking-widest">Distribución de capital</p>
+                        </div>
+                        <div class="relative flex-1 min-h-[250px] flex items-center justify-center">
+                            <canvas id="statusDoughnutChart"></canvas>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                <span class="text-[9px] font-extrabold uppercase text-gray-400 tracking-widest">En Proceso</span>
+                                <span class="text-lg font-black text-gray-900 dark:text-white leading-tight">
+                                    ${{ number_format($analytics['status_breakdown']->whereNotIn('status', ['aprobado', 'rechazado'])->sum('amount'), 0) }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-gray-50 dark:border-gray-700">
+                            <div class="grid grid-cols-2 gap-2">
+                                @foreach($analytics['status_breakdown']->take(4) as $s)
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-2 h-2 rounded-full @if($s->status == 'aprobado') bg-emerald-500 @elseif($s->status == 'rechazado') bg-rose-500 @else bg-indigo-500 @endif"></span>
+                                        <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 uppercase truncate">
+                                            @if($s->status == 'aprobado') Pagado 
+                                            @elseif($s->status == 'aprobado_cxp') Subdir.
+                                            @elseif($s->status == 'aprobado_direccion') Direcc.
+                                            @else {{ str_replace('_', ' ', $s->status) }} @endif
+                                        </span>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 3: Metrics Portfolio -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
+                    <!-- Category Matrix -->
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                        <h4 class="text-gray-900 dark:text-white font-black text-lg mb-6 uppercase tracking-tighter">¿En qué gastamos?</h4>
+                        <div class="flex-1 space-y-4">
+                            @foreach($analytics['category_breakdown']->take(5) as $cat)
+                                @php
+                                    $maxCat = $analytics['category_breakdown']->max('amount') ?: 1;
+                                    $percent = ($cat->amount / $maxCat) * 100;
+                                @endphp
+                                <div>
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="text-[10px] font-black uppercase text-gray-500 dark:text-gray-400 truncate w-2/3">{{ $cat->category }}</span>
+                                        <span class="text-[10px] font-black text-gray-900 dark:text-white">${{ number_format($cat->amount, 0) }}</span>
+                                    </div>
+                                    <div class="w-full bg-gray-50 dark:bg-gray-900 rounded-full h-1 overflow-hidden">
+                                        <div class="bg-indigo-600 h-full rounded-full" style="width: {{ $percent }}%"></div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                    <!-- Top Spenders -->
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700">
+                        <h4 class="text-gray-900 dark:text-white font-black text-lg mb-6 uppercase tracking-tighter">Top Solicitantes</h4>
+                        <div class="space-y-5">
+                            @foreach($analytics['top_spenders'] as $spender)
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <div class="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/40 rounded-full flex items-center justify-center text-indigo-600 font-black text-xs mr-3">
+                                            {{ substr($spender->user->name ?? '?', 0, 1) }}
+                                        </div>
+                                        <div>
+                                            <p class="text-xs font-black text-gray-900 dark:text-white truncate">{{ explode(' ', $spender->user->name ?? 'Usuario')[0] }}</p>
+                                            <p class="text-[9px] text-gray-400 font-bold">{{ $spender->count }} reembolsos</p>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs font-black text-gray-900 dark:text-white">${{ number_format($spender->amount, 0) }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    <!-- Approval Efficiency -->
+                    <div class="bg-gray-900 rounded-[2rem] p-8 text-white relative overflow-hidden group">
+                        <div class="relative z-10">
+                            <h4 class="text-xl font-black mb-1 uppercase tracking-tighter">Velocidad de Flujo</h4>
+                            <p class="text-[10px] text-indigo-300 font-bold mb-8 uppercase tracking-widest">¿Qué tan rápido aprobamos?</p>
+                            
+                            <div class="space-y-6">
+                                @forelse($analytics['avg_time_by_cost_center'] as $cc)
+                                    <div>
+                                        <div class="flex justify-between items-end mb-2">
+                                            <span class="text-[10px] font-black text-gray-400 truncate uppercase">{{ $cc->costCenter->code ?? 'CC' }}</span>
+                                            <span class="text-xs font-black text-indigo-400">{{ number_format($cc->avg_hours / 24, 1) }} d</span>
+                                        </div>
+                                        <div class="w-full bg-white/10 rounded-full h-1">
+                                            <div class="bg-indigo-500 h-full rounded-full transition-all duration-1000" style="width: {{ min(($cc->avg_hours / 24) * 5, 100) }}%"></div>
+                                        </div>
+                                    </div>
+                                @empty
+                                    <p class="text-xs text-center text-gray-500 py-10">Sin datos históricos suficientes</p>
+                                @endforelse
+                            </div>
+                        </div>
+                        <svg class="absolute -right-10 -bottom-10 w-40 h-40 text-white/5 group-hover:rotate-12 transition-transform duration-1000" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+
+                    <!-- Tax Snapshot -->
+                    <div class="bg-emerald-600 rounded-[2rem] p-8 text-white">
+                        <h4 class="text-xl font-black mb-1 uppercase tracking-tighter text-emerald-100">Capital Recuperable</h4>
+                        <p class="text-[10px] text-emerald-200 font-bold mb-8 uppercase tracking-widest">Identificación de Gastos Fiscales</p>
+                        
+                        <div class="mb-8">
+                            <h5 class="text-4xl font-black">${{ number_format($analytics['tax_summary']->taxes ?? 0, 2) }}</h5>
+                            <p class="text-[10px] font-bold text-emerald-100 mt-1 uppercase tracking-widest">Total IVA identificado en XMLs</p>
+                        </div>
+
+                        <div class="space-y-3">
+                            <div class="flex justify-between text-[10px] font-black border-b border-emerald-500/30 pb-2">
+                                <span class="text-emerald-100 uppercase">Subtotal</span>
+                                <span>${{ number_format($analytics['tax_summary']->subtotal ?? 0, 2) }}</span>
+                            </div>
+                            <div class="flex justify-between text-[10px] font-black border-b border-emerald-500/30 pb-2">
+                                <span class="text-emerald-100 uppercase">Impuestos</span>
+                                <span>${{ number_format($analytics['tax_summary']->taxes ?? 0, 2) }}</span>
+                            </div>
+                            <div class="flex justify-between text-[10px] font-black pt-2">
+                                <span class="text-emerald-100 uppercase">Impacto Total</span>
+                                <span class="text-xl">${{ number_format($analytics['tax_summary']->total ?? 0, 2) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div><!-- End Insights Section -->
+
+            <!-- Bottom Section Grid (Table + Sidebar) -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
+                <!-- Recent Activity Table (2 Columns) -->
                 <div class="lg:col-span-2 space-y-6">
-                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                        <div class="px-6 py-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Actividad Reciente</h3>
-                            <a href="{{ route('reimbursements.index') }}" class="text-sm font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">Ver Todo &rarr;</a>
+                    <div class="bg-white dark:bg-gray-800 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                        <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                            <h3 class="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter">Últimos Movimientos</h3>
+                            <a href="{{ route('reimbursements.index') }}" class="text-[10px] font-black text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-full transition-all">Ver Historial Completo &rarr;</a>
                         </div>
                         
                         @if($recentReimbursements->count() > 0)
@@ -114,49 +308,44 @@
                                 <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-700">
                                     <thead class="bg-gray-50/50 dark:bg-gray-900/50">
                                         <tr>
-                                            <th class="px-6 py-4 text-left font-black text-gray-400 uppercase tracking-widest text-[10px]">Detalle / Tipo</th>
-                                            <th class="px-6 py-4 text-left font-black text-gray-400 uppercase tracking-widest text-[10px]">Solicitante</th>
-                                            <th class="px-6 py-4 text-left font-black text-gray-400 uppercase tracking-widest text-[10px]">Total</th>
-                                            <th class="px-6 py-4 text-left font-black text-gray-400 uppercase tracking-widest text-[10px]">Estatus</th>
-                                            <th class="px-6 py-4 text-right font-black text-gray-400 uppercase tracking-widest text-[10px]">Acciones</th>
+                                            <th class="px-8 py-4 text-left font-black text-gray-400 uppercase tracking-widest text-[10px]">Identificador</th>
+                                            <th class="px-8 py-4 text-left font-black text-gray-400 uppercase tracking-widest text-[10px]">Solicitante / C.C.</th>
+                                            <th class="px-8 py-4 text-left font-black text-gray-400 uppercase tracking-widest text-[10px]">Importe</th>
+                                            <th class="px-8 py-4 text-left font-black text-gray-400 uppercase tracking-widest text-[10px]">Estatus Actual</th>
+                                            <th class="px-8 py-4 text-right font-black text-gray-400 uppercase tracking-widest text-[10px]"></th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-50 dark:divide-gray-700">
                                         @foreach($recentReimbursements as $reimbursement)
-                                            <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-900/50 transition-colors cursor-pointer" onclick="window.location='{{ route('reimbursements.show', $reimbursement) }}'">
-                                                <td class="px-6 py-4">
-                                                    <div class="font-bold text-gray-900 dark:text-white">{{ $reimbursement->folio ?? Str::limit($reimbursement->uuid, 8) ?? 'S/F' }}</div>
-                                                    <div class="text-xs text-indigo-500 font-medium">{{ ucfirst(str_replace('_', ' ', $reimbursement->type)) }}</div>
+                                            <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-900/10 transition-colors cursor-pointer" onclick="window.location='{{ route('reimbursements.show', $reimbursement) }}'">
+                                                <td class="px-8 py-5">
+                                                    <div class="font-black text-gray-900 dark:text-white">{{ $reimbursement->folio ?? Str::limit($reimbursement->uuid, 8) ?? 'S/F' }}</div>
+                                                    <div class="text-[10px] text-indigo-500 font-black uppercase tracking-wider">{{ str_replace('_', ' ', $reimbursement->type) }}</div>
                                                 </td>
-                                                <td class="px-6 py-4">
-                                                    <div class="text-gray-900 dark:text-white font-medium">{{ $reimbursement->user->name ?? 'Usuario' }}</div>
-                                                    <div class="text-[10px] text-gray-400 uppercase font-black">{{ $reimbursement->costCenter->code ?? '' }}</div>
+                                                <td class="px-8 py-5">
+                                                    <div class="text-gray-900 dark:text-white font-bold">{{ $reimbursement->user->name ?? 'N/A' }}</div>
+                                                    <div class="text-[10px] text-gray-400 uppercase font-black tracking-widest">{{ $reimbursement->costCenter->code ?? 'S/C' }}</div>
                                                 </td>
-                                                <td class="px-6 py-4 font-black text-gray-900 dark:text-white">
+                                                <td class="px-8 py-5 font-black text-gray-900 dark:text-white">
                                                     ${{ number_format($reimbursement->total, 2) }}
                                                 </td>
-                                                <td class="px-6 py-4">
-                                                    <div class="flex flex-col space-y-1">
-                                                        <span class="px-2 w-fit inline-flex text-[10px] leading-4 font-semibold rounded-full 
-                                                            {{ $reimbursement->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
-                                                            {{ $reimbursement->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
-                                                            {{ $reimbursement->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
-                                                            {{ $reimbursement->status === 'aprobado_director' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
-                                                            {{ $reimbursement->status === 'aprobado_control' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : '' }}
-                                                            {{ $reimbursement->status === 'aprobado_ejecutivo' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
-                                                            {{ $reimbursement->status === 'aprobado_cxp' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300' : '' }}
-                                                            {{ $reimbursement->status === 'aprobado_direccion' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
-                                                            {{ $reimbursement->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
-                                                        ">
-                                                            @if($reimbursement->status === 'aprobado') Pagado 
-                                                            @elseif($reimbursement->status === 'aprobado_cxp') Aprobado Subdirección
-                                                            @elseif($reimbursement->status === 'aprobado_direccion') Aprobado Dirección
-                                                            @else {{ ucfirst(str_replace('_', ' ', $reimbursement->status)) }} @endif
-                                                        </span>
-                                                    </div>
+                                                <td class="px-8 py-5">
+                                                    <span class="px-3 py-1 inline-flex text-[9px] leading-4 font-black rounded-full uppercase tracking-widest
+                                                        {{ $reimbursement->status === 'aprobado' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300' : '' }}
+                                                        {{ $reimbursement->status === 'rechazado' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300' : '' }}
+                                                        {{ $reimbursement->status === 'requiere_correccion' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300' : '' }}
+                                                        {{ in_array($reimbursement->status, ['pendiente', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp', 'aprobado_direccion']) ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300' : '' }}
+                                                    ">
+                                                        @if($reimbursement->status === 'aprobado') Pagado 
+                                                        @elseif($reimbursement->status === 'aprobado_cxp') Aprob. Subdir.
+                                                        @elseif($reimbursement->status === 'aprobado_direccion') Aprob. Direcc.
+                                                        @else {{ str_replace('_', ' ', $reimbursement->status) }} @endif
+                                                    </span>
                                                 </td>
-                                                <td class="px-6 py-4 text-right whitespace-nowrap text-xs font-bold">
-                                                    <a href="{{ route('reimbursements.show', $reimbursement) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300">VER &rarr;</a>
+                                                <td class="px-8 py-5 text-right whitespace-nowrap">
+                                                    <span class="text-indigo-600 dark:text-indigo-400">
+                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                                    </span>
                                                 </td>
                                             </tr>
                                         @endforeach
@@ -164,66 +353,179 @@
                                 </table>
                             </div>
                             @if($recentReimbursements instanceof \Illuminate\Pagination\LengthAwarePaginator)
-                            <div class="p-4 bg-gray-50 border-t border-gray-100 dark:bg-gray-700/50 dark:border-gray-700">
+                            <div class="p-6 bg-gray-50/50 border-t border-gray-100 dark:bg-gray-900/50 dark:border-gray-700">
                                 {{ $recentReimbursements->links() }}
                             </div>
                             @endif
                         @else
-                            <div class="p-12 text-center">
-                                <svg class="w-16 h-16 text-gray-200 dark:text-gray-700 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                                <p class="text-gray-500 dark:text-gray-400">No hay actividad reciente.</p>
+                            <div class="p-16 text-center">
+                                <div class="bg-gray-50 dark:bg-gray-900/50 w-20 h-20 rounded-[2rem] flex items-center justify-center mx-auto mb-6">
+                                    <svg class="w-10 h-10 text-gray-200 dark:text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                </div>
+                                <p class="text-gray-500 dark:text-gray-400 font-bold">No se han encontrado registros recientes.</p>
                             </div>
                         @endif
                     </div>
                 </div>
 
-                <!-- Side Widget Area -->
-                <div class="space-y-6">
+                <!-- Side Widget Area (1 Column) -->
+                <div class="space-y-8">
                     <!-- Unread Notifications -->
-                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                        <div class="px-6 py-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Notificaciones</h3>
-                            <a href="{{ route('notifications.index') }}" class="text-[10px] font-black text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 uppercase tracking-widest">Ver Todas</a>
+                    <div class="bg-white dark:bg-gray-800 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                        <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                            <h3 class="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter">Alertas</h3>
+                            <a href="{{ route('notifications.index') }}" class="text-[10px] font-black text-indigo-600 uppercase tracking-widest underline decoration-2 underline-offset-4">Ver Todo</a>
                         </div>
-                        <div class="p-2">
+                        <div class="p-4 space-y-2">
                             @forelse($notifications as $notification)
-                                <a href="{{ route('notifications.mark_read', $notification->id) }}" class="flex items-start p-3 hover:bg-gray-50 dark:hover:bg-gray-900/50 rounded-xl transition-all group">
-                                    <div class="flex-shrink-0 w-8 h-8 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center mr-3 mt-1 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                                <a href="{{ route('notifications.mark_read', $notification->id) }}" class="flex items-start p-4 hover:bg-gray-50 dark:hover:bg-gray-900/50 rounded-2xl transition-all group border border-transparent hover:border-gray-100 dark:hover:border-gray-700">
+                                    <div class="flex-shrink-0 w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center mr-4 group-hover:scale-110 transition-transform">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
                                     </div>
                                     <div class="flex-1 min-w-0">
-                                        <p class="text-xs font-bold text-gray-900 dark:text-white line-clamp-1 truncate">{{ $notification->data['title'] ?? 'Nueva Notificación' }}</p>
-                                        <p class="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2 mt-0.5">{{ Str::limit($notification->data['message'] ?? '', 60) }}</p>
-                                        <p class="text-[9px] text-gray-400 font-medium mt-1">{{ $notification->created_at->diffForHumans() }}</p>
+                                        <p class="text-[11px] font-black text-gray-900 dark:text-white uppercase tracking-tighter">{{ $notification->data['title'] ?? 'Recordatorio' }}</p>
+                                        <p class="text-[10px] text-gray-500 dark:text-gray-400 font-medium line-clamp-2 mt-1">{{ Str::limit($notification->data['message'] ?? '', 80) }}</p>
+                                        <p class="text-[9px] text-gray-300 font-black uppercase mt-2">{{ $notification->created_at->diffForHumans() }}</p>
                                     </div>
                                 </a>
                             @empty
-                                <div class="py-8 text-center">
-                                    <p class="text-[11px] font-black text-gray-400 uppercase tracking-tighter">Sin pendientes nuevos</p>
+                                <div class="py-12 text-center">
+                                    <div class="w-12 h-12 bg-gray-50 dark:bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <svg class="w-6 h-6 text-gray-200 dark:text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+                                    </div>
+                                    <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sin notificaciones</p>
                                 </div>
                             @endforelse
                         </div>
                     </div>
 
                     <!-- App Shortcuts -->
-                    <div class="bg-indigo-600 rounded-2xl p-6 text-white shadow-xl shadow-indigo-600/20 relative overflow-hidden">
+                    <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-indigo-600/40 relative overflow-hidden group">
                         <div class="relative z-10">
-                            <h4 class="text-lg font-black mb-2 leading-tight">¿Necesitas ayuda con tus gastos?</h4>
-                            <p class="text-indigo-100 text-xs mb-6 font-medium leading-relaxed">Recuerda subir tus archivos XML y PDF juntos para una validación inmediata.</p>
+                            <h4 class="text-2xl font-black mb-4 leading-none tracking-tighter">¿Nuevo Gasto?</h4>
+                            <p class="text-indigo-100 text-xs mb-8 font-bold leading-relaxed opacity-80 group-hover:opacity-100 transition-opacity">Sube tus archivos XML y PDF juntos para automatizar tu reembolso en segundos.</p>
                             @if(!Auth::user()->isAdminView())
-                            <a href="{{ route('reimbursements.create') }}" class="inline-flex items-center px-4 py-2 bg-white text-indigo-600 font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-indigo-50 transition-colors">
-                                Iniciar Proceso &rarr;
+                            <a href="{{ route('reimbursements.create') }}" class="inline-flex items-center justify-center w-full px-6 py-4 bg-white text-indigo-600 font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-indigo-50 transition-all transform hover:-translate-y-1 shadow-lg">
+                                Iniciar Solicitud &rarr;
                             </a>
                             @else
-                            <a href="{{ route('reimbursements.index') }}" class="inline-flex items-center px-4 py-2 bg-white text-indigo-600 font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-indigo-50 transition-colors">
-                                Ver Reembolsos &rarr;
+                            <a href="{{ route('reimbursements.index') }}" class="inline-flex items-center justify-center w-full px-6 py-4 bg-white text-indigo-600 font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-indigo-50 transition-all transform hover:-translate-y-1 shadow-lg">
+                                Ver Catálogo &rarr;
                             </a>
                             @endif
                         </div>
-                        <svg class="absolute -right-8 -bottom-8 w-40 h-40 text-indigo-500/20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                        <svg class="absolute -right-12 -bottom-12 w-48 h-48 text-white/5 opacity-40 group-hover:scale-110 transition-transform duration-700" fill="currentColor" viewBox="0 0 24 24"><path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
+            </div><!-- End Grid -->
+        </div><!-- End Max-Width Container -->
+    </div><!-- End Py-12 -->
+
+    @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const ctx = document.getElementById('dynamicsChart');
+            if (ctx) {
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: {!! json_encode($analytics['daily_activity']->pluck('date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('d M'))) !!},
+                        datasets: [{
+                            label: 'Gasto Diario ($)',
+                            data: {!! json_encode($analytics['daily_activity']->pluck('amount')) !!},
+                            borderColor: '#4f46e5',
+                            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                            borderWidth: 4,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#4f46e5'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: 'rgba(0,0,0,0.05)' },
+                                ticks: { font: { size: 10, weight: '900' } }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { font: { size: 10, weight: '700' } }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Status Doughnut Chart
+            const statusCtx = document.getElementById('statusDoughnutChart');
+            if (statusCtx) {
+                const statusData = {!! json_encode($analytics['status_breakdown']) !!};
+                
+                const statusConfig = {
+                    'aprobado': { label: 'Pagado', color: '#10b981' },
+                    'rechazado': { label: 'Rechazado', color: '#f43f5e' },
+                    'requiere_correccion': { label: 'Corregir', color: '#f59e0b' },
+                    'pendiente': { label: 'N1: Pendiente', color: '#4338ca' },
+                    'aprobado_director': { label: 'N2: Aprob. Dir', color: '#4f46e5' },
+                    'aprobado_control': { label: 'N3: Aprob. Ctrl', color: '#6366f1' },
+                    'aprobado_ejecutivo': { label: 'Aprob. Ejecut.', color: '#818cf8' },
+                    'aprobado_cxp': { label: 'Aprob. Subdir.', color: '#a5b4fc' },
+                    'aprobado_direccion': { label: 'Aprob. Direcc.', color: '#c7d2fe' }
+                };
+
+                const labels = [];
+                const values = [];
+                const colors = [];
+
+                statusData.forEach(item => {
+                    const config = statusConfig[item.status] || { label: item.status, color: '#9ca3af' };
+                    labels.push(config.label);
+                    values.push(item.amount);
+                    colors.push(config.color);
+                });
+
+                new Chart(statusCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: colors,
+                            borderWidth: 0,
+                            hoverOffset: 15,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '80%',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        if (label) label += ': ';
+                                        label += new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(context.raw);
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+    @endpush
 </x-app-layout>
+
