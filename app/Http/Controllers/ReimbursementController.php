@@ -25,116 +25,77 @@ class ReimbursementController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $tab = $request->input('tab', 'active');
+        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector();
+        $tab = $request->input('tab', $canManage ? 'management' : 'active');
         $globalSearch = $request->input('global_search');
-        $query = Reimbursement::orderBy('created_at', 'desc');
+        
+        $query = Reimbursement::with(['user', 'costCenter'])->orderBy('created_at', 'desc');
 
-        // Permissions & Stage Visibility Logic
-        if ($tab === 'global_history') {
-            if ($globalSearch) {
-                // Tracking: Search ALL reimbursements by folio prefix
-                $query->where('folio', 'like', "%{$globalSearch}%");
-            } else {
-                // Normal Global History: Only Rejected for non-admins, everything for admins
-                if (!$user->isAdmin() && !$user->isAdminView()) {
-                    $query->where('status', 'rechazado');
-                }
-                
-                if (!$user->isAdmin() && !$user->isAdminView() && !$user->isTreasury() && !$user->isCxp() && !$user->isDireccion()) {
-                    $query->whereHas('costCenter', function($q) use ($user) {
-                        $q->where('director_id', $user->id)
-                          ->orWhere('control_obra_id', $user->id)
-                          ->orWhere('director_ejecutivo_id', $user->id);
-                    });
-                }
-            }
-        } elseif ($user->isAdmin() || $user->isAdminView()) {
-            if ($tab === 'active') {
-                $query->whereNotIn('status', ['aprobado', 'rechazado']);
-            } else {
-                $query->whereIn('status', ['aprobado', 'rechazado']);
-            }
-        } elseif ($user->isDireccion()) {
-            if ($tab === 'active') {
-                $query->where('status', 'aprobado_cxp');
-            } else {
-                // History: Anything passed Dirección or in final states
-                $query->where(function($q) {
-                    $q->whereNotNull('approved_by_direccion_at')
-                      ->orWhereIn('status', ['aprobado', 'rechazado']);
-                })->where('status', '!=', 'aprobado_cxp');
-            }
-        } elseif ($user->isTreasury()) {
-            if ($tab === 'active') {
-                $query->where('status', 'aprobado_direccion');
-            } else {
-                // History: Processed by Treasury (Paid) or Rejected/Correction
-                $query->where(function($q) {
-                    $q->whereNotNull('approved_by_treasury_at')
-                      ->orWhereIn('status', ['aprobado', 'rechazado']);
-                })->where('status', '!=', 'aprobado_direccion');
-            }
-        } elseif ($user->isCxp()) {
-            if ($tab === 'active') {
-                $query->where('status', 'aprobado_ejecutivo');
-            } else {
-                // History: Anything passed CXP
-                $query->where(function($q) {
-                    $q->whereNotNull('approved_by_cxp_at')
-                      ->orWhereIn('status', ['aprobado', 'rechazado']);
-                })->where('status', '!=', 'aprobado_ejecutivo');
-            }
-        } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
-            $query->where(function($q) use ($user, $tab) {
-                // 1. Visibilidad como Creador (Dueño)
-                $q->where(function($ownerQuery) use ($user, $tab) {
-                    $ownerQuery->where('user_id', $user->id);
-                    if ($tab === 'active') {
-                        $ownerQuery->whereNotIn('status', ['aprobado', 'rechazado']);
-                    } else {
-                        $ownerQuery->whereIn('status', ['aprobado', 'rechazado']);
-                    }
-                });
-
-                // 2. Visibilidad como Aprobador (Rol designado en el Centro de Costos)
-                $q->orWhere(function($approverQuery) use ($user, $tab) {
-                    // Primero, restringir por Centro de Costos donde soy el aprobador designado
-                    $approverQuery->whereHas('costCenter', function($cc) use ($user) {
-                        if ($user->isDirector()) $cc->where('director_id', $user->id);
-                        if ($user->isControlObra()) $cc->where('control_obra_id', $user->id);
-                        if ($user->isExecutiveDirector()) $cc->where('director_ejecutivo_id', $user->id);
-                    });
-
-                    if ($tab === 'active') {
-                        // En "Activos", solo veo lo que me toca aprobar ahora mismo
-                        if ($user->isDirector()) $approverQuery->where('status', 'pendiente');
-                        if ($user->isControlObra()) $approverQuery->where('status', 'aprobado_director');
-                        if ($user->isExecutiveDirector()) $approverQuery->where('status', 'aprobado_control');
-                    } else {
-                        // En "Historial", veo lo que ya pasó por mis manos o fue rechazado/corregido
-                        if ($user->isDirector()) {
-                            $approverQuery->where('status', '!=', 'pendiente');
-                        }
-                        if ($user->isControlObra()) {
-                            $approverQuery->whereNotNull('approved_by_director_at')
-                                         ->where('status', '!=', 'aprobado_director');
-                        }
-                        if ($user->isExecutiveDirector()) {
-                            $approverQuery->whereNotNull('approved_by_control_at')
-                                         ->where('status', '!=', 'aprobado_control');
-                        }
-                    }
-                });
+        // TRACKER LOGIC: Global search bypasses tab scoping for management roles
+        if ($globalSearch && $canManage) {
+            $query->where(function($q) use ($globalSearch) {
+                $q->where('folio', 'like', "%{$globalSearch}%")
+                  ->orWhere('uuid', 'like', "%{$globalSearch}%");
             });
+            $reimbursements = $query->paginate(10)->appends($request->all());
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch'));
         }
- else {
-            // Standard Users see only their own
-            $query->where('user_id', $user->id);
-            if ($tab === 'active') {
+
+        // TAB LOGIC: STRICT SCOPING
+        if ($tab === 'active') {
+            // Strictly Personal: Pending
+            $query->where('user_id', $user->id)
+                  ->whereNotIn('status', ['aprobado', 'rechazado']);
+
+        } elseif ($tab === 'history') {
+            // Strictly Personal: Finished
+            $query->where('user_id', $user->id)
+                  ->whereIn('status', ['aprobado', 'rechazado']);
+
+        } elseif ($tab === 'management') {
+            // Approvals & Oversight for designated roles
+            if ($user->isAdmin() || $user->isAdminView()) {
                 $query->whereNotIn('status', ['aprobado', 'rechazado']);
+            } elseif ($user->isCxp() || $user->isDireccion() || $user->isTreasury()) {
+                // Administrative flow visibility: see everything from Exec Dir approval up to final payment
+                $query->whereIn('status', ['aprobado_ejecutivo', 'aprobado_cxp', 'aprobado_direccion']);
+            } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
+                $query->whereHas('costCenter', function($q) use ($user) {
+                    if ($user->isDirector()) $q->where('director_id', $user->id);
+                    if ($user->isControlObra()) $q->where('control_obra_id', $user->id);
+                    if ($user->isExecutiveDirector()) $q->where('director_ejecutivo_id', $user->id);
+                });
+                
+                if ($user->isDirector()) $query->where('status', 'pendiente');
+                elseif ($user->isControlObra()) $query->where('status', 'aprobado_director');
+                elseif ($user->isExecutiveDirector()) $query->where('status', 'aprobado_control');
             } else {
-                $query->whereIn('status', ['aprobado', 'rechazado']);
+                // Regular users see nothing in management
+                $query->where('id', 0);
             }
+
+        } elseif ($tab === 'global_history') {
+            // History for elevated roles (Management context)
+            if ($user->isAdmin() || $user->isAdminView() || $user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
+                if ($globalSearch) {
+                    $query->where('folio', 'like', "%{$globalSearch}%");
+                }
+                $query->whereIn('status', ['aprobado', 'rechazado']);
+            } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
+                // Directors see their cost centers' history
+                $query->whereHas('costCenter', function($q) use ($user) {
+                    if ($user->isDirector()) $q->where('director_id', $user->id);
+                    if ($user->isControlObra()) $q->where('control_obra_id', $user->id);
+                    if ($user->isExecutiveDirector()) $q->where('director_ejecutivo_id', $user->id);
+                })->whereIn('status', ['aprobado', 'rechazado']);
+            } else {
+                // Standard users see ONLY their own history in global_history tab too
+                $query->where('user_id', $user->id)
+                      ->whereIn('status', ['aprobado', 'rechazado']);
+            }
+        } else {
+            // DEFAULT FALLBACK: Personal Scope
+            $query->where('user_id', $user->id);
         }
 
         if ($request->filled('search')) {
@@ -177,17 +138,14 @@ class ReimbursementController extends Controller
         
         $allowedSortFields = ['folio', 'fecha', 'nombre_emisor', 'total', 'status', 'created_at'];
         
-        // Remove the default orderBy to apply custom sorting
-        $query->getQuery()->orders = null;
-
         if (in_array($sortField, $allowedSortFields)) {
-            $query->orderBy($sortField, $sortOrder === 'asc' ? 'asc' : 'desc');
+            $query->reorder($sortField, $sortOrder === 'asc' ? 'asc' : 'desc');
         } else {
-            $query->orderBy('created_at', 'desc');
+            $query->reorder('created_at', 'desc');
         }
 
         $reimbursements = $query->paginate(10)->appends($request->all());
-        return view('reimbursements.index', compact('reimbursements'));
+        return view('reimbursements.index', compact('reimbursements', 'globalSearch'));
     }
 
     /**
@@ -395,6 +353,7 @@ class ReimbursementController extends Controller
                     'fecha' => $xmlData['fecha'],
                     'total' => $xmlData['total'],
                     'subtotal' => $xmlData['subtotal'],
+                    'impuestos' => $xmlData['impuestos'] ?? 0, // Added this
                     'moneda' => $xmlData['moneda'],
                     'tipo_comprobante' => $xmlData['tipo_comprobante'],
                     'xml_path' => $xmlPath,
@@ -558,9 +517,24 @@ class ReimbursementController extends Controller
         }
         $tipo = (string)$xml['TipoDeComprobante'];
 
+        // Extraction of Taxes (Impuestos)
+        $impuestos = 0;
+        $impuestosNode = $xml->xpath('//cfdi:Comprobante/cfdi:Impuestos | //cfdi:Impuestos');
+        if ($impuestosNode) {
+            foreach ($impuestosNode as $node) {
+                if (isset($node['TotalImpuestosTrasladados'])) {
+                    $impuestos = (float)$node['TotalImpuestosTrasladados'];
+                    break;
+                }
+            }
+        }
+
         // Emisor / Receptor
-        $emisor = $xml->xpath('//cfdi:Emisor')[0];
-        $receptor = $xml->xpath('//cfdi:Receptor')[0];
+        $emisorArr = $xml->xpath('//cfdi:Emisor');
+        $emisor = $emisorArr ? $emisorArr[0] : null;
+        
+        $receptorArr = $xml->xpath('//cfdi:Receptor');
+        $receptor = $receptorArr ? $receptorArr[0] : null;
         
         // Timbre Fiscal Digital
         $tfd = $xml->xpath('//tfd:TimbreFiscalDigital');
@@ -568,14 +542,15 @@ class ReimbursementController extends Controller
 
         return [
             'uuid' => $uuid,
-            'rfc_emisor' => (string)$emisor['Rfc'],
-            'nombre_emisor' => (string)$emisor['Nombre'],
-            'rfc_receptor' => (string)$receptor['Rfc'],
-            'nombre_receptor' => (string)$receptor['Nombre'],
+            'rfc_emisor' => $emisor ? (string)$emisor['Rfc'] : 'N/A',
+            'nombre_emisor' => $emisor ? (string)$emisor['Nombre'] : 'N/A',
+            'rfc_receptor' => $receptor ? (string)$receptor['Rfc'] : 'N/A',
+            'nombre_receptor' => $receptor ? (string)$receptor['Nombre'] : 'N/A',
             'folio' => $folio,
             'fecha' => $fecha,
             'total' => $total,
             'subtotal' => $subtotal,
+            'impuestos' => $impuestos, // Added this
             'moneda' => $moneda,
             'tipo_comprobante' => $tipo,
         ];
@@ -697,6 +672,7 @@ class ReimbursementController extends Controller
             'fecha' => $request->fecha,
             'total' => $request->total,
             'subtotal' => $request->subtotal,
+            'impuestos' => $request->impuestos ?? ($request->total - $request->subtotal), // Added this
             'moneda' => $request->moneda,
             'tipo_comprobante' => $request->tipo_comprobante,
             'xml_path' => $xmlPath,
@@ -814,6 +790,13 @@ class ReimbursementController extends Controller
         } elseif ($user->isTreasury()) {
             // Treasury sees if it reached them once
             $canSee = $reimbursement->approved_by_direccion_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp']);
+        }
+
+        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isDireccion() || $user->isTreasury() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector();
+
+        if (!$canSee && $canManage) {
+            // Allow basic technical sheet view for management roles even if not in the direct approval line
+            $canSee = true;
         }
 
         if (!$canSee) {
@@ -1121,6 +1104,7 @@ class ReimbursementController extends Controller
      */
     public function export(Request $request)
     {
+        set_time_limit(300);
         $user = Auth::user();
         $query = Reimbursement::with(['user', 'costCenter', 'directorApprover', 'controlApprover', 'executiveApprover', 'cxpApprover', 'direccionApprover', 'treasuryApprover']);
 
@@ -1143,6 +1127,23 @@ class ReimbursementController extends Controller
             });
         }
 
+        // Apply common filters
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('folio', 'like', "%{$search}%")
+                  ->orWhere('uuid', 'like', "%{$search}%")
+                  ->orWhere('nombre_emisor', 'like', "%{$search}%")
+                  ->orWhere('title', 'like', "%{$search}%");
+            });
+        }
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
         // Apply role-based visibility
         if (!$user->isAdmin() && !$user->isAdminView()) {
             if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
@@ -1153,8 +1154,6 @@ class ReimbursementController extends Controller
                 });
             } elseif ($user->isCxp() || $user->isDireccion() || $user->isTreasury()) {
                 // CXP and Treasury see all approved up to their level or beyond
-                 // No extra filter needed for now as they usually audit everything, 
-                 // but let's keep it consistent with their index view if needed.
             } else {
                 $query->where('user_id', $user->id);
             }
@@ -1177,6 +1176,7 @@ class ReimbursementController extends Controller
             // Headers
             fputcsv($file, [
                 'Folio',
+                'UUID',
                 'Emisor',
                 'Tipo de Solicitud',
                 'Centro de Costos',
@@ -1188,7 +1188,6 @@ class ReimbursementController extends Controller
                 'Total',
                 'Estatus',
                 'Aprobaciones',
-                'Observaciones',
                 'Validación XML vs PDF (UUID)',
                 'Validación XML vs PDF (Monto)'
             ]);
@@ -1247,6 +1246,7 @@ class ReimbursementController extends Controller
 
                 fputcsv($file, [
                     $r->folio ?? 'N/A',
+                    $r->uuid ?? 'N/A',
                     $r->nombre_emisor . " (" . $r->rfc_emisor . ")",
                     ucfirst(str_replace('_', ' ', $r->type ?? 'Reembolso')),
                     $r->costCenter->name ?? 'N/A',
@@ -1258,7 +1258,6 @@ class ReimbursementController extends Controller
                     "$ " . number_format((float)$r->total, 2) . " " . ($r->moneda ?? 'MXN'),
                     ucwords(str_replace('_', ' ', $r->status)),
                     $approvalsStr,
-                    $r->observaciones,
                     $uuidMatch,
                     $totalMatch
                 ]);
@@ -1266,6 +1265,125 @@ class ReimbursementController extends Controller
 
             fclose($file);
         }, $fileName, $headers);
+    }
+
+    /**
+     * Bulk approve reimbursements via CSV upload.
+     */
+    public function bulkApprove(Request $request)
+    {
+        set_time_limit(300); // 5 minutes
+        \Illuminate\Support\Facades\DB::disableQueryLog();
+
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        if (!$user->isAdmin() && !$user->isTreasury() && !$user->isCxp()) {
+            abort(403, 'No tienes permisos para realizar aprobaciones masivas.');
+        }
+
+        $request->validate([
+            'csv_file' => 'required|file',
+        ]);
+
+        $file = $request->file('csv_file');
+        $handle = fopen($file->getRealPath(), 'r');
+        
+        // Skip BOM if present
+        $bom = fread($handle, 3);
+        if ($bom !== "\xEF\xBB\xBF") {
+            rewind($handle);
+        }
+
+        $header = fgetcsv($handle);
+        
+        if (!$header) {
+            fclose($handle);
+            return back()->with('error', 'El archivo CSV está vacío o no se puede leer.');
+        }
+
+        // Find Folio and UUID columns dynamically
+        $folioIdx = array_search('Folio', $header);
+        $uuidIdx = array_search('UUID', $header);
+
+        if ($folioIdx === false || $uuidIdx === false) {
+            fclose($handle);
+            return back()->with('error', 'El archivo CSV no tiene el formato correcto (faltan las columnas Folio o UUID).');
+        }
+
+        $processed = 0;
+        $failed = 0;
+        $errors = [
+            'not_found' => [],
+            'already_approved' => [],
+            'invalid_status' => [],
+        ];
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $folio = $row[$folioIdx] ?? null;
+            $uuid = $row[$uuidIdx] ?? null;
+
+            if (!$folio || !$uuid || $uuid === 'N/A') continue;
+
+            $reimbursement = Reimbursement::where('folio', $folio)
+                ->where('uuid', $uuid)
+                ->first();
+
+            if ($reimbursement) {
+                // 1. Check if already approved
+                if ($reimbursement->status === 'aprobado') {
+                    $failed++;
+                    $errors['already_approved'][] = "Folio $folio: Ya se encontraba aprobado.";
+                    continue;
+                }
+
+                // 2. Check if rejected
+                if ($reimbursement->status === 'rechazado') {
+                    $failed++;
+                    $errors['invalid_status'][] = "Folio $folio: Está marcado como rechazado.";
+                    continue;
+                }
+
+                // 3. Check workflow profile
+                // Admins, CXP, and Treasury can approve records that are in the administrative pipeline
+                $adminFlow = ['aprobado_ejecutivo', 'aprobado_cxp', 'aprobado_direccion'];
+                if (!$user->isAdmin() && !in_array($reimbursement->status, $adminFlow)) {
+                    $failed++;
+                    $statusLabel = ucwords(str_replace('_', ' ', $reimbursement->status));
+                    $errors['invalid_status'][] = "Folio $folio: El estatus '$statusLabel' requiere aprobaciones previas de Directores antes de pasar a Cuentas por Pagar.";
+                    continue;
+                }
+
+                // If we reach here, we can approve
+                $reimbursement->update([
+                    'status' => 'aprobado',
+                    'approved_by_treasury_id' => $user->id,
+                    'approved_by_treasury_at' => now(),
+                ]);
+                $processed++;
+
+                // Notify owner - wrapped in try catch to avoid stopping the whole process
+                try {
+                    if ($reimbursement->user) {
+                        $reimbursement->user->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} fue aprobado masivamente.", "success"));
+                    }
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error("Error notifying user in bulk approval: " . $e->getMessage());
+                }
+            } else {
+                $failed++;
+                $errors['not_found'][] = "Folio $folio (UUID: $uuid): No encontrado en el sistema.";
+            }
+        }
+
+        fclose($handle);
+
+        $msg = "Se procesaron $processed aprobaciones exitosamente.";
+        if ($failed > 0) {
+            $msg .= " No se pudieron procesar $failed registros.";
+            return back()->with('warning', $msg)->with('bulk_errors_categorized', $errors);
+        }
+
+        return back()->with('success', $msg);
     }
 
     private function getCategories()

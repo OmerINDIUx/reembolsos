@@ -9,48 +9,66 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
+                    @php
+                        $user = Auth::user();
+                        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector();
+                        $defaultTab = $canManage ? 'management' : 'active';
+                    @endphp
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
                         <h3 class="text-lg font-medium">Listado de Reembolsos</h3>
-                        @if(!Auth::user()->isAdminView())
                         <div class="flex space-x-2">
+                            @if($user->isAdmin() || $user->isTreasury() || $user->isCxp())
+                            <button type="button" x-data @click="$dispatch('open-bulk-approval-modal')" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
+                                Aprobación Masiva (CSV)
+                            </button>
+                            @endif
+                            @if(!Auth::user()->isAdminView())
                              <a href="{{ route('reimbursements.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
                                 Nuevo Reembolso
                             </a>
+                            @endif
                         </div>
-                        @endif
                     </div>
 
                     <!-- Tabs -->
                     <div class="mb-4 border-b border-gray-200 dark:border-gray-700">
                         <ul class="flex flex-wrap -mb-px text-sm font-medium text-center" id="myTab" data-tabs-toggle="#myTabContent" role="tablist">
+                            @php
+                                // User and permissions already defined above
+                            @endphp
+
+                            @if($canManage)
                             <li class="mr-2" role="presentation">
-                                <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'active'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab', 'active') == 'active' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="active-tab" type="button" role="tab" aria-controls="active" aria-selected="false">En Proceso</a>
+                                <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'management'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab', $defaultTab) == 'management' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="management-tab" type="button" role="tab" aria-controls="management" aria-selected="false">Módulo de Gestión</a>
                             </li>
-                            <li class="mr-2" role="presentation">
-                                <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'history'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'history' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="history-tab" type="button" role="tab" aria-controls="history" aria-selected="false">Historial</a>
-                            </li>
-                            @if(Auth::user()->isAdmin() || Auth::user()->isCxp() || Auth::user()->isTreasury() || Auth::user()->isDireccion() || Auth::user()->isDirector() || Auth::user()->isControlObra() || Auth::user()->isExecutiveDirector())
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'global_history'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'global_history' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="global-history-tab" type="button" role="tab" aria-controls="global_history" aria-selected="false">
-                                    {{ (Auth::user()->isAdmin() || Auth::user()->isAdminView()) ? 'Todos los Reembolsos (Global)' : 'Historial Global (Rechazados)' }}
+                                    {{ ($user->isAdmin() || $user->isAdminView()) ? 'Todos los Reembolsos (Global)' : 'Historial Global (Rechazados)' }}
                                 </a>
                             </li>
                             @endif
+
+                            <li class="mr-2" role="presentation">
+                                <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'active'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab', $defaultTab) == 'active' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="active-tab" type="button" role="tab" aria-controls="active" aria-selected="false">Mis Reembolsos</a>
+                            </li>
+                            <li class="mr-2" role="presentation">
+                                <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'history'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'history' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="history-tab" type="button" role="tab" aria-controls="history" aria-selected="false">Mis Pagados/Rechazados</a>
+                            </li>
                         </ul>
                     </div>
 
-                    <!-- Global Folio Search (Only in Global History) -->
-                    @if(request('tab') === 'global_history')
+                    <!-- Global Folio Search (Rastreador) -->
+                    @if($canManage && (request('tab', $defaultTab) === 'management' || request('tab') === 'global_history'))
                         <div class="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl flex flex-col md:flex-row items-center gap-4">
                             <div class="flex-shrink-0">
-                                <span class="text-indigo-600 dark:text-indigo-400 font-bold text-sm uppercase tracking-wider">Rastreador de Folio:</span>
+                                <span class="text-indigo-600 dark:text-indigo-400 font-bold text-sm uppercase tracking-wider">Rastreador de Folio (Global):</span>
                             </div>
                             <form action="{{ route('reimbursements.index') }}" method="GET" class="flex-1 w-full flex gap-2">
-                                <input type="hidden" name="tab" value="global_history">
-                                <input type="text" name="global_search" value="{{ $globalSearch ?? '' }}" placeholder="Ingresa folio completo para rastrear..." class="flex-1 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-bold text-sm">BUSCAR</button>
+                                <input type="hidden" name="tab" value="{{ request('tab', $defaultTab) }}">
+                                <input type="text" name="global_search" value="{{ $globalSearch ?? '' }}" placeholder="Ingresa folio completo o UUID..." class="flex-1 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-bold text-sm">RASTREAR</button>
                                 @if(isset($globalSearch))
-                                    <a href="{{ route('reimbursements.index', ['tab' => 'global_history']) }}" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 transition-colors font-bold text-sm uppercase">Limpiar</a>
+                                    <a href="{{ route('reimbursements.index', ['tab' => request('tab', $defaultTab)]) }}" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 transition-colors font-bold text-sm uppercase">Limpiar</a>
                                 @endif
                             </form>
                         </div>
@@ -62,10 +80,54 @@
                         </div>
                     @endif
 
+                    @if(session('bulk_errors_categorized'))
+                        <div class="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-lg">
+                            <h4 class="text-sm font-bold text-amber-800 dark:text-amber-300 mb-3 flex items-center">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                Resumen de incidencias en la carga masiva:
+                            </h4>
+                            
+                            @php $ecat = session('bulk_errors_categorized'); @endphp
+                            
+                            @if(count($ecat['not_found']) > 0)
+                            <div class="mb-3">
+                                <span class="text-[11px] font-bold text-red-700 dark:text-red-400 uppercase tracking-wider">● No encontrados (Folio/UUID no coinciden):</span>
+                                <ul class="list-disc list-inside text-[10px] text-red-600 dark:text-red-400 mt-1 ml-2">
+                                    @foreach($ecat['not_found'] as $err) <li>{{ $err }}</li> @endforeach
+                                </ul>
+                            </div>
+                            @endif
+
+                            @if(count($ecat['invalid_status']) > 0)
+                            <div class="mb-3">
+                                <span class="text-[11px] font-bold text-orange-700 dark:text-orange-400 uppercase tracking-wider">● Fuera de flujo o perfil (Requieren aprobación previa):</span>
+                                <ul class="list-disc list-inside text-[10px] text-orange-600 dark:text-orange-400 mt-1 ml-2">
+                                    @foreach($ecat['invalid_status'] as $err) <li>{{ $err }}</li> @endforeach
+                                </ul>
+                            </div>
+                            @endif
+
+                            @if(count($ecat['already_approved']) > 0)
+                            <div>
+                                <span class="text-[11px] font-bold text-gray-700 dark:text-gray-400 uppercase tracking-wider">● Ya aprobados previamente (Duplicados):</span>
+                                <ul class="list-disc list-inside text-[10px] text-gray-600 dark:text-gray-400 mt-1 ml-2">
+                                    @foreach($ecat['already_approved'] as $err) <li>{{ $err }}</li> @endforeach
+                                </ul>
+                            </div>
+                            @endif
+                        </div>
+                    @endif
+
+                    @if(session('bulk_errors'))
+                        <div class="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-lg text-xs text-red-700 dark:text-red-400">
+                            {{ session('bulk_errors') }}
+                        </div>
+                    @endif
+
                     <!-- Search & Filter Form -->
                     <div class="mb-6 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
                         <form id="filter-form" action="{{ route('reimbursements.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4" novalidate>
-                            <input type="hidden" name="tab" value="{{ request('tab', 'active') }}">
+                            <input type="hidden" name="tab" value="{{ request('tab', $defaultTab) }}">
                             <input type="hidden" name="sort_by" id="input-sort-by" value="{{ request('sort_by', 'created_at') }}">
                             <input type="hidden" name="sort_order" id="input-sort-order" value="{{ request('sort_order', 'desc') }}">
                             
@@ -337,6 +399,63 @@
         </div>
     </div>
     
+    <!-- Bulk Approval Modal -->
+    <div x-data="{ open: false }" 
+         @open-bulk-approval-modal.window="open = true" 
+         x-show="open" 
+         class="fixed z-10 inset-0 overflow-y-auto" 
+         style="display: none;">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity" aria-hidden="true" @click="open = false">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <form action="{{ route('reimbursements.bulk_approve') }}" method="POST" enctype="multipart/form-data">
+                    @csrf
+                    <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div class="sm:flex sm:items-start">
+                            <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+                                <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100">
+                                    Aprobación Masiva de Reembolsos
+                                </h3>
+                                <div class="mt-2">
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                                        Sube el archivo CSV exportado del sistema. El sistema buscará el <strong>Folio</strong> y el <strong>UUID</strong> para marcar los reembolsos como <strong>Pagados</strong> (Aprobación Final).
+                                    </p>
+                                    
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Archivo CSV</label>
+                                            <input type="file" name="csv_file" accept=".csv" class="mt-1 block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-gray-700 dark:file:text-gray-300" required>
+                                        </div>
+                                        
+                                        <div class="p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-lg text-[11px] text-blue-700 dark:text-blue-300">
+                                            <strong>Nota:</strong> Esta acción es definitiva y notificará a los usuarios que su reembolso ha sido pagado.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm">
+                            Procesar Aprobación
+                        </button>
+                        <button type="button" @click="open = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>    
+
     <!-- Rejection Modal -->
     <div x-data="{ open: false, actionUrl: '', reasons: [
         'Falta comprobante fiscal (XML/PDF)',
@@ -430,10 +549,12 @@
                 const fromDate = document.getElementById('from_date').value;
                 const toDate = document.getElementById('to_date').value;
                 
+                /* 
                 if (!fromDate || !toDate) {
                     alert('Por favor selecciona un rango de fechas (Desde y Hasta) para exportar. \n\nNota: La búsqueda incluye tanto la fecha de creación del reembolso como la fecha de expedición del XML.');
                     return;
                 }
+                */
                 
                 const params = new URLSearchParams(new FormData(form)).toString();
                 window.location.href = "{{ route('reimbursements.export') }}?" + params;

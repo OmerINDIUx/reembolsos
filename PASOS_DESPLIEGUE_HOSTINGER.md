@@ -18,7 +18,7 @@ Esta guía contiene los pasos finales para subir la versión actualizada del sis
         - ❌ **`storage/app/public/pdfs`** (NO subas tus PDF de prueba)
         - ❌ **`storage/app/public/trips`** (NO subas tus carpetas de prueba)
     - **Asegúrate de incluir el archivo `.env`** (aunque en el servidor lo revisaremos).
-    elminamos el hot de public
+      elminamos el hot de public
     - Comprime todo en un archivo llamado `reembolsos_update.zip`.
 
 ---
@@ -27,6 +27,16 @@ Esta guía contiene los pasos finales para subir la versión actualizada del sis
 
 1. **Base de Datos:**
     - Asegúrate de tener creados el nombre de la BD, usuario y contraseña en hPanel.
+
+2. **⚙️ Configuración PHP (CRÍTICO para Bulk Upload):**
+    - En hPanel, ve a **Avanzado** > **Configuración de PHP**.
+    - Haz clic en la pestaña **Opciones de PHP**.
+    - Busca y ajusta los siguientes valores para permitir la carga de hasta 20 facturas (64MB):
+        - `max_file_uploads` ➡️ **60** (para cubrir XML + PDF + margen)
+        - `upload_max_filesize` ➡️ **15M** (margen para PDFs pesados)
+        - `post_max_size` ➡️ **80M** (total de la sesión de carga)
+        - `max_execution_time` ➡️ **300** (dar tiempo al servidor para procesar todo)
+    - Haz clic en **Guardar** al final de la página.
 
 ---
 
@@ -91,10 +101,10 @@ Esta guía contiene los pasos finales para subir la versión actualizada del sis
     /opt/alt/php84/usr/bin/php artisan route:cache
     /opt/alt/php84/usr/bin/php artisan view:cache
     ```
-
+/opt/alt/php84/usr/bin/php artisan migrate --force
 ---
 
-## 🚪 Fase 4: Redirección .htaccess
+## 🚪 Fase 5: Redirección .htaccess
 
 Si tu dominio apunta directamente a `public_html` pero el sistema está en una carpeta, asegúrate de que el `.htaccess` en la raíz de `public_html` tenga esto:
 

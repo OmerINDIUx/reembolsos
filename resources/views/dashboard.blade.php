@@ -8,8 +8,14 @@
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             
-            <!-- Welcome Section -->
-            <div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    @php
+        $user = Auth::user();
+        // Updated Full Access: Admin, CXP (N4), Subdir (N5), Direcc/Tes (N6)
+        // Removed N3 (Executive Director) from full global metrics
+        $hasFullAccess = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isDireccion() || $user->isTreasury();
+    @endphp
+
+    <div class="py-12">
                 <div>
                     <h3 class="text-3xl font-extrabold text-gray-900 dark:text-white">¡Hola, {{ Auth::user()->name }}! 👋</h3>
                     <div class="flex items-center gap-2 mt-1">
@@ -30,88 +36,93 @@
                 @endif
             </div>
 
-            <!-- Stats Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-                
-                @if(Auth::user()->isDirector() || Auth::user()->isControlObra() || Auth::user()->isExecutiveDirector())
-                    <!-- Managers Specific Stats (Director, Control, Ejecutivo) -->
-                    <div class="bg-gradient-to-br from-amber-50 to-white dark:from-amber-900/10 dark:to-gray-800 p-6 rounded-2xl shadow-sm border border-amber-100 dark:border-amber-900/30 relative overflow-hidden group">
-                        <div class="relative z-10">
-                            <p class="text-amber-600 dark:text-amber-400 text-xs font-black uppercase tracking-widest mb-1">Por Aprobar ({{ $stats['approval_level_label'] ?? 'N/A' }})</p>
-                            <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $stats['pending_approvals_count'] ?? 0 }}</h4>
-                            <p class="text-amber-700 dark:text-amber-300 font-bold mt-1 text-sm">${{ number_format($stats['pending_approvals_amount'] ?? 0, 2) }}</p>
-                        </div>
-                        <svg class="absolute -right-4 -bottom-4 w-24 h-24 text-amber-500/10 group-hover:scale-110 transition-transform duration-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"></path><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path></svg>
-                    </div>
+            <!-- Stats Grid (Dynamic based on Role) -->
+            <div class="mb-10">
+                <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] mb-4">
+                    {{ isset($stats['management']) ? 'Resumen de Gestión / Operación' : 'Mi Resumen Personal' }}
+                </h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    @php
+                        $displayStats = isset($stats['management']) ? $stats['management'] : $stats['personal'];
+                        $isManagement = isset($stats['management']);
+                    @endphp
 
-                    <div class="bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/10 dark:to-gray-800 p-6 rounded-2xl shadow-sm border border-blue-100 dark:border-blue-900/30 relative overflow-hidden group">
-                        <div class="relative z-10">
-                            <p class="text-blue-600 dark:text-blue-400 text-xs font-black uppercase tracking-widest mb-1">Mis Pendientes</p>
-                            <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $stats['my_pending_count'] ?? 0 }}</h4>
-                        </div>
-                        <svg class="absolute -right-4 -bottom-4 w-24 h-24 text-blue-500/10 group-hover:scale-110 transition-transform duration-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    </div>
-
-                    <div class="bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/10 dark:to-gray-800 p-6 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-900/30 relative overflow-hidden group">
-                        <div class="relative z-10">
-                            <p class="text-emerald-600 dark:text-emerald-400 text-xs font-black uppercase tracking-widest mb-1">Mis Pagados</p>
-                            <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $stats['my_approved_count'] ?? 0 }}</h4>
-                            <p class="text-emerald-700 dark:text-emerald-300 font-bold mt-1 text-sm">${{ number_format($stats['my_total_reimbursed'] ?? 0, 2) }}</p>
-                        </div>
-                        <svg class="absolute -right-4 -bottom-4 w-24 h-24 text-emerald-500/10 group-hover:scale-110 transition-transform duration-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
-                    </div>
-
-                @else
-                    <!-- Admin / Subdirección / Standard User Stats -->
+                    <!-- En Proceso / En Tránsito -->
                     <div class="bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-900/10 dark:to-gray-800 p-6 rounded-2xl shadow-sm border border-indigo-100 dark:border-indigo-900/30 relative overflow-hidden group">
                         <div class="relative z-10">
-                            <p class="text-indigo-600 dark:text-indigo-400 text-xs font-black uppercase tracking-widest mb-1">En Proceso</p>
-                            <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $stats['pending_count'] ?? 0 }}</h4>
-                            <p class="text-indigo-700 dark:text-indigo-300 font-bold mt-1 text-sm truncate">
-                                ${{ number_format($stats['total_amount_pending'] ?? $stats['total_pending_amount'] ?? 0, 2) }}
+                            <p class="text-indigo-600 dark:text-indigo-400 text-xs font-black uppercase tracking-widest mb-1">
+                                {{ $isManagement ? 'En Tránsito (Global)' : 'Mis Pendientes' }}
                             </p>
+                            <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $displayStats['pending_count'] }}</h4>
+                            <p class="text-indigo-700 dark:text-indigo-300 font-bold mt-1 text-sm truncate">
+                                ${{ number_format($displayStats['pending_amount'], 2) }}
+                            </p>
+                            @if($isManagement && isset($stats['personal']) && $stats['personal']['pending_count'] > 0)
+                                <p class="text-[9px] text-gray-400 mt-2 italic">Tus personales: {{ $stats['personal']['pending_count'] }} (${{ number_format($stats['personal']['pending_amount'], 2) }})</p>
+                            @endif
                         </div>
                         <svg class="absolute -right-4 -bottom-4 w-24 h-24 text-indigo-500/10 group-hover:scale-110 transition-transform duration-500" fill="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     </div>
 
+                    <!-- Total Pagados -->
                     <div class="bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/10 dark:to-gray-800 p-6 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-900/30 relative overflow-hidden group">
                         <div class="relative z-10">
-                            <p class="text-emerald-600 dark:text-emerald-400 text-xs font-black uppercase tracking-widest mb-1">Total Pagados</p>
-                            <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $stats['approved_count'] ?? 0 }}</h4>
+                            <p class="text-emerald-600 dark:text-emerald-400 text-xs font-black uppercase tracking-widest mb-1">
+                                {{ $isManagement ? 'Pagados (Global)' : 'Mis Pagados' }}
+                            </p>
+                            <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $displayStats['approved_count'] }}</h4>
                             <p class="text-emerald-700 dark:text-emerald-300 font-bold mt-1 text-sm truncate">
-                                ${{ number_format($stats['total_amount_approved'] ?? $stats['total_approved_amount'] ?? 0, 2) }}
+                                ${{ number_format($displayStats['approved_amount'], 2) }}
                             </p>
                         </div>
                         <svg class="absolute -right-4 -bottom-4 w-24 h-24 text-emerald-500/10 group-hover:scale-110 transition-transform duration-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3z"></path><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zM7.001 5a1 1 0 011-1h8a1 1 0 110 2h-8a1 1 0 01-1-1zm0 14a1 1 0 110-2h8a1 1 0 110 2h-8z" clip-rule="evenodd"></path></svg>
                     </div>
 
-                    @if(isset($stats['correction_count']) && $stats['correction_count'] > 0)
-                    <div class="bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/10 dark:to-gray-800 p-6 rounded-2xl shadow-sm border border-orange-200 dark:border-orange-900/30 relative overflow-hidden group">
-                        <div class="relative z-10">
-                            <p class="text-orange-600 dark:text-orange-400 text-xs font-black uppercase tracking-widest mb-1">Para Corregir</p>
-                            <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $stats['correction_count'] }}</h4>
-                        </div>
-                        <svg class="absolute -right-4 -bottom-4 w-24 h-24 text-orange-500/10 animate-pulse" fill="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                    </div>
-                    @endif
-
+                    <!-- Rechazados -->
                     <div class="bg-gradient-to-br from-rose-50 to-white dark:from-rose-900/10 dark:to-gray-800 p-6 rounded-2xl shadow-sm border border-rose-100 dark:border-rose-900/30 relative overflow-hidden group">
                         <div class="relative z-10">
-                            <p class="text-rose-600 dark:text-rose-400 text-xs font-black uppercase tracking-widest mb-1">Rechazados</p>
-                            <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $stats['rejected_count'] ?? 0 }}</h4>
-                            <p class="text-rose-700 dark:text-rose-300 font-bold mt-1 text-sm truncate">
-                                ${{ number_format($stats['total_amount_rejected'] ?? 0, 2) }}
+                            <p class="text-rose-600 dark:text-rose-400 text-xs font-black uppercase tracking-widest mb-1">
+                                {{ $isManagement ? 'Rechazados (Global)' : 'Mis Rechazados' }}
                             </p>
+                            <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $displayStats['rejected_count'] ?? 0 }}</h4>
                         </div>
                         <svg class="absolute -right-4 -bottom-4 w-24 h-24 text-rose-500/10 group-hover:scale-110 transition-transform duration-500" fill="currentColor" viewBox="0 0 24 24"><path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     </div>
-                @endif
+
+                    <!-- Alert Card (Correction or Status Label) -->
+                    @if(!$isManagement)
+                        @if($stats['personal']['correction_count'] > 0)
+                        <div class="bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/10 dark:to-gray-800 p-6 rounded-2xl border border-orange-200 dark:border-orange-900/30 relative overflow-hidden group">
+                            <div class="relative z-10">
+                                <p class="text-orange-600 dark:text-orange-400 text-xs font-black uppercase tracking-widest mb-1">Para Corregir</p>
+                                <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $stats['personal']['correction_count'] }}</h4>
+                            </div>
+                            <svg class="absolute -right-4 -bottom-4 w-24 h-24 text-orange-500/10 animate-pulse" fill="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                        </div>
+                        @else
+                        <div class="bg-gray-50/50 dark:bg-gray-800/30 p-6 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 flex items-center justify-center">
+                            <p class="text-[10px] font-black text-gray-300 uppercase tracking-widest">Sin alertas</p>
+                        </div>
+                        @endif
+                    @else
+                        <!-- Management Level Label -->
+                        <div class="bg-indigo-900 p-6 rounded-2xl relative overflow-hidden flex flex-col justify-center">
+                            <p class="text-indigo-400 text-[10px] font-black uppercase tracking-widest mb-1">Alcance Actual</p>
+                            <h4 class="text-xl font-black text-white leading-tight">
+                                {{ Auth::user()->role_name ?? 'Gestión' }} 
+                                <span class="text-indigo-500 text-xs block opacity-60">Nivel de Supervisión Activo</span>
+                            </h4>
+                        </div>
+                    @endif
+                </div>
             </div>
+
 
             <!-- Enhanced Insights Section -->
             <div class="mb-12">
                 <!-- Row 1: High Level Metrics -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    @if($hasFullAccess)
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-[1.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
                         <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Crecimiento Semanal</p>
                         <div class="flex items-center gap-3">
@@ -124,6 +135,7 @@
                         </div>
                         <p class="text-[9px] text-gray-400 mt-2">Vs. semana anterior</p>
                     </div>
+                    @endif
 
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-[1.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
                         <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Ticket Promedio</p>
@@ -131,15 +143,17 @@
                         <p class="text-[9px] text-gray-400 mt-2">Por cada comprobante</p>
                     </div>
 
+                    @if($hasFullAccess)
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-[1.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
                         <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Recuperación de IVA/Imp</p>
                         <h5 class="text-2xl font-black text-emerald-600">${{ number_format($analytics['tax_summary']->taxes ?? 0, 2) }}</h5>
                         <p class="text-[9px] text-gray-400 mt-2">Deducible identificado</p>
                     </div>
+                    @endif
 
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-[1.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
                         <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Total en Tránsito</p>
-                        <h5 class="text-2xl font-black text-indigo-600">${{ number_format($stats['total_amount_pending'] ?? 0, 2) }}</h5>
+                        <h5 class="text-2xl font-black text-indigo-600">${{ number_format($displayStats['pending_amount'] ?? 0, 2) }}</h5>
                         <p class="text-[9px] text-gray-400 mt-2">Esperando aprobación final</p>
                     </div>
                 </div>
@@ -147,6 +161,7 @@
                 <!-- Row 2: Deep Dive Analytics -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
                     <!-- Main Trend Chart -->
+                    @if($hasFullAccess)
                     <div class="lg:col-span-2 bg-white dark:bg-gray-800 p-8 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700">
                         <div class="flex items-center justify-between mb-8">
                             <div>
@@ -162,32 +177,48 @@
                             <canvas id="dynamicsChart"></canvas>
                         </div>
                     </div>
+                    @endif
 
-                    <!-- Status Doughnut Chart -->
-                    <div class="bg-white dark:bg-gray-800 p-8 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
-                        <div class="mb-4">
+                    <!-- Status Doughnut Chart (Visible to all, wider if full chart is hidden) -->
+                    <div class="{{ $hasFullAccess ? 'lg:col-span-1' : 'lg:col-span-3' }} bg-white dark:bg-gray-800 p-8 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                        <div class="mb-4 text-center">
                             <h4 class="text-gray-900 dark:text-white font-black text-lg uppercase tracking-tighter">Resumen por Estatus</h4>
                             <p class="text-xs text-gray-400 font-bold uppercase tracking-widest">Distribución de capital</p>
                         </div>
-                        <div class="relative flex-1 min-h-[250px] flex items-center justify-center">
+                        <div class="relative flex-1 min-h-[300px] flex items-center justify-center">
                             <canvas id="statusDoughnutChart"></canvas>
                             <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                <span class="text-[9px] font-extrabold uppercase text-gray-400 tracking-widest">En Proceso</span>
-                                <span class="text-lg font-black text-gray-900 dark:text-white leading-tight">
+                                <span class="text-[11px] font-extrabold uppercase text-gray-400 tracking-widest">En Proceso</span>
+                                <span class="text-2xl font-black text-gray-900 dark:text-white leading-tight">
                                     ${{ number_format($analytics['status_breakdown']->whereNotIn('status', ['aprobado', 'rechazado'])->sum('amount'), 0) }}
                                 </span>
                             </div>
                         </div>
                         <div class="mt-4 pt-4 border-t border-gray-50 dark:border-gray-700">
-                            <div class="grid grid-cols-2 gap-2">
-                                @foreach($analytics['status_breakdown']->take(4) as $s)
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="w-2 h-2 rounded-full @if($s->status == 'aprobado') bg-emerald-500 @elseif($s->status == 'rechazado') bg-rose-500 @else bg-indigo-500 @endif"></span>
-                                        <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 uppercase truncate">
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                @foreach($analytics['status_breakdown'] as $s)
+                                    <div class="flex items-center gap-1.5 {{ $s->amount == 0 ? 'opacity-30' : 'opacity-100' }}">
+                                        <span class="w-2 h-2 rounded-full shadow-sm" style="background-color: 
+                                            @if($s->status == 'aprobado') #64b032 
+                                            @elseif($s->status == 'rechazado') #ff3000 
+                                            @elseif($s->status == 'requiere_correccion') #ffa608
+                                            @elseif($s->status == 'aprobado_director') #3385fa
+                                            @elseif($s->status == 'aprobado_control') #66a3fb
+                                            @elseif($s->status == 'aprobado_ejecutivo') #004bb3
+                                            @elseif($s->status == 'aprobado_cxp') #003380
+                                            @elseif($s->status == 'aprobado_direccion') #ff8c00
+                                            @else #0066f9 @endif"></span>
+                                        <span class="text-[8px] font-black text-gray-500 dark:text-gray-400 uppercase truncate" title="{{ $s->label }}">
                                             @if($s->status == 'aprobado') Pagado 
-                                            @elseif($s->status == 'aprobado_cxp') Subdir.
-                                            @elseif($s->status == 'aprobado_direccion') Direcc.
-                                            @else {{ str_replace('_', ' ', $s->status) }} @endif
+                                            @elseif($s->status == 'aprobado_director') N2: Dir
+                                            @elseif($s->status == 'aprobado_control') N3: Ctrl
+                                            @elseif($s->status == 'aprobado_ejecutivo') N4: Ejec.
+                                            @elseif($s->status == 'aprobado_cxp') N5: Subdir.
+                                            @elseif($s->status == 'aprobado_direccion') N6: Direcc.
+                                            @elseif($s->status == 'pendiente') N1: Pend.
+                                            @elseif($s->status == 'rechazado') Recha.
+                                            @elseif($s->status == 'requiere_correccion') Correg.
+                                            @else {{ $s->label }} @endif
                                         </span>
                                     </div>
                                 @endforeach
@@ -196,7 +227,8 @@
                     </div>
                 </div>
 
-                <!-- Row 3: Metrics Portfolio -->
+                <!-- Row 3: Metrics Portfolio (Visible only to Full Access) -->
+                @if($hasFullAccess)
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
                     <!-- Category Matrix -->
                     <div class="bg-white dark:bg-gray-800 p-8 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
@@ -291,6 +323,7 @@
                         </div>
                     </div>
                 </div>
+                @endif
             </div><!-- End Insights Section -->
 
             <!-- Bottom Section Grid (Table + Sidebar) -->
@@ -468,40 +501,49 @@
             const statusCtx = document.getElementById('statusDoughnutChart');
             if (statusCtx) {
                 const statusData = {!! json_encode($analytics['status_breakdown']) !!};
+                const detailedItems = {!! json_encode($analytics['detailed_items']) !!};
                 
                 const statusConfig = {
-                    'aprobado': { label: 'Pagado', color: '#10b981' },
-                    'rechazado': { label: 'Rechazado', color: '#f43f5e' },
-                    'requiere_correccion': { label: 'Corregir', color: '#f59e0b' },
-                    'pendiente': { label: 'N1: Pendiente', color: '#4338ca' },
-                    'aprobado_director': { label: 'N2: Aprob. Dir', color: '#4f46e5' },
-                    'aprobado_control': { label: 'N3: Aprob. Ctrl', color: '#6366f1' },
-                    'aprobado_ejecutivo': { label: 'Aprob. Ejecut.', color: '#818cf8' },
-                    'aprobado_cxp': { label: 'Aprob. Subdir.', color: '#a5b4fc' },
-                    'aprobado_direccion': { label: 'Aprob. Direcc.', color: '#c7d2fe' }
+                    'aprobado': { label: 'Pagado', color: '#64b032' },
+                    'rechazado': { label: 'Rechazado', color: '#ff3000' },
+                    'requiere_correccion': { label: 'Corregir', color: '#ffa608' },
+                    'pendiente': { label: 'N1: Pendiente', color: '#0066f9' },
+                    'aprobado_director': { label: 'N2: Aprob. Dir', color: '#3385fa' },
+                    'aprobado_control': { label: 'N3: Aprob. Ctrl', color: '#66a3fb' },
+                    'aprobado_ejecutivo': { label: 'Aprob. Ejecut.', color: '#004bb3' },
+                    'aprobado_cxp': { label: 'Aprob. Subdir.', color: '#003380' },
+                    'aprobado_direccion': { label: 'Aprob. Direcc.', color: '#ff8c00' }
                 };
 
                 const labels = [];
-                const values = [];
+                const counts = [];
+                const amounts = [];
                 const colors = [];
 
+                // Filter out statuses with zero items
                 statusData.forEach(item => {
-                    const config = statusConfig[item.status] || { label: item.status, color: '#9ca3af' };
-                    labels.push(config.label);
-                    values.push(item.amount);
-                    colors.push(config.color);
+                    if (item.count > 0) {
+                        const config = statusConfig[item.status] || { label: item.status, color: '#9ca3af' };
+                        labels.push(config.label);
+                        counts.push(item.count);
+                        amounts.push(item.amount);
+                        colors.push(config.color);
+                    }
                 });
 
                 new Chart(statusCtx, {
                     type: 'doughnut',
                     data: {
                         labels: labels,
+                        amounts: amounts, // Custom property for tooltips
                         datasets: [{
-                            data: values,
+                            data: counts, // USE COUNT FOR PROPORTIONS
                             backgroundColor: colors,
-                            borderWidth: 0,
-                            hoverOffset: 15,
-                            borderRadius: 4
+                            borderWidth: 4,
+                            borderColor: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
+                            hoverOffset: 20,
+                            borderRadius: 10,
+                            spacing: 5
                         }]
                     },
                     options: {
@@ -513,10 +555,14 @@
                             tooltip: {
                                 callbacks: {
                                     label: function(context) {
-                                        let label = context.label || '';
-                                        if (label) label += ': ';
-                                        label += new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(context.raw);
-                                        return label;
+                                        const label = context.label || '';
+                                        const count = context.raw;
+                                        const amount = context.chart.data.amounts[context.dataIndex];
+                                        const amountFormatted = new Intl.NumberFormat('es-MX', { 
+                                            style: 'currency', 
+                                            currency: 'MXN' 
+                                        }).format(amount);
+                                        return `${label}: ${count} solicitudes (${amountFormatted})`;
                                     }
                                 }
                             }

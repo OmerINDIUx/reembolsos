@@ -103,4 +103,19 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function getRoleNameAttribute()
+    {
+        return match($this->role) {
+            'admin' => 'Administrador (Full)',
+            'admin_view' => 'Administrador (Lectura)',
+            'director' => 'Director N1',
+            'control_obra' => 'Control de Obra N2',
+            'director_ejecutivo' => 'Director Ejecutivo N3',
+            'accountant' => 'Cuentas por Pagar N4',
+            'direccion' => 'Subdirección N5',
+            'tesoreria' => 'Dirección N6',
+            default => 'Usuario Estándar',
+        };
+    }
 }

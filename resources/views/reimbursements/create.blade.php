@@ -260,16 +260,26 @@
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">$</span>
                                                     <input type="number" step="0.01" :name="'items['+index+'][subtotal]'" x-model="item.data.subtotal" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-indigo-600 pl-8" :readonly="hasInvoice" :required="!hasInvoice">
                                                 </div>
-                                                <template x-if="!hasInvoice && parseFloat(item.data.subtotal) > parseFloat(item.data.total)">
-                                                    <p class="mt-1 text-[9px] font-bold text-red-600 uppercase">El subtotal no puede ser mayor al total</p>
-                                                </template>
+                                            </div>
+
+                                            <div>
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2 text-amber-600">Impuestos (IVA)</label>
+                                                <div class="relative">
+                                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">$</span>
+                                                    <input type="number" step="0.01" :name="'items['+index+'][impuestos]'" x-model="item.data.impuestos" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-amber-600 pl-8" :readonly="hasInvoice">
+                                                </div>
                                             </div>
                                             <div>
                                                 <label class="block text-[10px] font-black text-white bg-indigo-600 rounded-t-lg px-2 py-1 uppercase mb-0 tracking-widest inline-block">Total del Gasto *</label>
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-indigo-300">$</span>
-                                                    <input type="number" step="0.01" :name="'items['+index+'][total]'" x-model="item.data.total" class="w-full bg-indigo-50 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-800 rounded-xl rounded-tl-none text-xl font-black text-indigo-700 dark:text-indigo-300 py-3 pl-10" :readonly="hasInvoice" :required="!hasInvoice">
+                                                    <input type="number" step="0.01" :name="'items['+index+'][total]'" x-model="item.data.total" class="w-full bg-indigo-50 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-800 rounded-xl rounded-tl-none text-xl font-black text-indigo-700 dark:text-indigo-300 py-3 pl-10" :readonly="hasInvoice" :required="!hasInvoice" 
+                                                        @input="if(!hasInvoice) item.data.impuestos = (parseFloat(item.data.total || 0) - parseFloat(item.data.subtotal || 0)).toFixed(2)">
                                                 </div>
+                                                
+                                                <template x-if="!hasInvoice && parseFloat(item.data.subtotal) > parseFloat(item.data.total)">
+                                                    <p class="mt-1 text-[9px] font-bold text-red-600 uppercase">El subtotal no puede ser mayor al total</p>
+                                                </template>
                                                 
                                                 <!-- Limit Warning -->
                                                 <template x-if="!hasInvoice && item.data.total > 2000">
@@ -488,8 +498,8 @@
                         fileName: '',
                         xmlParsed: false,
                         noPdf: false,
-                        manualData: { nombre_emisor: '', fecha: '', subtotal: 0, total: 0 },
-                        data: { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0 }
+                        manualData: { nombre_emisor: '', fecha: '', subtotal: 0, total: 0, impuestos: 0 },
+                        data: { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, impuestos: 0 }
                     });
                 },
                 removeItem(index) { 

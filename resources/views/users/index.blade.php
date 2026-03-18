@@ -33,6 +33,7 @@
                                 <select name="role" id="role" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                     <option value="">Todos</option>
                                     <option value="admin" {{ request('role') == 'admin' ? 'selected' : '' }}>Admin</option>
+                                    <option value="admin_view" {{ request('role') == 'admin_view' ? 'selected' : '' }}>Admin (Solo Lectura)</option>
                                     <option value="director" {{ request('role') == 'director' ? 'selected' : '' }}>Director</option>
                                     <option value="control_obra" {{ request('role') == 'control_obra' ? 'selected' : '' }}>Control de Obra</option>
                                     <option value="director_ejecutivo" {{ request('role') == 'director_ejecutivo' ? 'selected' : '' }}>Director Ejecutivo</option>
@@ -105,6 +106,7 @@
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                                             {{ $user->role === 'admin' ? 'bg-purple-100 text-purple-800' : '' }}
+                                            {{ $user->role === 'admin_view' ? 'bg-gray-100 text-gray-800 border-2 border-dashed border-gray-300' : '' }}
                                             {{ $user->role === 'director' ? 'bg-blue-100 text-blue-800' : '' }}
                                             {{ $user->role === 'accountant' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : '' }}
                                             {{ $user->role === 'direccion' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300' : '' }}
