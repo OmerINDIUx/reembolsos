@@ -153,3 +153,40 @@ Para futuras actualizaciones, sigue este flujo para **NUNCA** perder datos de cl
 ## �🎉 ¡Listo!
 
 El sistema ahora reflejará todos los cambios de roles (Subdirección, Cuentas por Pagar), las notificaciones de Dirección y la nueva bitácora de observaciones.
+
+---
+
+## 🐙 ANEXO: Despliegue Automático con Git (GitHub / GitLab)
+
+Dado que ahora el proyecto está versionado correctamente y tiene los archivos protegidos en `.gitignore`, puedes vincular tu cuenta de Hostinger con Git para que las actualizaciones suban inmediatamente cuando hagas `git push`. 
+
+### 1. Sube tu código a GitHub/GitLab
+1. Crea un repositorio vacío (sin README ni .gitignore) en GitHub o GitLab.
+2. Abre tu terminal en la carpeta local de tu proyecto y ejecuta:
+```bash
+git remote add origin URL_DE_TU_REPOSITORIO.git
+git branch -M main
+git push -u origin main
+```
+*(Asegúrate de ejecutar siempre `npm run build` localmente y hacer commit de los cambios generados antes de hacer `git push`).*
+
+### 2. Vincula el Repositorio en Hostinger (hPanel)
+1. Entra a hPanel y ve a **Avanzado** > **GIT**.
+2. Completa los datos:
+   - **Repositorio:** Escribe la ruta de tu repositorio (Ej: `usuario/reembolsos`). 
+   - **Rama (Branch):** Escribe `main` o `master`.
+   - **Directorio de instalación:** Asegúrate de que apunte a `public_html` (o a la subcarpeta donde está tu sistema si no está en la raíz).
+3. Haz clic en **Crear**. 
+   *(Si tu repositorio es privado, Hostinger te pedirá generar una "Deploy Key" (Clave de Despliegue ssh-rsa) y pegarla en las configuraciones (Settings > Deploy Keys) de tu repositorio en GitHub/GitLab).*
+
+### 3. Activar Auto-Deploy (Webhooks)
+Para que al hacer `git push` Hostinger se actualice de forma 100% automática:
+1. En la misma pantalla de **GIT** en Hostinger, encontrarás una columna llamada **Webhook**.
+2. Ahí verás una URL ("Auto Deployment URL"). Cópiala.
+3. Ve a tu repositorio en **GitHub/GitLab** > **Settings** > **Webhooks** > **Add webhook**.
+4. Pega la URL en "Payload URL", selecciona *Content type* como `application/json` y dale a agregar. 
+
+### 4. ¿Qué hacer después de un Git Push?
+Hostinger subirá de inmediato el nuevo código y compilará la información nueva (porque `public/build` ya no se ignora), pero **CUIDADO**: Git no ejecuta migraciones de base de datos automáticamente en Hostinger PHP Compartido.
+* **Si agregaste nuevas tablas/columnas:** siempre tienes que ingresar por SSH (Fase 4 de este archivo) a correr `/opt/alt/php84/usr/bin/php artisan migrate --force`.
+* Tus facturas en `public/storage`, tus configuraciones de `.env` y el archivo `node_modules`/`hot` quedarán intactos y completamente a salvo y no serán sobrescritos por Git.
