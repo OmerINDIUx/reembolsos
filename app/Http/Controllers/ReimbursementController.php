@@ -155,6 +155,12 @@ class ReimbursementController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
+        
+        // Beta closed check
+        if (!$user->isAdmin()) {
+            return redirect()->route('panel')->with('error', 'La recepción de nuevos reembolsos ha cerrado por fin de beta. Nos vemos en la v1 el 15 de abril.');
+        }
+
         if ($user->isCxp() || $user->isTreasury() || $user->isAdminView()) {
             abort(403, 'Tu rol no tiene permisos para crear reembolsos.');
         }
@@ -209,6 +215,12 @@ class ReimbursementController extends Controller
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
+
+        // Beta closed check
+        if (!$user->isAdmin()) {
+            return redirect()->route('panel')->with('error', 'La recepción de nuevos reembolsos ha cerrado por fin de beta.');
+        }
+
         if ($user->isCxp() || $user->isTreasury() || $user->isAdminView()) {
             abort(403, 'Tu rol no tiene permisos para registrar reembolsos.');
         }
@@ -563,6 +575,12 @@ class ReimbursementController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
+
+        // Beta closed check
+        if (!$user->isAdmin()) {
+            return redirect()->route('panel')->with('error', 'La recepción de nuevos reembolsos ha cerrado por fin de beta.');
+        }
+
         if ($user->isCxp() || $user->isTreasury()) {
             abort(403, 'Tu rol no tiene permisos para registrar reembolsos.');
         }

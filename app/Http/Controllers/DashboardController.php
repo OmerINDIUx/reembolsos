@@ -15,6 +15,13 @@ class DashboardController extends Controller
     public function index()
     {
         $user = Auth::user();
+        
+        // Trigger beta notice on login/dashboard entry
+        if (!session()->has('beta_notice_displayed')) {
+            session()->flash('show_beta_modal', true);
+            session()->put('beta_notice_displayed', true);
+        }
+
         $stats = [];
         $recentReimbursements = collect();
 
