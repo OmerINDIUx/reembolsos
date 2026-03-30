@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
@@ -76,10 +77,61 @@ class UserController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(User $user)
     {
-        // Not really needed for users usually
-        return redirect()->route('users.edit', $id);
+        $user->load(['director', 'subordinates', 'costCenters']);
+
+        // 1. Personal Spending Stats
+        $pendingQuery = $user->reimbursements()->whereNotIn('status', ['aprobado', 'rechazado']);
+        $approvedQuery = $user->reimbursements()->where('status', 'aprobado');
+
+        $stats = [
+            'pending_count' => (clone $pendingQuery)->count(),
+            'pending_amount' => (clone $pendingQuery)->sum('total'),
+            'approved_count' => (clone $approvedQuery)->count(),
+            'approved_amount' => (clone $approvedQuery)->sum('total'),
+            'rejected_count' => $user->reimbursements()->where('status', 'rechazado')->count(),
+        ];
+
+        // 2. Category Breakdown (Personal)
+        $categoryBreakdown = $user->reimbursements()
+            ->select('category', DB::raw('sum(total) as amount'), DB::raw('count(*) as count'))
+            ->groupBy('category')
+            ->orderBy('amount', 'desc')
+            ->get();
+
+        // 3. Status Breakdown
+        $statusBreakdown = $user->reimbursements()
+            ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total) as amount'))
+            ->groupBy('status')
+            ->get();
+
+        // 4. Monthly Trend (Last 6 months)
+        $monthlyTrend = $user->reimbursements()
+            ->where('status', 'aprobado')
+            ->select(
+                DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'),
+                DB::raw('sum(total) as amount')
+            )
+            ->where('created_at', '>=', now()->subMonths(6))
+            ->groupBy('month')
+            ->orderBy('month', 'asc')
+            ->get();
+
+        // 5. Recent Activity
+        $recentReimbursements = $user->reimbursements()
+            ->with(['costCenter', 'currentStep'])
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        // 6. Approval Task Stats (if they are an approver)
+        // This is complex as it depends on current_step_id pointing to a step they are assigned to
+        $pendingApprovalsCount = \App\Models\Reimbursement::whereHas('currentStep', function($q) use ($user) {
+            $q->where('user_id', $user->id);
+        })->whereNotIn('status', ['aprobado', 'rechazado'])->count();
+
+        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount'));
     }
 
     /**

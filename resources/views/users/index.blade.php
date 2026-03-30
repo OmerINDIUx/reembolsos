@@ -82,7 +82,7 @@
                             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nombre</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Usuario (Click p/ Perfil)</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Rol</th>
                                     @if(Auth::user()->isAdmin())
@@ -96,10 +96,18 @@
                             </thead>
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 @foreach ($users as $user)
-                                <tr>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                                        {{ $user->name }}
-                                    </td>
+                                <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-all">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                    <a href="{{ route('users.show', $user->id) }}" class="flex items-center group">
+                                        <div class="flex-shrink-0 h-10 w-10 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            {{ substr($user->name, 0, 1) }}
+                                        </div>
+                                        <div class="ml-4">
+                                            <div class="text-sm font-black text-gray-900 dark:text-white group-hover:text-indigo-600 transition-colors underline decoration-dotted decoration-indigo-200 underline-offset-4">{{ $user->name }}</div>
+                                            <div class="text-[10px] text-gray-400 font-bold">Ver Panel Personal &rarr;</div>
+                                        </div>
+                                    </a>
+                                </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                         {{ $user->email }}
                                     </td>

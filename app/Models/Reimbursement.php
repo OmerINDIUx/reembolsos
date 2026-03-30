@@ -110,6 +110,11 @@ class Reimbursement extends Model
         return $this->belongsTo(CostCenter::class);
     }
 
+    public function currentStep()
+    {
+        return $this->belongsTo(ApprovalStep::class, 'current_step_id');
+    }
+
     public function files()
     {
         return $this->hasMany(ReimbursementFile::class);

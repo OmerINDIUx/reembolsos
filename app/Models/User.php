@@ -41,6 +41,11 @@ class User extends Authenticatable
         return $this->hasMany(CostCenter::class, 'director_id');
     }
 
+    public function reimbursements()
+    {
+        return $this->hasMany(Reimbursement::class);
+    }
+
     public function isAdmin()
     {
         return $this->role === 'admin';

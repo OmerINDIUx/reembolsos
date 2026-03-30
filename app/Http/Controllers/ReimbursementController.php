@@ -103,6 +103,10 @@ class ReimbursementController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->filled('cost_center_id')) {
+            $query->where('cost_center_id', $request->cost_center_id);
+        }
+
         if ($request->filled('type')) {
             $query->where('type', $request->type);
         }
