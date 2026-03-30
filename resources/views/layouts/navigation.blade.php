@@ -28,6 +28,9 @@
                         {{ __('Centro de Costos') }}
                     </x-nav-link>
                     @endif
+                    <x-nav-link :href="route('travel_events.index')" :active="request()->routeIs('travel_events.*')">
+                        {{ __('Viajes y Eventos') }}
+                    </x-nav-link>
                 </div>
             </div>
 
@@ -165,6 +168,9 @@
                 {{ __('Centro de Costos') }}
             </x-responsive-nav-link>
             @endif
+            <x-responsive-nav-link :href="route('travel_events.index')" :active="request()->routeIs('travel_events.*')">
+                {{ __('Viajes y Eventos') }}
+            </x-responsive-nav-link>
         </div>
 
         <!-- Responsive Settings Options -->

@@ -11,6 +11,7 @@ class Reimbursement extends Model
     protected $fillable = [
         'type',
         'cost_center_id',
+        'travel_event_id',
         'week',
         'category',
         'uuid',
@@ -108,6 +109,11 @@ class Reimbursement extends Model
     public function costCenter()
     {
         return $this->belongsTo(CostCenter::class);
+    }
+
+    public function travelEvent()
+    {
+        return $this->belongsTo(TravelEvent::class);
     }
 
     public function currentStep()

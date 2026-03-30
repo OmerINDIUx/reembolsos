@@ -66,7 +66,7 @@
                 <input type="hidden" name="week" value="{{ $currentWeek }}">
                 <input type="hidden" name="has_invoice" value="{{ $hasInvoice ? 1 : 0 }}">
 
-                <!-- Header Info Card -->
+                <!-- Paso 1: Clasificación de Gasto -->
                 <div class="bg-white dark:bg-gray-800 shadow-xl rounded-3xl mb-10 overflow-hidden border border-gray-100 dark:border-gray-700">
                     <div class="p-8 md:p-10">
                         <div class="flex items-center mb-8">
@@ -75,20 +75,49 @@
                             </div>
                             <div>
                                 <h3 class="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Paso 1</h3>
-                                <p class="text-sm text-gray-500 font-medium">Define el Centro de Costos al que se cargarán todos los comprobantes de esta sesión.</p>
+                                <p class="text-sm text-gray-500 font-medium">Define a qué entidad se cargará el gasto de esta sesión.</p>
                             </div>
                         </div>
 
+                        <!-- Charge Type Toggle -->
+                        <div class="flex p-1 bg-gray-100 dark:bg-gray-900 rounded-2xl mb-8 max-w-md">
+                            <button type="button" 
+                                @click="chargeType = 'cost_center'" 
+                                :class="chargeType === 'cost_center' ? 'bg-white dark:bg-gray-800 shadow-md text-indigo-600' : 'text-gray-500 hover:text-gray-700'"
+                                class="flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
+                                Centro de Costos
+                            </button>
+                            <button type="button" 
+                                @click="chargeType = 'travel_event'" 
+                                :class="chargeType === 'travel_event' ? 'bg-white dark:bg-gray-800 shadow-md text-indigo-600' : 'text-gray-500 hover:text-gray-700'"
+                                class="flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
+                                Viaje o Evento
+                            </button>
+                        </div>
+
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div>
+                            <!-- Cost Center Select -->
+                            <div x-show="chargeType === 'cost_center'" class="animate-slideDown">
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Centro de Costos *</label>
-                                <select name="cost_center_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" required>
+                                <select name="cost_center_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" :required="chargeType === 'cost_center'">
                                     <option value="">Selecciona el Centro de Costos...</option>
                                     @foreach($costCenters as $center)
                                         <option value="{{ $center->id }}">{{ $center->name }}</option>
                                     @endforeach
                                 </select>
                             </div>
+
+                            <!-- Travel/Event Select -->
+                            <div x-show="chargeType === 'travel_event'" class="animate-slideDown">
+                                <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Viaje o Evento *</label>
+                                <select name="travel_event_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" :required="chargeType === 'travel_event'">
+                                    <option value="">Selecciona el Viaje o Evento...</option>
+                                    @foreach($travelEvents as $event)
+                                        <option value="{{ $event->id }}">{{ $event->name }} ({{ $event->code }})</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
                             <div>
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Semana de Proceso</label>
                                 <div class="w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-2xl py-4 px-5 text-gray-500 font-bold">
@@ -482,6 +511,7 @@
         function reimbursementForm() {
             return {
                 type: '{{ $type }}',
+                chargeType: 'cost_center',
                 tripType: 'nacional',
                 items: [],
                 maxItems: 20,

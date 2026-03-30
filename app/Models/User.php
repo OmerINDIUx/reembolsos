@@ -123,4 +123,9 @@ class User extends Authenticatable
             default => 'Usuario Estándar',
         };
     }
+
+    public function travelEvents()
+    {
+        return $this->belongsToMany(TravelEvent::class, 'travel_event_user');
+    }
 }

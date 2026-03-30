@@ -40,6 +40,7 @@ Route::middleware(['auth', \App\Http\Middleware\ForcePasswordChange::class])->gr
 
     Route::middleware('role:admin,admin_view,director,control_obra,director_ejecutivo,accountant')->group(function() {
         Route::resource('cost_centers', CostCenterController::class);
+        Route::resource('travel_events', \App\Http\Controllers\TravelEventController::class);
     });
     
     // Notifications
