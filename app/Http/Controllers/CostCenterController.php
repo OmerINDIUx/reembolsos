@@ -18,16 +18,15 @@ class CostCenterController extends Controller
         $user = Auth::user();
 
         // Base query
-        $query = CostCenter::with(['director', 'controlObra', 'directorEjecutivo'])->orderBy('code');
+        $query = CostCenter::with(['director', 'controlObra', 'directorEjecutivo', 'accountant', 'direccion', 'tesoreria'])->orderBy('code');
 
         if ($user->isAdmin() || $user->isAdminView()) {
             // Admin and AdminView see all
-        } elseif ($user->isDirector()) {
-            $query->where('director_id', $user->id);
-        } elseif ($user->isControlObra()) {
-            $query->where('control_obra_id', $user->id);
-        } elseif ($user->isExecutiveDirector()) {
-            $query->where('director_ejecutivo_id', $user->id);
+        } else {
+            // See any cost center where user is part of the approval chain
+            $query->whereHas('approvalSteps', function($q) use ($user) {
+                $q->where('user_id', $user->id);
+            });
         }
 
         if ($request->filled('search')) {
@@ -52,11 +51,8 @@ class CostCenterController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
-        $directors = User::whereIn('role', ['admin', 'director'])->orderBy('name')->get();
-        $controlObras = User::where('role', 'control_obra')->orderBy('name')->get();
-        $executives = User::where('role', 'director_ejecutivo')->orderBy('name')->get();
-        
-        return view('cost_centers.create', compact('directors', 'controlObras', 'executives'));
+        $users = User::orderBy('name')->get();
+        return view('cost_centers.create', compact('users'));
     }
 
     /**
@@ -70,17 +66,26 @@ class CostCenterController extends Controller
 
         $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:cost_centers,name'],
-            'director_id' => ['required', 'exists:users,id'],
-            'control_obra_id' => ['required', 'exists:users,id'],
-            'director_ejecutivo_id' => ['required', 'exists:users,id'],
+            'steps' => ['required', 'array', 'min:1'],
+            'steps.*.user_id' => ['required', 'exists:users,id'],
+            'steps.*.name' => ['required', 'string', 'max:255'],
         ]);
 
-        $data = $request->all();
-        $data['code'] = strtoupper(\Illuminate\Support\Str::slug($request->name));
+        $cc = CostCenter::create([
+            'name' => $request->name,
+            'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
+            'description' => $request->description,
+        ]);
 
-        CostCenter::create($data);
+        foreach ($request->steps as $index => $step) {
+            $cc->approvalSteps()->create([
+                'user_id' => $step['user_id'],
+                'name' => $step['name'],
+                'order' => $index + 1,
+            ]);
+        }
 
-        return redirect()->route('cost_centers.index')->with('success', 'Centro de Costos creado exitosamente.');
+        return redirect()->route('cost_centers.index')->with('success', 'Centro de Costos creado con ' . count($request->steps) . ' niveles de aprobación.');
     }
 
     /**
@@ -92,11 +97,9 @@ class CostCenterController extends Controller
              abort(403, 'Unauthorized action.');
         }
 
-        $directors = User::whereIn('role', ['admin', 'director'])->orderBy('name')->get();
-        $controlObras = User::where('role', 'control_obra')->orderBy('name')->get();
-        $executives = User::where('role', 'director_ejecutivo')->orderBy('name')->get();
-
-        return view('cost_centers.edit', compact('costCenter', 'directors', 'controlObras', 'executives'));
+        $users = User::orderBy('name')->get();
+        $costCenter->load('approvalSteps.user');
+        return view('cost_centers.edit', compact('costCenter', 'users'));
     }
 
     /**
@@ -110,17 +113,28 @@ class CostCenterController extends Controller
 
         $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('cost_centers')->ignore($costCenter->id)],
-            'director_id' => ['required', 'exists:users,id'],
-            'control_obra_id' => ['required', 'exists:users,id'],
-            'director_ejecutivo_id' => ['required', 'exists:users,id'],
+            'steps' => ['required', 'array', 'min:1'],
+            'steps.*.user_id' => ['required', 'exists:users,id'],
+            'steps.*.name' => ['required', 'string', 'max:255'],
         ]);
 
-        $data = $request->all();
-        $data['code'] = strtoupper(\Illuminate\Support\Str::slug($request->name));
+        $costCenter->update([
+            'name' => $request->name,
+            'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
+            'description' => $request->description,
+        ]);
 
-        $costCenter->update($data);
+        // Rebuild steps
+        $costCenter->approvalSteps()->delete();
+        foreach ($request->steps as $index => $step) {
+            $costCenter->approvalSteps()->create([
+                'user_id' => $step['user_id'],
+                'name' => $step['name'],
+                'order' => $index + 1,
+            ]);
+        }
 
-        return redirect()->route('cost_centers.index')->with('success', 'Centro de Costos actualizado exitosamente.');
+        return redirect()->route('cost_centers.index')->with('success', 'Centro de Costos actualizado con ' . count($request->steps) . ' niveles de aprobación.');
     }
 
     /**

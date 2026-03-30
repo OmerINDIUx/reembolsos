@@ -56,22 +56,12 @@ class ReimbursementController extends Controller
             // Approvals & Oversight for designated roles
             if ($user->isAdmin() || $user->isAdminView()) {
                 $query->whereNotIn('status', ['aprobado', 'rechazado']);
-            } elseif ($user->isCxp() || $user->isDireccion() || $user->isTreasury()) {
-                // Administrative flow visibility: see everything from Exec Dir approval up to final payment
-                $query->whereIn('status', ['aprobado_ejecutivo', 'aprobado_cxp', 'aprobado_direccion']);
-            } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
-                $query->whereHas('costCenter', function($q) use ($user) {
-                    if ($user->isDirector()) $q->where('director_id', $user->id);
-                    if ($user->isControlObra()) $q->where('control_obra_id', $user->id);
-                    if ($user->isExecutiveDirector()) $q->where('director_ejecutivo_id', $user->id);
-                });
-                
-                if ($user->isDirector()) $query->where('status', 'pendiente');
-                elseif ($user->isControlObra()) $query->where('status', 'aprobado_director');
-                elseif ($user->isExecutiveDirector()) $query->where('status', 'aprobado_control');
             } else {
-                // Regular users see nothing in management
-                $query->where('id', 0);
+                // DYNAMIC VISIBILITY:
+                // User sees it if they are the assigned approver for the CURRENT step
+                $query->whereHas('currentStep', function($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                });
             }
 
         } elseif ($tab === 'global_history') {
@@ -156,10 +146,6 @@ class ReimbursementController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
         
-        // Beta closed check
-        if (!$user->isAdmin()) {
-            return redirect()->route('panel')->with('error', 'La recepción de nuevos reembolsos ha cerrado por fin de beta. Nos vemos en la v1 el 15 de abril.');
-        }
 
         if ($user->isCxp() || $user->isTreasury() || $user->isAdminView()) {
             abort(403, 'Tu rol no tiene permisos para crear reembolsos.');
@@ -213,13 +199,7 @@ class ReimbursementController extends Controller
         $hasInvoice = $request->get('has_invoice', '1') == '1';
         Log::info("BULK_STORE_START: User=" . Auth::id() . " Mode=" . ($hasInvoice ? 'Invoice' : 'Manual'));
 
-        /** @var \App\Models\User $user */
         $user = Auth::user();
-
-        // Beta closed check
-        if (!$user->isAdmin()) {
-            return redirect()->route('panel')->with('error', 'La recepción de nuevos reembolsos ha cerrado por fin de beta.');
-        }
 
         if ($user->isCxp() || $user->isTreasury() || $user->isAdminView()) {
             abort(403, 'Tu rol no tiene permisos para registrar reembolsos.');
@@ -269,38 +249,30 @@ class ReimbursementController extends Controller
             }
         }
 
-        // Auto-approval logic based on creator's role
-        $initialStatus = 'pendiente';
+        // DYNAMIC WORKFLOW: Initialize at the first step
+        $firstStep = $costCenter->approvalSteps()->orderBy('order', 'asc')->first();
+        $initialStatus = $firstStep ? 'pendiente' : 'aprobado';
+        $currentStepId = $firstStep ? $firstStep->id : null;
+
+        // AUTO-APPROVAL: If creator is the approver, advance
         $autoNote = "";
         $approvalData = [];
-
-        if ($user->isExecutiveDirector()) {
-            $initialStatus = 'aprobado_ejecutivo';
-            $autoNote = "\n[AUTO-APROBACIÓN SISTEMA: Ingresado por Director Ejecutivo]";
-            $approvalData = [
-                'approved_by_director_id' => $user->id,
-                'approved_by_director_at' => now(),
-                'approved_by_control_id' => $user->id,
-                'approved_by_control_at' => now(),
-                'approved_by_executive_id' => $user->id,
-                'approved_by_executive_at' => now(),
-            ];
-        } elseif ($user->isControlObra()) {
-            $initialStatus = 'aprobado_control';
-            $autoNote = "\n[AUTO-APROBACIÓN SISTEMA: Ingresado por Control de Obra]";
-            $approvalData = [
-                'approved_by_director_id' => $user->id,
-                'approved_by_director_at' => now(),
-                'approved_by_control_id' => $user->id,
-                'approved_by_control_at' => now(),
-            ];
-        } elseif ($user->isDirector()) {
-            $initialStatus = 'aprobado_director';
-            $autoNote = "\n[AUTO-APROBACIÓN SISTEMA: Ingresado por Director]";
-            $approvalData = [
-                'approved_by_director_id' => $user->id,
-                'approved_by_director_at' => now(),
-            ];
+        
+        while ($firstStep && $firstStep->user_id === $user->id) {
+            $autoNote .= "\n[AUTO-APROBACIÓN: " . $firstStep->name . "]";
+            // Record approval info if needed (mapping legacy columns for now)
+            $this->mapApprovalData($firstStep->order, $user->id, $approvalData);
+            
+            $nextStep = $costCenter->approvalSteps()->where('order', '>', $firstStep->order)->orderBy('order', 'asc')->first();
+            if ($nextStep) {
+                $firstStep = $nextStep;
+                $currentStepId = $nextStep->id;
+            } else {
+                $firstStep = null;
+                $currentStepId = null;
+                $initialStatus = 'aprobado';
+                break;
+            }
         }
 
         $createdCount = 0;
@@ -371,6 +343,7 @@ class ReimbursementController extends Controller
                     'xml_path' => $xmlPath,
                     'pdf_path' => $pdfPath,
                     'status' => $initialStatus,
+                    'current_step_id' => $currentStepId,
                     'observaciones' => trim($finalObs),
                     'attendees_count' => $item['attendees_count'] ?? null,
                     'attendees_names' => $item['attendees_names'] ?? null,
@@ -576,11 +549,6 @@ class ReimbursementController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // Beta closed check
-        if (!$user->isAdmin()) {
-            return redirect()->route('panel')->with('error', 'La recepción de nuevos reembolsos ha cerrado por fin de beta.');
-        }
-
         if ($user->isCxp() || $user->isTreasury()) {
             abort(403, 'Tu rol no tiene permisos para registrar reembolsos.');
         }
@@ -640,38 +608,29 @@ class ReimbursementController extends Controller
             }
         }
 
-        // Auto-approval logic
-        $initialStatus = 'pendiente';
+        // DYNAMIC WORKFLOW: Initialize at the first step
+        $firstStep = $costCenter->approvalSteps()->orderBy('order', 'asc')->first();
+        $initialStatus = $firstStep ? 'pendiente' : 'aprobado';
+        $currentStepId = $firstStep ? $firstStep->id : null;
+
+        // AUTO-APPROVAL
         $autoNote = "";
         $approvalData = [];
-
-        if ($user->isExecutiveDirector()) {
-            $initialStatus = 'aprobado_ejecutivo';
-            $autoNote = "\n[AUTO-APROBACIÓN SISTEMA: Ingresado por Director Ejecutivo]";
-            $approvalData = [
-                'approved_by_director_id' => $user->id,
-                'approved_by_director_at' => now(),
-                'approved_by_control_id' => $user->id,
-                'approved_by_control_at' => now(),
-                'approved_by_executive_id' => $user->id,
-                'approved_by_executive_at' => now(),
-            ];
-        } elseif ($user->isControlObra()) {
-            $initialStatus = 'aprobado_control';
-            $autoNote = "\n[AUTO-APROBACIÓN SISTEMA: Ingresado por Control de Obra]";
-            $approvalData = [
-                'approved_by_director_id' => $user->id,
-                'approved_by_director_at' => now(),
-                'approved_by_control_id' => $user->id,
-                'approved_by_control_at' => now(),
-            ];
-        } elseif ($user->isDirector()) {
-            $initialStatus = 'aprobado_director';
-            $autoNote = "\n[AUTO-APROBACIÓN SISTEMA: Ingresado por Director]";
-            $approvalData = [
-                'approved_by_director_id' => $user->id,
-                'approved_by_director_at' => now(),
-            ];
+        
+        while ($firstStep && $firstStep->user_id === $user->id) {
+            $autoNote .= "\n[AUTO-APROBACIÓN: " . $firstStep->name . "]";
+            $this->mapApprovalData($firstStep->order, $user->id, $approvalData);
+            
+            $nextStep = $costCenter->approvalSteps()->where('order', '>', $firstStep->order)->orderBy('order', 'asc')->first();
+            if ($nextStep) {
+                $firstStep = $nextStep;
+                $currentStepId = $nextStep->id;
+            } else {
+                $firstStep = null;
+                $currentStepId = null;
+                $initialStatus = 'aprobado';
+                break;
+            }
         }
 
         $finalObs = ($request->observaciones ?? "") . $autoNote;
@@ -696,7 +655,8 @@ class ReimbursementController extends Controller
             'xml_path' => $xmlPath,
             'pdf_path' => $pdfPath,
             'status' => $initialStatus,
-            'observaciones' => trim($finalObs),
+            'current_step_id' => $currentStepId,
+            'observaciones' => ($request->observaciones ?? "") . $autoNote,
             'attendees_count' => $request->attendees_count,
             'attendees_names' => $request->attendees_names,
             'location' => $request->location,
@@ -959,61 +919,25 @@ class ReimbursementController extends Controller
                  $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
                  $data['status'] = $request->status;
                  
-            } elseif ($request->status === 'aprobado') {
-                // SEQUENTIAL APPROVAL LOGIC
-                
-                // 1. Director
-                if (($user->isDirector() || $user->isAdmin()) && $reimbursement->costCenter->director_id === $user->id && $reimbursement->status === 'pendiente') {
-                    $data['status'] = 'aprobado_director';
-                    $data['approved_by_director_id'] = $user->id;
-                    $data['approved_by_director_at'] = now();
-                } elseif ($user->isAdmin() && $reimbursement->status === 'pendiente') {
-                    $data['status'] = 'aprobado_director';
-                    $data['approved_by_director_id'] = $user->id;
-                    $data['approved_by_director_at'] = now();
-                }
-
-                // 2. Control de Obra
-                if (($user->isControlObra() || $user->isAdmin()) && $reimbursement->costCenter->control_obra_id === $user->id && $reimbursement->status === 'aprobado_director') {
-                    $data['status'] = 'aprobado_control';
-                    $data['approved_by_control_id'] = $user->id;
-                    $data['approved_by_control_at'] = now();
-                } elseif ($user->isAdmin() && $reimbursement->status === 'aprobado_director') {
-                    $data['status'] = 'aprobado_control';
-                    $data['approved_by_control_id'] = $user->id;
-                    $data['approved_by_control_at'] = now();
-                }
-
-                // 3. Director Ejecutivo
-                if (($user->isExecutiveDirector() || $user->isAdmin()) && $reimbursement->costCenter->director_ejecutivo_id === $user->id && $reimbursement->status === 'aprobado_control') {
-                    $data['status'] = 'aprobado_ejecutivo';
-                    $data['approved_by_executive_id'] = $user->id;
-                    $data['approved_by_executive_at'] = now();
-                } elseif ($user->isAdmin() && $reimbursement->status === 'aprobado_control') {
-                    $data['status'] = 'aprobado_ejecutivo';
-                    $data['approved_by_executive_id'] = $user->id;
-                    $data['approved_by_executive_at'] = now();
-                }
-
-                // 4. Subdirección (CXP)
-                if (($user->isCxp() || $user->isAdmin()) && $reimbursement->status === 'aprobado_ejecutivo') {
-                    $data['status'] = 'aprobado_cxp';
-                    $data['approved_by_cxp_id'] = $user->id;
-                    $data['approved_by_cxp_at'] = now();
-                }
-
-                // 5. Dirección (Dirección General)
-                if (($user->isDireccion() || $user->isAdmin()) && $reimbursement->status === 'aprobado_cxp') {
-                    $data['status'] = 'aprobado_direccion';
-                    $data['approved_by_direccion_id'] = $user->id;
-                    $data['approved_by_direccion_at'] = now();
-                }
-
-                // 6. Tesorería (Final)
-                if (($user->isTreasury() || $user->isAdmin()) && $reimbursement->status === 'aprobado_direccion') {
-                    $data['status'] = 'aprobado';
-                    $data['approved_by_treasury_id'] = $user->id;
-                    $data['approved_by_treasury_at'] = now();
+                // DYNAMIC APPROVAL LOGIC
+                $currentStep = $reimbursement->currentStep;
+                if (($currentStep && $user->id === $currentStep->user_id) || $user->isAdmin()) {
+                    // Record approval in legacy columns if possible (order 1-6)
+                    $this->mapApprovalData($currentStep->order ?? 1, $user->id, $data);
+                    
+                    // Find next step
+                    $nextStep = $reimbursement->costCenter->approvalSteps()
+                        ->where('order', '>', $currentStep->order ?? 0)
+                        ->orderBy('order', 'asc')
+                        ->first();
+                        
+                    if ($nextStep) {
+                        $data['current_step_id'] = $nextStep->id;
+                        $data['status'] = 'pendiente'; // Or something better, but status names are tied to steps in current views
+                    } else {
+                        $data['current_step_id'] = null;
+                        $data['status'] = 'aprobado';
+                    }
                 }
             }
         }
@@ -1620,6 +1544,26 @@ class ReimbursementController extends Controller
 
         } catch (\Exception $e) {
             return back()->with('error', 'Error durante la validación: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Maps approval step order to legacy columns for backward compatibility.
+     */
+    private function mapApprovalData($order, $userId, &$data)
+    {
+        $map = [
+            1 => ['approved_by_director_id', 'approved_by_director_at'],
+            2 => ['approved_by_control_id', 'approved_by_control_at'],
+            3 => ['approved_by_executive_id', 'approved_by_executive_at'],
+            4 => ['approved_by_cxp_id', 'approved_by_cxp_at'],
+            5 => ['approved_by_direccion_id', 'approved_by_direccion_at'],
+            6 => ['approved_by_treasury_id', 'approved_by_treasury_at'],
+        ];
+
+        if (isset($map[$order])) {
+            $data[$map[$order][0]] = $userId;
+            $data[$map[$order][1]] = now();
         }
     }
 }

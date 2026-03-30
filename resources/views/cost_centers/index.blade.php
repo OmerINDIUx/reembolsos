@@ -51,9 +51,7 @@
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cód/Nombre</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Aprobador N1 (Dir)</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Aprobador N2 (CO)</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Aprobador N3 (DE)</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Flujo de Aprobación</th>
                                     @if(Auth::user()->isAdmin() || Auth::user()->isAdminView())
                                     <th scope="col" class="relative px-6 py-3 text-right">Acciones</th>
                                     @endif
@@ -66,14 +64,23 @@
                                         <div class="font-bold text-gray-900 dark:text-gray-100">{{ $cc->code }}</div>
                                         <div class="text-xs text-gray-500">{{ $cc->name }}</div>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        {{ $cc->director->name ?? 'N/A' }}
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
+                                        {{ $cc->director->name ?? '---' }}
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        {{ $cc->controlObra->name ?? 'N/A' }}
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
+                                        {{ $cc->controlObra->name ?? '---' }}
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        {{ $cc->directorEjecutivo->name ?? 'N/A' }}
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
+                                        {{ $cc->directorEjecutivo->name ?? '---' }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center border-l border-gray-100 dark:border-gray-700">
+                                        {{ $cc->accountant->name ?? '---' }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
+                                        {{ $cc->direccion->name ?? '---' }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
+                                        {{ $cc->tesoreria->name ?? '---' }}
                                     </td>
                                      @if(Auth::user()->isAdmin() || Auth::user()->isAdminView())
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">

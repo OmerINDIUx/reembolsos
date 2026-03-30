@@ -76,37 +76,6 @@
             @if(session('warning'))
                 Toast.fire({ icon: 'warning', title: '{{ session('warning') }}' });
             @endif
-
-            // Global Beta Notice (Triggered from Dashboard/Login)
-            document.addEventListener('DOMContentLoaded', function() {
-                @if(session('show_beta_modal') || (request()->routeIs('panel') && !session()->has('beta_notice_displayed_once_this_load')))
-                    Swal.fire({
-                        title: '<div class="flex flex-col items-center"><div class="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mb-4 text-3xl">🚀</div><span class="text-xl font-black uppercase tracking-tighter text-gray-900 dark:text-white text-center">¡Gracias por ser parte de la Beta!</span></div>',
-                        html: `
-                            <div class="text-center">
-                                <p class="text-sm font-bold text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
-                                    Queremos informarte que el periodo de pruebas ha concluido con éxito. 
-                                    <br><br>
-                                    <span class="text-indigo-600 dark:text-indigo-400 font-black">IMPORTANTE:</span> Por el momento <span class="underline decoration-indigo-500 decoration-2 underline-offset-4">no se podrán subir nuevos reembolsos</span>. El sistema permanecerá activo únicamente para aprobar o rechazar los registros existentes.
-                                </p>
-                                <div class="bg-indigo-50 dark:bg-indigo-900/40 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-800 mb-2">
-                                    <p class="text-indigo-900 dark:text-indigo-100 font-black text-lg uppercase tracking-widest">Nos vemos en la V1</p>
-                                    <p class="text-indigo-600 dark:text-indigo-400 font-black text-2xl">15 de Abril</p>
-                                </div>
-                            </div>
-                        `,
-                        confirmButtonText: 'ENTENDIDO',
-                        confirmButtonColor: '#4f46e5',
-                        padding: '2.5rem',
-                        background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
-                        customClass: {
-                            popup: 'rounded-[2.5rem] shadow-2xl border-none',
-                            confirmButton: 'rounded-xl px-12 py-4 font-black text-xs uppercase tracking-[0.2em] shadow-lg hover:shadow-indigo-500/30 transition-all'
-                        }
-                    });
-                    @php session()->flash('beta_notice_displayed_once_this_load', true); @endphp
-                @endif
-            });
         </script>
     </body>
 </html>

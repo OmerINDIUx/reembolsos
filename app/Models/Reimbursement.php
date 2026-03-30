@@ -28,6 +28,7 @@ class Reimbursement extends Model
         'xml_path',
         'pdf_path',
         'status',
+        'current_step_id',
         'observaciones',
         'attendees_count',
         'attendees_names',

@@ -15,6 +15,9 @@ class CostCenter extends Model
         'director_id',
         'control_obra_id',
         'director_ejecutivo_id',
+        'accountant_id',
+        'direccion_id',
+        'tesoreria_id',
         'description',
     ];
 
@@ -31,6 +34,26 @@ class CostCenter extends Model
     public function directorEjecutivo()
     {
         return $this->belongsTo(User::class, 'director_ejecutivo_id');
+    }
+
+    public function accountant()
+    {
+        return $this->belongsTo(User::class, 'accountant_id');
+    }
+
+    public function direccion()
+    {
+        return $this->belongsTo(User::class, 'direccion_id');
+    }
+
+    public function tesoreria()
+    {
+        return $this->belongsTo(User::class, 'tesoreria_id');
+    }
+
+    public function approvalSteps()
+    {
+        return $this->hasMany(ApprovalStep::class)->orderBy('order');
     }
 
     public function reimbursements()
