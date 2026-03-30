@@ -53,16 +53,14 @@
                             </div>
                         </div>
 
-                        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-4 rounded-xl shadow-sm overflow-hidden relative group">
+                        <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 p-4 rounded-xl shadow-sm overflow-hidden relative group">
                              <div class="absolute -right-4 -top-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <svg class="w-24 h-24 text-blue-600" fill="currentColor" viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                                <svg class="w-24 h-24 text-indigo-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
                              </div>
-                            <h4 class="text-xs uppercase tracking-wider text-blue-600 dark:text-blue-400 font-bold mb-1">CC con Mayor Actividad</h4>
+                            <h4 class="text-xs uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-bold mb-1">Presupuesto Total Mensual</h4>
                             <div class="flex items-baseline space-x-2">
-                                <span class="text-lg font-bold text-gray-900 dark:text-white truncate max-w-[150px]">
-                                    {{ $globalStats['top_cost_centers'][0]->code ?? 'N/A' }}
-                                </span>
-                                <span class="text-xs text-gray-500">{{ $globalStats['top_cost_centers'][0]->total_count ?? 0 }} refs</span>
+                                <span class="text-2xl font-bold text-gray-900 dark:text-white">${{ number_format($globalStats['total_budget'], 2) }}</span>
+                                <span class="text-xs text-gray-500">MXN</span>
                             </div>
                         </div>
                     </div>
@@ -101,7 +99,7 @@
                                 <tr>
                                     <th scope="col" class="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Centro de Costos (Click p/ Dashboard)</th>
                                     <th scope="col" class="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estatus Actual</th>
-                                    <th scope="col" class="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Montos</th>
+                                    <th scope="col" class="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Monto Ejecutado vs Presupuesto</th>
                                     <th scope="col" class="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Progreso / Análisis</th>
                                     <th scope="col" class="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Flujo de Aprobación</th>
                                     @if(Auth::user()->isAdmin() || Auth::user()->isAdminView())
@@ -133,10 +131,45 @@
                                             </span>
                                         </div>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
-                                        <div class="flex flex-col">
-                                            <div class="text-amber-600 dark:text-amber-400 font-bold">${{ number_format($cc->pending_total ?? 0, 2) }}</div>
-                                            <div class="text-[10px] text-gray-400">Por pagar: ${{ number_format($cc->approved_total ?? 0, 2) }}</div>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-left">
+                                        <div class="flex flex-col space-y-3">
+                                            @php 
+                                            $paidPercentage = $cc->budget > 0 ? (($cc->approved_total ?? 0) / $cc->budget) * 100 : 0;
+                                            $pendingPercentage = $cc->budget > 0 ? (($cc->pending_total ?? 0) / $cc->budget) * 100 : 0;
+                                            $totalSpent = ($cc->approved_total ?? 0) + ($cc->pending_total ?? 0);
+                                            $totalPercentage = $cc->budget > 0 ? ($totalSpent / $cc->budget) * 100 : 0;
+                                            @endphp
+
+                                            <!-- Bar 1: Paid -->
+                                            <div>
+                                                <div class="flex justify-between items-center mb-1">
+                                                    <span class="text-[9px] font-black uppercase text-emerald-600 dark:text-emerald-400">Pagado: ${{ number_format($cc->approved_total ?? 0, 2) }}</span>
+                                                    <span class="text-[9px] font-bold text-gray-400">{{ number_format($paidPercentage, 1) }}%</span>
+                                                </div>
+                                                <div class="w-full bg-gray-100 dark:bg-gray-700 h-1.5 rounded-full overflow-hidden">
+                                                    <div class="h-full bg-emerald-500 transition-all duration-500" style="width: {{ min(100, $paidPercentage) }}%"></div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Bar 2: Pending -->
+                                            <div>
+                                                <div class="flex justify-between items-center mb-1">
+                                                    <span class="text-[9px] font-black uppercase text-amber-600 dark:text-amber-400">En Proceso: ${{ number_format($cc->pending_total ?? 0, 2) }}</span>
+                                                    <span class="text-[9px] font-bold text-gray-400">{{ number_format($pendingPercentage, 1) }}%</span>
+                                                </div>
+                                                <div class="w-full bg-gray-100 dark:bg-gray-700 h-1.5 rounded-full overflow-hidden">
+                                                    <div class="h-full bg-amber-500 transition-all duration-500" style="width: {{ min(100, $pendingPercentage) }}%"></div>
+                                                </div>
+                                            </div>
+
+                                            <div class="pt-1 border-t border-gray-100 dark:border-gray-700/50 flex justify-between items-center">
+                                                <span class="text-[10px] font-black uppercase {{ $totalPercentage > 100 ? 'text-red-500' : 'text-gray-500' }}">
+                                                    Total: ${{ number_format($totalSpent, 2) }} / ${{ number_format($cc->budget, 2) }}
+                                                </span>
+                                                <span class="text-[10px] font-black {{ $totalPercentage > 100 ? 'text-red-600' : 'text-indigo-600' }}">
+                                                    {{ number_format($totalPercentage, 1) }}% Gasto
+                                                </span>
+                                            </div>
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-xs text-center">

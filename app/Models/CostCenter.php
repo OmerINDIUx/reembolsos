@@ -19,6 +19,7 @@ class CostCenter extends Model
         'direccion_id',
         'tesoreria_id',
         'description',
+        'budget',
     ];
 
     public function director()

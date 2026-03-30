@@ -84,6 +84,7 @@ class CostCenterController extends Controller
             'total_pending_count' => \App\Models\Reimbursement::whereNotIn('status', ['aprobado', 'rechazado'])->count(),
             'total_pending_amount' => \App\Models\Reimbursement::whereNotIn('status', ['aprobado', 'rechazado'])->sum('total'),
             'total_approved_amount' => \App\Models\Reimbursement::where('status', 'aprobado')->sum('total'),
+            'total_budget' => CostCenter::sum('budget'),
             'top_cost_centers' => CostCenter::withCount(['reimbursements as total_count'])
                 ->orderBy('total_count', 'desc')
                 ->limit(5)
@@ -191,6 +192,7 @@ class CostCenterController extends Controller
 
         $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:cost_centers,name'],
+            'budget' => ['required', 'numeric', 'min:0'],
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.user_id' => ['required', 'exists:users,id'],
             'steps.*.name' => ['required', 'string', 'max:255'],
@@ -200,6 +202,7 @@ class CostCenterController extends Controller
             'name' => $request->name,
             'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
             'description' => $request->description,
+            'budget' => $request->budget,
         ]);
 
         foreach ($request->steps as $index => $step) {
@@ -238,6 +241,7 @@ class CostCenterController extends Controller
 
         $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('cost_centers')->ignore($costCenter->id)],
+            'budget' => ['required', 'numeric', 'min:0'],
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.user_id' => ['required', 'exists:users,id'],
             'steps.*.name' => ['required', 'string', 'max:255'],
@@ -247,6 +251,7 @@ class CostCenterController extends Controller
             'name' => $request->name,
             'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
             'description' => $request->description,
+            'budget' => $request->budget,
         ]);
 
         // Rebuild steps
