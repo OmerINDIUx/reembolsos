@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use SimpleXMLElement;
 use Smalot\PdfParser\Parser;
+use Illuminate\Support\Facades\DB;
 
 use Illuminate\Support\Str;
 
@@ -24,6 +25,7 @@ class ReimbursementController extends Controller
      */
     public function index(Request $request)
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector();
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
@@ -134,13 +136,73 @@ class ReimbursementController extends Controller
             $query->reorder('created_at', 'desc');
         }
 
+        if ($tab === 'management' || $tab === 'weekly_summary') {
+            // Get ALL current items for these tabs to allow proper grouping in UI
+            $reimbursements = $query->get();
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch'));
+        }
+
         $reimbursements = $query->paginate(10)->appends($request->all());
         return view('reimbursements.index', compact('reimbursements', 'globalSearch'));
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Display the Auditoría de Reembolsos as a standalone page.
      */
+    public function audit(Request $request)
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector();
+
+        if (!$canManage) {
+            abort(403, 'No tienes permiso para ver la auditoría.');
+        }
+
+        // Load all management reimbursements (same logic as index tab=management)
+        $query = Reimbursement::with(['user', 'costCenter'])->orderBy('created_at', 'desc');
+
+        if ($user->isAdmin() || $user->isAdminView()) {
+            $query->whereNotIn('status', ['aprobado', 'rechazado']);
+        } else {
+            $query->whereHas('currentStep', function($q) use ($user) {
+                $q->where('user_id', $user->id);
+            });
+        }
+
+        $allReimbursements = $query->get();
+
+        // Filter parameters from the request
+        $selectedWeek    = $request->input('week');
+        $selectedCcName  = $request->input('cc');
+        $selectedType    = $request->input('type');
+
+        // Build grouped data
+        $groupedByWeek = $allReimbursements->groupBy('week');
+
+        // If all three params exist, resolve the specific items
+        $auditItems = null;
+        $auditMeta  = null;
+
+        if ($selectedWeek && $selectedCcName && $selectedType) {
+            $weekItems = $groupedByWeek->get($selectedWeek, collect());
+            $ccItems   = $weekItems->filter(fn($r) => ($r->costCenter->name ?? 'Sin Centro de Costos') === $selectedCcName);
+            $typeItems = $ccItems->where('type', $selectedType);
+
+            $auditItems = $typeItems->sortByDesc('fecha');
+            $auditMeta  = [
+                'week'    => $selectedWeek,
+                'cc_name' => $selectedCcName,
+                'type'    => $selectedType,
+                'total'   => $typeItems->sum('total'),
+                'count'   => $typeItems->count(),
+            ];
+        }
+
+        return view('reimbursements.audit', compact('groupedByWeek', 'auditItems', 'auditMeta', 'selectedWeek', 'selectedCcName', 'selectedType'));
+    }
+
+
     public function create(Request $request)
     {
         /** @var \App\Models\User $user */
@@ -151,8 +213,8 @@ class ReimbursementController extends Controller
             abort(403, 'Tu rol no tiene permisos para crear reembolsos.');
         }
 
-        $type = $request->get('type');
-        $hasInvoice = $request->get('has_invoice', '1') !== '0';
+        $type = $request->input('type');
+        $hasInvoice = $request->input('has_invoice', '1') !== '0';
         $allowedTypes = ['reembolso', 'fondo_fijo', 'comida', 'viaje'];
 
         if (!$type || !in_array($type, $allowedTypes)) {
@@ -196,9 +258,10 @@ class ReimbursementController extends Controller
      */
     public function bulkStore(Request $request)
     {
-        $hasInvoice = $request->get('has_invoice', '1') == '1';
+        $hasInvoice = $request->input('has_invoice', '1') == '1';
         Log::info("BULK_STORE_START: User=" . Auth::id() . " Mode=" . ($hasInvoice ? 'Invoice' : 'Manual'));
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         if ($user->isCxp() || $user->isTreasury() || $user->isAdminView()) {

@@ -5,6 +5,14 @@
         </h2>
     </x-slot>
 
+    <style>
+        [x-cloak] { display: none !important; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
@@ -198,208 +206,275 @@
                         </form>
                     </div>
 
-                    <div id="results-container">
-                        <div class="overflow-x-auto relative shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead class="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="folio">
-                                            Folio / UUID
-                                            <span class="ml-1">
-                                                @if(request('sort_by') == 'folio')
-                                                    @if(request('sort_order', 'desc') == 'asc')
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                                                    @else
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                    @endif
-                                                @else
-                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
-                                                @endif
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="fecha">
-                                            Fecha
-                                            <span class="ml-1">
-                                                @if(request('sort_by') == 'fecha')
-                                                    @if(request('sort_order', 'desc') == 'asc')
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                                                    @else
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                    @endif
-                                                @else
-                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
-                                                @endif
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="nombre_emisor">
-                                            Emisor
-                                            <span class="ml-1">
-                                                @if(request('sort_by') == 'nombre_emisor')
-                                                    @if(request('sort_order', 'desc') == 'asc')
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                                                    @else
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                    @endif
-                                                @else
-                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
-                                                @endif
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="total">
-                                            Total
-                                            <span class="ml-1">
-                                                @if(request('sort_by') == 'total')
-                                                    @if(request('sort_order', 'desc') == 'asc')
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                                                    @else
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                    @endif
-                                                @else
-                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
-                                                @endif
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        Solicitante / Centro de Costos
-                                    </th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="status">
-                                            Estatus / Ubicación
-                                            <span class="ml-1">
-                                                @if(request('sort_by') == 'status')
-                                                    @if(request('sort_order', 'desc') == 'asc')
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                                                    @else
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                    @endif
-                                                @else
-                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
-                                                @endif
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" class="relative px-6 py-3">
-                                        <span class="sr-only">Acciones</span>
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                @foreach ($reimbursements as $r)
-                                <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                        <div class="flex flex-col">
-                            <span>{{ $r->folio ? $r->folio : substr($r->uuid, 0, 8).'...' }}</span>
-                            <span class="text-xs text-gray-500 font-normal">
-                                {{ ucfirst(str_replace('_', ' ', $r->type ?? 'Reembolso')) }}
-                            </span>
-                        </div>
-                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        {{ $r->fecha ? \Carbon\Carbon::parse($r->fecha)->format('d/m/Y') : '-' }}
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        {{ \Illuminate\Support\Str::limit($r->nombre_emisor, 20) }}
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        ${{ number_format($r->total, 2) }} {{ $r->moneda }}
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        <div class="flex flex-col">
-                                            <span class="font-bold">{{ $r->user->name ?? 'N/A' }}</span>
-                                            <span class="text-xs">{{ $r->costCenter->name ?? 'Sin C.C.' }}</span>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        <div class="flex flex-col space-y-1">
-                                            <span class="px-2 w-fit inline-flex text-xs leading-5 font-semibold rounded-full 
-                                                {{ $r->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
-                                                {{ $r->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
-                                                {{ $r->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
-                                                {{ $r->status === 'aprobado_director' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
-                                                {{ $r->status === 'aprobado_control' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : '' }}
-                                                {{ $r->status === 'aprobado_ejecutivo' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
-                                                {{ $r->status === 'aprobado_cxp' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300' : '' }}
-                                                {{ $r->status === 'aprobado_direccion' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
-                                                {{ $r->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
-                                            ">
-                                                @if($r->status === 'aprobado') Pagado 
-                                                @elseif($r->status === 'aprobado_cxp') Aprobado Subdirección
-                                                @elseif($r->status === 'aprobado_direccion') Aprobado Dirección
-                                                @else {{ ucfirst(str_replace('_', ' ', $r->status)) }} @endif
-                                            </span>
-                                            <span class="text-[10px] text-gray-400 font-medium italic">
-                                                @if($r->status === 'pendiente') 
-                                                    En: {{ $r->costCenter->director->name ?? 'Director' }} (N1)
-                                                @elseif($r->status === 'aprobado_director') 
-                                                    En: {{ $r->costCenter->controlObra->name ?? 'Control de Obra' }} (N2)
-                                                @elseif($r->status === 'aprobado_control') 
-                                                    En: {{ $r->costCenter->directorEjecutivo->name ?? 'Dir. Ejecutivo' }} (N3)
-                                                @elseif($r->status === 'aprobado_ejecutivo') 
-                                                    En: Subdirección
-                                                @elseif($r->status === 'aprobado_cxp') 
-                                                    En: Dirección
-                                                @elseif($r->status === 'aprobado_direccion') 
-                                                    En: Cuentas por Pagar
-                                                @elseif($r->status === 'aprobado') Finalizado
-                                                @else Rechazado/Corregir
-                                                @endif
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                        @php
-                                            $user = Auth::user();
-                                            $isOwnerOrDesignatedApprover = $r->user_id === $user->id || 
-                                                ($user->isAdmin() || $user->isCxp() || $user->isDireccion() || $user->isTreasury() || $user->isAdminView()) ||
-                                                ($user->isDirector() && $r->costCenter->director_id === $user->id) ||
-                                                ($user->isControlObra() && $r->costCenter->control_obra_id === $user->id) ||
-                                                ($user->isExecutiveDirector() && $r->costCenter->director_ejecutivo_id === $user->id);
-                                        @endphp
+                    @php
+                        $tab = request('tab', $defaultTab);
+                        $isGroupedView = ($tab === 'management' || $tab === 'weekly_summary');
+                    @endphp
 
-                                        @if($isOwnerOrDesignatedApprover)
-                                            <a href="{{ route('reimbursements.show', $r->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Ver</a>
-                                            
+                    <div id="results-container">
+                        @if($isGroupedView)
+                            @php
+                                $groupedByWeek = $reimbursements->groupBy('week');
+                            @endphp
+
+                            <div>
+                            <div class="space-y-6">
+                                @forelse($groupedByWeek as $week => $weekItems)
+                                    <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                                        {{-- Header Semana --}}
+                                        <div class="bg-indigo-50/50 dark:bg-indigo-900/20 px-8 py-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                                            <div class="flex items-center space-x-4">
+                                                <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-none">
+                                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                                </div>
+                                                <div>
+                                                    <h3 class="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest italic">Semana Fiscal</h3>
+                                                    <p class="text-xl font-black text-gray-900 dark:text-white leading-none mt-1">{{ $week }}</p>
+                                                </div>
+                                            </div>
+                                            <div class="text-right">
+                                                <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Semana</h3>
+                                                <p class="text-2xl font-black text-indigo-700 dark:text-indigo-400 leading-none mt-1">${{ number_format($weekItems->sum('total'), 2) }}</p>
+                                            </div>
+                                        </div>
+
+                                        {{-- Lista de Centros de Costos --}}
+                                        <div class="p-4 space-y-2">
                                             @php
-                                                $canApproveCurr = ($user->isDirector() && $r->status === 'pendiente' && $r->costCenter->director_id === $user->id) ||
-                                                                 ($user->isControlObra() && $r->status === 'aprobado_director' && $r->costCenter->control_obra_id === $user->id) ||
-                                                                 ($user->isExecutiveDirector() && $r->status === 'aprobado_control' && $r->costCenter->director_ejecutivo_id === $user->id) ||
-                                                                 ($user->isCxp() && $r->status === 'aprobado_ejecutivo') ||
-                                                                 ($user->isDireccion() && $r->status === 'aprobado_cxp') ||
-                                                                 (($user->isTreasury() || $user->isAdmin()) && $r->status === 'aprobado_direccion');
+                                                $groupedByCC = $weekItems->groupBy(function($item) {
+                                                    return $item->costCenter->name ?? 'Sin Centro de Costos';
+                                                });
+                                            @endphp
+                                            @foreach($groupedByCC as $ccName => $ccItems)
+                                                <a href="{{ route('reimbursements.audit', ['week' => $week, 'cc' => $ccName]) }}" 
+                                                   class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/30 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-md transition-all group no-underline">
+                                                    <div class="flex items-center space-x-4">
+                                                        <div class="w-2 h-2 bg-indigo-400 rounded-full group-hover:scale-125 transition-transform"></div>
+                                                        <span class="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{{ $ccName }}</span>
+                                                    </div>
+                                                    <div class="flex items-center space-x-6">
+                                                        <span class="text-sm font-black text-gray-900 dark:text-white">${{ number_format($ccItems->sum('total'), 2) }}</span>
+                                                        <div class="p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 group-hover:bg-indigo-600 transition-colors">
+                                                            <svg class="w-4 h-4 text-gray-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                                        </div>
+                                                    </div>
+                                                </a>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @empty
+                                    <div class="p-20 text-center bg-gray-50 dark:bg-gray-800 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                                        <p class="text-gray-400 font-black uppercase tracking-widest text-sm">Sin datos para procesar en el flujo seleccionado</p>
+                                    </div>
+                                @endforelse
+                            </div>
+
+                            </div>
+
+                        @else
+                            <div class="overflow-x-auto relative shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead class="bg-gray-50 dark:bg-gray-700">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="folio">
+                                                Folio / UUID
+                                                <span class="ml-1">
+                                                    @if(request('sort_by') == 'folio')
+                                                        @if(request('sort_order', 'desc') == 'asc')
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                        @else
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                        @endif
+                                                    @else
+                                                        <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                    @endif
+                                                </span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="fecha">
+                                                Fecha
+                                                <span class="ml-1">
+                                                    @if(request('sort_by') == 'fecha')
+                                                        @if(request('sort_order', 'desc') == 'asc')
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                        @else
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                        @endif
+                                                    @else
+                                                        <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                    @endif
+                                                </span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="nombre_emisor">
+                                                Emisor
+                                                <span class="ml-1">
+                                                    @if(request('sort_by') == 'nombre_emisor')
+                                                        @if(request('sort_order', 'desc') == 'asc')
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                        @else
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                        @endif
+                                                    @else
+                                                        <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                    @endif
+                                                </span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="total">
+                                                Total
+                                                <span class="ml-1">
+                                                    @if(request('sort_by') == 'total')
+                                                        @if(request('sort_order', 'desc') == 'asc')
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                        @else
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                        @endif
+                                                    @else
+                                                        <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                    @endif
+                                                </span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Solicitante / Centro de Costos
+                                        </th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="status">
+                                                Estatus / Ubicación
+                                                <span class="ml-1">
+                                                    @if(request('sort_by') == 'status')
+                                                        @if(request('sort_order', 'desc') == 'asc')
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                        @else
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                        @endif
+                                                    @else
+                                                        <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                    @endif
+                                                </span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" class="relative px-6 py-3">
+                                            <span class="sr-only">Acciones</span>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                    @foreach ($reimbursements as $r)
+                                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                            <div class="flex flex-col">
+                                <span>{{ $r->folio ? $r->folio : substr($r->uuid, 0, 8).'...' }}</span>
+                                <span class="text-xs text-gray-500 font-normal">
+                                    {{ ucfirst(str_replace('_', ' ', $r->type ?? 'Reembolso')) }}
+                                </span>
+                            </div>
+                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            {{ $r->fecha ? \Carbon\Carbon::parse($r->fecha)->format('d/m/Y') : '-' }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            {{ \Illuminate\Support\Str::limit($r->nombre_emisor, 20) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            ${{ number_format($r->total, 2) }} {{ $r->moneda }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            <div class="flex flex-col">
+                                                <span class="font-bold">{{ $r->user->name ?? 'N/A' }}</span>
+                                                <span class="text-xs">{{ $r->costCenter->name ?? 'Sin C.C.' }}</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            <div class="flex flex-col space-y-1">
+                                                <span class="px-2 w-fit inline-flex text-xs leading-5 font-semibold rounded-full 
+                                                    {{ $r->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
+                                                    {{ $r->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
+                                                    {{ $r->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
+                                                    {{ $r->status === 'aprobado_director' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
+                                                    {{ $r->status === 'aprobado_control' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : '' }}
+                                                    {{ $r->status === 'aprobado_ejecutivo' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
+                                                    {{ $r->status === 'aprobado_cxp' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300' : '' }}
+                                                    {{ $r->status === 'aprobado_direccion' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
+                                                    {{ $r->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
+                                                ">
+                                                    @if($r->status === 'aprobado') Pagado 
+                                                    @elseif($r->status === 'aprobado_cxp') Aprobado Subdirección
+                                                    @elseif($r->status === 'aprobado_direccion') Aprobado Dirección
+                                                    @else {{ ucfirst(str_replace('_', ' ', $r->status)) }} @endif
+                                                </span>
+                                                <span class="text-[10px] text-gray-400 font-medium italic">
+                                                    @if($r->status === 'pendiente') 
+                                                        En: {{ $r->costCenter->director->name ?? 'Director' }} (N1)
+                                                    @elseif($r->status === 'aprobado_director') 
+                                                        En: {{ $r->costCenter->controlObra->name ?? 'Control de Obra' }} (N2)
+                                                    @elseif($r->status === 'aprobado_control') 
+                                                        En: {{ $r->costCenter->directorEjecutivo->name ?? 'Dir. Ejecutivo' }} (N3)
+                                                    @elseif($r->status === 'aprobado_ejecutivo') 
+                                                        En: Subdirección
+                                                    @elseif($r->status === 'aprobado_cxp') 
+                                                        En: Dirección
+                                                    @elseif($r->status === 'aprobado_direccion') 
+                                                        En: Cuentas por Pagar
+                                                    @elseif($r->status === 'aprobado') Finalizado
+                                                    @else Rechazado/Corregir
+                                                    @endif
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                            @php
+                                                $user = Auth::user();
+                                                $isOwnerOrDesignatedApprover = $r->user_id === $user->id || 
+                                                    ($user->isAdmin() || $user->isCxp() || $user->isDireccion() || $user->isTreasury() || $user->isAdminView()) ||
+                                                    ($user->isDirector() && $r->costCenter->director_id === $user->id) ||
+                                                    ($user->isControlObra() && $r->costCenter->control_obra_id === $user->id) ||
+                                                    ($user->isExecutiveDirector() && $r->costCenter->director_ejecutivo_id === $user->id);
                                             @endphp
 
-                                            @if($canApproveCurr)
-                                                <form action="{{ route('reimbursements.update', $r->id) }}" method="POST" class="inline">
-                                                    @csrf
-                                                    @method('PUT')
-                                                    <input type="hidden" name="status" value="aprobado">
-                                                    <button type="submit" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-600 ml-2">Aprobar</button>
-                                                </form>
-                                                <button type="button" x-data @click="$dispatch('open-rejection-modal', { url: '{{ route('reimbursements.update', $r->id) }}' })" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Rechazar</button>
+                                            @if($isOwnerOrDesignatedApprover)
+                                                <a href="{{ route('reimbursements.show', $r->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Ver</a>
+                                                
+                                                @php
+                                                    $canApproveCurr = ($user->isDirector() && $r->status === 'pendiente' && $r->costCenter->director_id === $user->id) ||
+                                                                     ($user->isControlObra() && $r->status === 'aprobado_director' && $r->costCenter->control_obra_id === $user->id) ||
+                                                                     ($user->isExecutiveDirector() && $r->status === 'aprobado_control' && $r->costCenter->director_ejecutivo_id === $user->id) ||
+                                                                     ($user->isCxp() && $r->status === 'aprobado_ejecutivo') ||
+                                                                     ($user->isDireccion() && $r->status === 'aprobado_cxp') ||
+                                                                     (($user->isTreasury() || $user->isAdmin()) && $r->status === 'aprobado_direccion');
+                                                @endphp
+
+                                                @if($canApproveCurr)
+                                                    <form action="{{ route('reimbursements.update', $r->id) }}" method="POST" class="inline">
+                                                        @csrf
+                                                        @method('PUT')
+                                                        <input type="hidden" name="status" value="aprobado">
+                                                        <button type="submit" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-600 ml-2">Aprobar</button>
+                                                    </form>
+                                                    <button type="button" x-data @click="$dispatch('open-rejection-modal', { url: '{{ route('reimbursements.update', $r->id) }}' })" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Rechazar</button>
+                                                @endif
+                                            @else
+                                                <span class="text-gray-400 italic text-xs">Consulta (Sin Permiso)</span>
                                             @endif
-                                        @else
-                                            <span class="text-gray-400 italic text-xs">Consulta (Sin Permiso)</span>
-                                        @endif
-                                    </td>
-                                </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                        @if(!isset($weeklySummary))
+                        <div class="mt-8 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 sm:rounded-b-lg">
+                            {{ $reimbursements->links() }}
+                        </div>
+                        @endif
+                        @endif
                     </div>
-                    <div class="mt-8 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 sm:rounded-b-lg">
-                        {{ $reimbursements->links() }}
-                    </div>
-                    
-                    </div> <!-- End of results-container -->
-                </div>
+                 </div>
             </div>
         </div>
     </div>
