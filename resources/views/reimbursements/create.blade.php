@@ -60,7 +60,7 @@
             @endif
 
             <!-- Global Form -->
-            <form :action="type === 'viaje' ? '{{ route('reimbursements.store') }}' : '{{ route('reimbursements.bulk_store') }}'" method="POST" enctype="multipart/form-data" x-on:submit="handleSubmit" novalidate>
+            <form id="reimbursement-form" :action="type === 'viaje' ? '{{ route('reimbursements.store') }}' : '{{ route('reimbursements.bulk_store') }}'" method="POST" enctype="multipart/form-data" x-on:submit="handleSubmit" novalidate>
                 @csrf
                 <input type="hidden" name="type" value="{{ $type }}">
                 <input type="hidden" name="week" value="{{ $currentWeek }}">
@@ -80,7 +80,7 @@
                         </div>
 
                         <!-- Charge Type Toggle -->
-                        <div class="flex p-1 bg-gray-100 dark:bg-gray-900 rounded-2xl mb-8 max-w-md">
+                        <div x-show="type === 'viaje'" class="flex p-1 bg-gray-100 dark:bg-gray-900 rounded-2xl mb-8 max-w-md">
                             <button type="button" 
                                 @click="chargeType = 'cost_center'" 
                                 :class="chargeType === 'cost_center' ? 'bg-white dark:bg-gray-800 shadow-md text-indigo-600' : 'text-gray-500 hover:text-gray-700'"
@@ -97,9 +97,9 @@
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <!-- Cost Center Select -->
-                            <div x-show="chargeType === 'cost_center'" class="animate-slideDown">
+                            <div x-show="type !== 'viaje' || chargeType === 'cost_center'" class="animate-slideDown">
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Centro de Costos *</label>
-                                <select name="cost_center_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" :required="chargeType === 'cost_center'">
+                                <select name="cost_center_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" :required="type !== 'viaje' || chargeType === 'cost_center'">
                                     <option value="">Selecciona el Centro de Costos...</option>
                                     @foreach($costCenters as $center)
                                         <option value="{{ $center->id }}">{{ $center->name }}</option>
@@ -108,9 +108,9 @@
                             </div>
 
                             <!-- Travel/Event Select -->
-                            <div x-show="chargeType === 'travel_event'" class="animate-slideDown">
+                            <div x-show="type === 'viaje' && chargeType === 'travel_event'" class="animate-slideDown">
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Viaje o Evento *</label>
-                                <select name="travel_event_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" :required="chargeType === 'travel_event'">
+                                <select name="travel_event_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" :required="type === 'viaje' && chargeType === 'travel_event'">
                                     <option value="">Selecciona el Viaje o Evento...</option>
                                     @foreach($travelEvents as $event)
                                         <option value="{{ $event->id }}">{{ $event->name }} ({{ $event->code }})</option>
@@ -153,21 +153,77 @@
                                             <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3">Archivos Fuente</h4>
                                             
                                             <div>
-                                                <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Archivo XML (CFDI) *</label>
-                                                <input type="file" :name="'items['+index+'][xml_file]'" accept=".xml" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :required="hasInvoice" x-on:change="handleXmlChange($event, index)">
+                                                <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3 flex items-center justify-between">
+                                                    <span>Archivo XML (CFDI) *</span>
+                                                    <span class="text-[9px] font-black text-gray-400 uppercase italic">Máx 10MB</span>
+                                                </label>
+                                                <input type="file" :name="'items['+index+'][xml_file]'" accept=".xml" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :required="hasInvoice && !item.fileName" x-on:change="handleXmlChange($event, index)">
+                                                <template x-if="item.fileName">
+                                                    <div class="mt-1 flex items-center justify-between">
+                                                        <div class="flex items-center text-[10px] text-green-600 font-bold uppercase italic">
+                                                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>
+                                                            <span x-text="item.fileName"></span>
+                                                        </div>
+                                                        <template x-if="item.draftId">
+                                                            <a :href="'/reimbursements/' + item.draftId + '/view-file/xml'" target="_blank" class="text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest flex items-center bg-indigo-50 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100">
+                                                                VER
+                                                                <svg class="w-2 h-2 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                                            </a>
+                                                        </template>
+                                                    </div>
+                                                </template>
                                             </div>
 
                                              <template x-if="hasInvoice">
                                                 <div :class="item.xmlParsed ? 'opacity-100' : 'opacity-40 pointer-events-none transition-opacity'">
                                                     <div class="flex items-center justify-between mb-3">
-                                                        <label class="block text-sm font-bold text-gray-700 dark:text-gray-300">Archivo PDF</label>
+                                                        <div class="flex flex-col">
+                                                            <label class="block text-sm font-bold text-gray-700 dark:text-gray-300">Archivo PDF</label>
+                                                            <span class="text-[9px] font-black text-gray-400 uppercase italic leading-none mt-1">Máx 10MB</span>
+                                                        </div>
                                                         <label class="flex items-center cursor-pointer">
                                                             <input type="checkbox" :name="'items['+index+'][no_pdf]'" class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" x-on:change="item.noPdf = $event.target.checked">
                                                             <span class="ml-2 text-[10px] font-bold text-gray-500 uppercase">Sin PDF</span>
                                                         </label>
                                                     </div>
-                                                    <input type="file" :name="'items['+index+'][pdf_file]'" accept=".pdf" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :disabled="item.noPdf" :required="!item.noPdf && item.xmlParsed && hasInvoice" x-on:change="handlePdfChange($event, index)">
+                                                    <input type="file" :name="'items['+index+'][pdf_file]'" accept=".pdf" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :disabled="item.noPdf" :required="!item.noPdf && item.xmlParsed && hasInvoice && !item.pdfName" x-on:change="handlePdfChange($event, index)">
+                                                    <template x-if="item.pdfName">
+                                                        <div class="mt-1 flex items-center justify-between">
+                                                            <div class="flex items-center text-[10px] text-green-600 font-bold uppercase italic">
+                                                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>
+                                                                <span>PDF Guardado</span>
+                                                            </div>
+                                                            <template x-if="item.draftId">
+                                                                <a :href="'/reimbursements/' + item.draftId + '/view-file/pdf'" target="_blank" class="text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest flex items-center bg-indigo-50 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100">
+                                                                    VER
+                                                                    <svg class="w-2 h-2 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                                                </a>
+                                                            </template>
+                                                        </div>
+                                                    </template>
                                                     
+                                                    <div class="mt-4">
+                                                        <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center justify-between">
+                                                            <span>Ticket / Pruebas Adicionales</span>
+                                                            <span class="text-[9px] font-black text-gray-400 uppercase italic">Máx 10MB</span>
+                                                        </label>
+                                                        <input type="file" :name="'items['+index+'][ticket_file]'" accept=".pdf,.jpg,.jpeg,.png,.txt" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-2" x-on:change="handleTicketChange($event, index)">
+                                                        <template x-if="item.ticketName">
+                                                            <div class="mt-1 flex items-center justify-between">
+                                                                <div class="flex items-center text-[10px] text-green-600 font-bold uppercase italic">
+                                                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>
+                                                                    <span>Ticket Guardado</span>
+                                                                </div>
+                                                                <template x-if="item.draftId">
+                                                                    <a :href="'/reimbursements/' + item.draftId + '/view-file/ticket'" target="_blank" class="text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest flex items-center bg-indigo-50 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100">
+                                                                        VER
+                                                                        <svg class="w-2 h-2 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                                                    </a>
+                                                                </template>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+
                                                     <!-- PDF Validation Indicator -->
                                                     <div x-show="item.data.pdf_validation" class="mt-2 space-y-2 animate-fadeIn text-[10px] font-black uppercase tracking-widest">
                                                         <!-- UUID Badge -->
@@ -206,8 +262,17 @@
                                             <div class="space-y-6">
                                                 <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3">Comprobante</h4>
                                                 <div>
+                                                    <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Ticket / Pruebas Adicionales</label>
+                                                    <input type="file" :name="'items['+index+'][ticket_file]'" accept=".pdf,.jpg,.jpeg,.png,.txt" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-2 mb-4" x-on:change="calculateTotalFileSize()">
+
                                                     <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Archivo de Respaldado (PDF/Imagen) *</label>
-                                                    <input type="file" :name="'items['+index+'][pdf_file]'" accept=".pdf,image/*,.txt" class="block w-full text-xs text-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :required="!hasInvoice" x-on:change="handlePdfChange($event, index)">
+                                                    <input type="file" :name="'items['+index+'][pdf_file]'" accept=".pdf,image/*,.txt" class="block w-full text-xs text-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :required="!hasInvoice && !item.pdfName" x-on:change="handlePdfChange($event, index)">
+                                                    <template x-if="item.pdfName">
+                                                        <div class="mt-1 flex items-center text-[10px] text-green-600 font-bold uppercase italic">
+                                                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>
+                                                            <span x-text="item.pdfName"></span>
+                                                        </div>
+                                                    </template>
                                                 </div>
                                             </div>
                                         </template>
@@ -217,7 +282,7 @@
                                             <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3">Clasificación</h4>
                                             <div>
                                                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Categoría *</label>
-                                                <select :name="'items['+index+'][category]'" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 text-sm py-3" :required="type !== 'viaje'">
+                                                <select :name="'items['+index+'][category]'" x-model="item.data.category" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 text-sm py-3" :required="type !== 'viaje'">
                                                     <option value="">Selecciona...</option>
                                                     @foreach($categories as $cat)
                                                         <option value="{{ $cat }}">{{ $cat }}</option>
@@ -226,7 +291,7 @@
                                             </div>
                                             <div>
                                                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Justificación *</label>
-                                                <textarea :name="'items['+index+'][observaciones]'" rows="4" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm text-sm" :required="type !== 'viaje'" placeholder="Motivo del gasto..."></textarea>
+                                                <textarea :name="'items['+index+'][observaciones]'" x-model="item.data.observaciones" rows="4" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm text-sm" :required="type !== 'viaje'" placeholder="Motivo del gasto..."></textarea>
                                             </div>
                                         </div>
                                     </div>
@@ -238,16 +303,37 @@
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
                                             <div class="col-span-1 md:col-span-2" x-show="hasInvoice">
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Folio Fiscal (UUID)</label>
-                                                <input type="text" :value="item.data.uuid" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs font-mono text-gray-600 dark:text-gray-400" readonly placeholder="Esperando XML...">
+                                                <input type="text" :name="'items['+index+'][uuid]'" :value="item.data.uuid" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs font-mono text-gray-600 dark:text-gray-400" readonly placeholder="Esperando XML...">
                                             </div>
                                             
                                             <div x-show="hasInvoice">
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">RFC Emisor</label>
-                                                <input type="text" :value="item.data.rfc_emisor" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                                <input type="text" :name="'items['+index+'][rfc_emisor]'" :value="item.data.rfc_emisor" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
                                             </div>
                                             <div x-show="hasInvoice">
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Folio Interno (XML)</label>
-                                                <input type="text" :value="item.data.folio" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                                <input type="text" :name="'items['+index+'][folio]'" :value="item.data.folio" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                            </div>
+                                            
+                                            <div x-show="hasInvoice">
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Método de Pago</label>
+                                                <input type="text" :name="'items['+index+'][metodo_pago]'" :value="item.data.metodo_pago" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                            </div>
+                                            <div x-show="hasInvoice">
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Forma de Pago</label>
+                                                <input type="text" :name="'items['+index+'][forma_pago]'" :value="item.data.forma_pago" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                            </div>
+                                            <div x-show="hasInvoice">
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Uso CFDI</label>
+                                                <input type="text" :name="'items['+index+'][uso_cfdi]'" :value="item.data.uso_cfdi" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                            </div>
+                                            <div x-show="hasInvoice">
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Lugar Expedición (CP)</label>
+                                                <input type="text" :name="'items['+index+'][lugar_expedicion]'" :value="item.data.lugar_expedicion" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                            </div>
+                                            <div x-show="hasInvoice" class="col-span-2">
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Regimen Fiscal Emisor</label>
+                                                <input type="text" :name="'items['+index+'][regimen_fiscal_emisor]'" :value="item.data.regimen_fiscal_emisor" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
                                             </div>
 
                                             <div :class="!hasInvoice ? 'col-span-2' : ''">
@@ -437,7 +523,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div class="md:col-span-2">
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Título del Viaje (Ej: Visita Obra Querétaro) *</label>
-                                <input type="text" name="title" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                                <input type="text" name="title" x-model="title" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
                             </div>
 
                             <div>
@@ -450,28 +536,33 @@
 
                             <div>
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Destino *</label>
-                                <input type="text" name="trip_destination" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'" placeholder="Ciudad, Estado/Pais">
+                                <input type="text" name="trip_destination" x-model="tripDestination" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'" placeholder="Ciudad, Estado/Pais">
                             </div>
 
                             <div>
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Noches *</label>
-                                <input type="number" name="trip_nights" min="0" value="0" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                                <input type="number" name="trip_nights" x-model="tripNights" min="0" value="0" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
                             </div>
 
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Fecha Inicio *</label>
-                                    <input type="date" name="trip_start_date" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                                    <input type="date" name="trip_start_date" x-model="tripStartDate" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Fecha Fin *</label>
-                                    <input type="date" name="trip_end_date" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                                    <input type="date" name="trip_end_date" x-model="tripEndDate" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
                                 </div>
                             </div>
 
                             <div class="md:col-span-2">
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Observaciones / Justificación</label>
-                                <textarea name="observaciones" rows="3" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" placeholder="Describe el motivo del viaje..."></textarea>
+                                <textarea name="observaciones" x-model="observacionesGeneral" rows="3" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" placeholder="Describe el motivo del viaje..."></textarea>
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Ticket / Pruebas Adicionales (Comprobante único para el viaje)</label>
+                                <input type="file" name="ticket_file" accept=".pdf,.jpg,.jpeg,.png,.txt" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5">
                             </div>
 
                             <div class="md:col-span-2" x-show="tripType === 'internacional'">
@@ -493,13 +584,26 @@
                             <span class="block text-4xl font-black text-gray-900 dark:text-white" x-text="'$ ' + calculateTotal().toLocaleString('es-MX', {minimumFractionDigits: 2})"></span>
                         </div>
                         
-                        <button type="submit" 
-                            :disabled="!hasInvoice && (items.some(i => i.data.total > 2000) || items.some(i => parseFloat(i.data.subtotal) > parseFloat(i.data.total)))"
-                            :class="!hasInvoice && (items.some(i => i.data.total > 2000) || items.some(i => parseFloat(i.data.subtotal) > parseFloat(i.data.total))) ? 'opacity-50 cursor-not-allowed grayscale' : ''"
-                            class="group inline-flex items-center px-16 py-8 bg-indigo-600 text-white rounded-[2rem] font-black text-2xl uppercase italic hover:bg-indigo-700 shadow-2xl transition-all transform hover:scale-105">
-                            <span>REGISTRAR TODO</span>
-                            <svg class="w-8 h-8 ml-4 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
-                        </button>
+                        <div class="flex flex-col items-center space-y-4">
+                            <div x-show="lastAutoSave" x-cloak class="text-[10px] font-black text-gray-400 uppercase tracking-widest animate-pulse">
+                                <span class="text-green-500">●</span> Guardado autom. <span x-text="lastAutoSave"></span>
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <button type="button" @click="saveDraft(false)" 
+                                    class="inline-flex items-center px-8 py-4 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-600 transition-all border-b-4 border-gray-200 dark:border-gray-900 active:border-b-0 active:translate-y-1">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                                    GUARDAR BORRADOR
+                                </button>
+                                
+                                <button type="submit" 
+                                    :disabled="!hasInvoice && (items.some(i => i.data.total > 2000) || items.some(i => parseFloat(i.data.subtotal) > parseFloat(i.data.total)))"
+                                    :class="!hasInvoice && (items.some(i => i.data.total > 2000) || items.some(i => parseFloat(i.data.subtotal) > parseFloat(i.data.total))) ? 'opacity-50 cursor-not-allowed grayscale' : ''"
+                                    class="group inline-flex items-center px-12 py-6 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xl uppercase italic hover:bg-indigo-700 shadow-xl transition-all transform hover:scale-105">
+                                    <span>REGISTRAR</span>
+                                    <svg class="w-6 h-6 ml-3 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -513,24 +617,189 @@
                 type: '{{ $type }}',
                 chargeType: 'cost_center',
                 tripType: 'nacional',
+                title: '',
+                tripDestination: '',
+                tripNights: 0,
+                tripStartDate: '',
+                tripEndDate: '',
+                observacionesGeneral: '',
                 items: [],
                 maxItems: 20,
-                maxTotalSize: 64 * 1024 * 1024, // 64 MB
+                maxFileSize: 10 * 1024 * 1024, // 10MB per file
+                maxTotalSize: 64 * 1024 * 1024, // 64 MB Total
                 currentTotalSize: 0,
                 hasInvoice: {{ $hasInvoice ? 'true' : 'false' }},
+                draftId: {{ isset($reimbursement) ? $reimbursement->id : 'null' }},
+                lastAutoSave: null,
+                isSaving: false,
                 init() { 
-                    if (this.type !== 'viaje') this.addItem(); 
+                    @if(isset($reimbursement))
+                        this.chargeType = '{{ $reimbursement->travel_event_id ? "travel_event" : "cost_center" }}';
+                        this.tripType = '{{ $reimbursement->trip_type ?? "nacional" }}';
+                        this.title = `{!! addslashes($reimbursement->title) !!}`;
+                        this.tripDestination = `{!! addslashes($reimbursement->trip_destination) !!}`;
+                        this.tripNights = {{ $reimbursement->trip_nights ?? 0 }};
+                        this.tripStartDate = '{{ $reimbursement->trip_start_date ? $reimbursement->trip_start_date->format("Y-m-d") : "" }}';
+                        this.tripEndDate = '{{ $reimbursement->trip_end_date ? $reimbursement->trip_end_date->format("Y-m-d") : "" }}';
+                        this.observacionesGeneral = `{!! addslashes($reimbursement->observaciones) !!}`;
+                        
+                        this.addItem({
+                            draftId: '{{ $reimbursement->id }}',
+                            fileName: '{{ $reimbursement->xml_path ? "Factura: " . ($reimbursement->folio ?: (substr($reimbursement->uuid, 0, 8) ?: 'Cargada')) : "" }}',
+                            pdfName: '{{ $reimbursement->pdf_path ? "PDF Guardado" : "" }}',
+                            ticketName: '{{ $reimbursement->ticket_path ? "Ticket/Prueba Guardado" : "" }}',
+                            xmlParsed: {{ $reimbursement->xml_path ? 'true' : 'false' }},
+                            data: {
+                                uuid: '{{ $reimbursement->uuid }}',
+                                folio: '{{ $reimbursement->folio }}',
+                                rfc_emisor: '{{ $reimbursement->rfc_emisor }}',
+                                nombre_emisor: '{{ $reimbursement->nombre_emisor }}',
+                                rfc_receptor: '{{ $reimbursement->rfc_receptor }}',
+                                nombre_receptor: '{{ $reimbursement->nombre_receptor }}',
+                                fecha: '{{ $reimbursement->fecha ? $reimbursement->fecha->format("Y-m-d") : "" }}',
+                                total: {{ $reimbursement->total ?: 0 }},
+                                subtotal: {{ $reimbursement->subtotal ?: 0 }},
+                                impuestos: {{ $reimbursement->impuestos ?: 0 }},
+                                moneda: '{{ $reimbursement->moneda ?: "MXN" }}',
+                                metodo_pago: '{{ $reimbursement->metodo_pago }}',
+                                forma_pago: '{{ $reimbursement->forma_pago }}',
+                                uso_cfdi: '{{ $reimbursement->uso_cfdi }}',
+                                lugar_expedicion: '{{ $reimbursement->lugar_expedicion }}',
+                                regimen_fiscal_emisor: '{{ $reimbursement->regimen_fiscal_emisor }}',
+                                category: '{{ $reimbursement->category }}',
+                                observaciones: `{!! addslashes($reimbursement->observaciones) !!}`
+                            }
+                        });
+                    @else
+                        if (this.type !== 'viaje') this.addItem(); 
+                    @endif
+
+                    // Auto-save every 30 seconds
+                    setInterval(() => this.saveDraft(true), 30000);
                 },
-                addItem() {
+                addItem(initialData = null) {
                     if (this.items.length >= this.maxItems) return;
-                    this.items.push({
+                    
+                    const newItem = {
                         id: Date.now() + Math.random(),
-                        fileName: '',
-                        xmlParsed: false,
+                        draftId: initialData ? initialData.draftId : null,
+                        fileName: initialData ? initialData.fileName : '',
+                        pdfName: initialData ? initialData.pdfName : '',
+                        ticketName: initialData ? initialData.ticketName : '',
+                        xmlParsed: initialData ? initialData.xmlParsed : false,
                         noPdf: false,
                         manualData: { nombre_emisor: '', fecha: '', subtotal: 0, total: 0, impuestos: 0 },
-                        data: { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, impuestos: 0 }
-                    });
+                        data: initialData ? initialData.data : { 
+                            uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', 
+                            nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, 
+                            impuestos: 0, metodo_pago: '', forma_pago: '', uso_cfdi: '', 
+                            lugar_expedicion: '', regimen_fiscal_emisor: '', category: '', observaciones: '' 
+                        }
+                    };
+                    
+                    this.items.push(newItem);
+                },
+                async saveDraft(isAuto = false) {
+                    if (this.isSaving) return;
+
+                    // NEW: Prevent autosave if Step 2 is empty
+                    if (isAuto) {
+                        let hasStep2Data = false;
+                        if (this.type === 'viaje') {
+                            hasStep2Data = (this.title && this.title.trim() !== '') || 
+                                           (this.tripDestination && this.tripDestination.trim() !== '');
+                        } else {
+                            hasStep2Data = this.items.some(item => {
+                                return item.draftId || // Already saved
+                                       item.xmlParsed || // XML exists
+                                       item.pdfName || // PDF preview exists
+                                       item.ticketName || // Ticket preview exists
+                                       parseFloat(item.data.total) > 0 || // Amount exists
+                                       (item.data.nombre_emisor && item.data.nombre_emisor.trim() !== '') ||
+                                       (item.data.observaciones && item.data.observaciones.trim() !== '');
+                            });
+                        }
+
+                        if (!hasStep2Data) return; // Ignore if no data in Step 2
+                    }
+
+                    this.isSaving = true;
+                    
+                    try {
+                        const formElem = document.getElementById('reimbursement-form');
+                        const formData = new FormData(formElem);
+                        
+                        // IF isAuto, we could strip files, but user wants everything.
+                        // However, to avoid timeouts, for AUTO-SAVE we'll strip them IF they haven't changed.
+                        // For simplicity now, let's just send everything but handle the response.
+
+                        if (this.draftId) {
+                            formData.append('draft_id', this.draftId);
+                        }
+                        
+                        // Also append individual item draft IDs if they exist
+                        this.items.forEach((item, index) => {
+                            if (item.draftId) {
+                                formData.append(`items[${index}][draft_id]`, item.draftId);
+                            }
+                        });
+
+                        formData.append('_token', '{{ csrf_token() }}');
+
+                        const response = await fetch('{{ route("reimbursements.auto_save") }}', {
+                            method: 'POST',
+                            body: formData,
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+
+                        const result = await response.json();
+                        if (result.success) {
+                            // Update IDs
+                            if (result.main_id) this.draftId = result.main_id;
+                            if (result.ids) {
+                                Object.keys(result.ids).forEach(index => {
+                                    if (this.items[index]) {
+                                        const r = result.ids[index];
+                                        this.items[index].draftId = r.id;
+                                        if (r.has_xml) {
+                                            this.items[index].xmlParsed = true;
+                                            if (!this.items[index].fileName) {
+                                                this.items[index].fileName = 'Factura: ' + (r.folio || 'Guardada');
+                                            }
+                                        }
+                                        if (r.has_pdf) this.items[index].pdfName = 'PDF Guardado';
+                                        if (r.has_ticket) this.items[index].ticketName = 'Ticket Guardado';
+                                        if (r.folio) this.items[index].folio = r.folio;
+                                    }
+                                });
+                            }
+
+                            this.lastAutoSave = new Date().toLocaleTimeString();
+                            if (!isAuto) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: '<span class="text-lg font-black uppercase tracking-tight">Borrador Guardado</span>',
+                                    text: 'Se han guardado todos los archivos y datos.',
+                                    timer: 2000,
+                                    showConfirmButton: false,
+                                    toast: true,
+                                    position: 'top-end',
+                                    customClass: {
+                                        popup: 'rounded-2xl border-none shadow-2xl dark:bg-gray-800'
+                                    }
+                                });
+                            }
+                        } else {
+                            throw new Error(result.error || 'Server error');
+                        }
+                    } catch (e) {
+                        console.error('Draft Save Error:', e);
+                        if (!isAuto) {
+                            Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo guardar: ' + e.message });
+                        }
+                    } finally {
+                        this.isSaving = false;
+                    }
                 },
                 removeItem(index) { 
                     if (this.items.length > 1) {
@@ -553,6 +822,17 @@
                 handleXmlChange(e, index) {
                     const file = e.target.files[0];
                     if (!file) return;
+
+                    if (file.size > this.maxFileSize) {
+                        Swal.fire({
+                            title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Archivo Muy Grande</span>',
+                            html: `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">El archivo <b>${file.name}</b> supera el límite permitido de <b>10MB</b>.</p>`,
+                            icon: 'warning',
+                            confirmButtonColor: '#ef4444',
+                        });
+                        e.target.value = '';
+                        return;
+                    }
 
                     const extension = file.name.split('.').pop().toLowerCase();
                     if (extension !== 'xml') {
@@ -579,6 +859,17 @@
                     const file = e.target.files[0];
                     if (!file) return;
 
+                    if (file.size > this.maxFileSize) {
+                        Swal.fire({
+                             title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Archivo Muy Grande</span>',
+                             html: `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">El archivo <b>${file.name}</b> supera el límite permitido de <b>10MB</b>.</p>`,
+                             icon: 'warning',
+                             confirmButtonColor: '#ef4444',
+                        });
+                        e.target.value = '';
+                        return;
+                    }
+
                     const extension = file.name.split('.').pop().toLowerCase();
                     const allowedExtensions = this.hasInvoice ? ['pdf'] : ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'jfif', 'txt'];
                     
@@ -600,6 +891,42 @@
 
                     if (this.hasInvoice) {
                         this.validateFiles(index);
+                    }
+
+                    this.calculateTotalFileSize();
+                },
+                handleTicketChange(e, index) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    if (file.size > this.maxFileSize) {
+                        Swal.fire({
+                             title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Archivo Muy Grande</span>',
+                             html: `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">El archivo <b>${file.name}</b> supera el límite permitido de <b>10MB</b>.</p>`,
+                             icon: 'warning',
+                             confirmButtonColor: '#ef4444',
+                        });
+                        e.target.value = '';
+                        return;
+                    }
+
+                    const extension = file.name.split('.').pop().toLowerCase();
+                    const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'jfif', 'txt'];
+                    
+                    if (!allowedExtensions.includes(extension)) {
+                        Swal.fire({
+                            title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Archivo Inválido</span>',
+                            html: `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">Este campo solo acepta archivos <b>${allowedExtensions.map(e => e.toUpperCase()).join(', ')}</b>.</p>`,
+                            icon: 'error',
+                            confirmButtonText: 'ENTENDIDO',
+                            confirmButtonColor: '#ef4444',
+                            customClass: {
+                                popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                                confirmButton: 'rounded-xl px-8 py-3 font-black text-xs uppercase tracking-widest'
+                            }
+                        });
+                        e.target.value = '';
+                        return;
                     }
 
                     this.calculateTotalFileSize();
@@ -702,7 +1029,7 @@
                             item.xmlParsed = false; 
                             xmlInput.value = ''; 
                             item.fileName = ''; 
-                            item.data = { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0 };
+                            item.data = { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '' };
                         }
                         else { 
                             // Check for duplicates in current session list
@@ -722,7 +1049,7 @@
                                 xmlInput.value = '';
                                 item.xmlParsed = false;
                                 item.fileName = '';
-                                item.data = { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0 };
+                                item.data = { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '' };
                                 return;
                             }
 

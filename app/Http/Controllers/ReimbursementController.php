@@ -221,8 +221,13 @@ class ReimbursementController extends Controller
         $hasInvoice = $request->input('has_invoice', '1') !== '0';
         $allowedTypes = ['reembolso', 'fondo_fijo', 'comida', 'viaje'];
 
+        $drafts = Reimbursement::where('user_id', $user->id)
+                                ->where('status', 'borrador')
+                                ->latest()
+                                ->get();
+
         if (!$type || !in_array($type, $allowedTypes)) {
-            return view('reimbursements.select_type');
+            return view('reimbursements.select_type', compact('drafts'));
         }
 
         $user = Auth::user();
@@ -289,6 +294,7 @@ class ReimbursementController extends Controller
             'items.*.category' => ['required', Rule::in($this->getCategories())],
             'items.*.xml_file' => $hasInvoice ? 'required|file' : 'nullable',
             'items.*.pdf_file' => $hasInvoice ? 'nullable|file|max:15360' : 'required|file|max:15360',
+            'items.*.ticket_file' => 'nullable|file|max:10240', // Nuevo: Ticket/Pruebas
             'items.*.confirm_company' => $hasInvoice ? 'required' : 'nullable',
         ];
 
@@ -417,6 +423,8 @@ class ReimbursementController extends Controller
                 }
 
                 $pdfPath = $pdfFile ? $pdfFile->store('pdfs') : null;
+                $ticketFile = $item['ticket_file'] ?? null;
+                $ticketPath = $ticketFile ? $ticketFile->store('tickets') : null;
 
                 $finalObs = ($item['observaciones'] ?? "") . $autoNote;
 
@@ -435,11 +443,17 @@ class ReimbursementController extends Controller
                     'fecha' => $xmlData['fecha'],
                     'total' => $xmlData['total'],
                     'subtotal' => $xmlData['subtotal'],
-                    'impuestos' => $xmlData['impuestos'] ?? 0, // Added this
+                    'impuestos' => $xmlData['impuestos'] ?? 0,
                     'moneda' => $xmlData['moneda'],
                     'tipo_comprobante' => $xmlData['tipo_comprobante'],
+                    'metodo_pago' => $xmlData['metodo_pago'] ?? null,
+                    'forma_pago' => $xmlData['forma_pago'] ?? null,
+                    'uso_cfdi' => $xmlData['uso_cfdi'] ?? null,
+                    'lugar_expedicion' => $xmlData['lugar_expedicion'] ?? null,
+                    'regimen_fiscal_emisor' => $xmlData['regimen_fiscal_emisor'] ?? null,
                     'xml_path' => $xmlPath,
                     'pdf_path' => $pdfPath,
+                    'ticket_path' => $ticketPath,
                     'status' => $initialStatus,
                     'current_step_id' => $currentStepId,
                     'observaciones' => trim($finalObs),
@@ -540,7 +554,14 @@ class ReimbursementController extends Controller
             $pdfFile = $request->file('pdf_file');
             $pdfValidation = $this->getValidationData($data, $pdfFile);
 
-            return response()->json(array_merge($data, ['pdf_validation' => $pdfValidation]));
+            return response()->json(array_merge($data, [
+                'pdf_validation' => $pdfValidation,
+                'metodo_pago' => $data['metodo_pago'],
+                'forma_pago' => $data['forma_pago'],
+                'uso_cfdi' => $data['uso_cfdi'],
+                'lugar_expedicion' => $data['lugar_expedicion'],
+                'regimen_fiscal_emisor' => $data['regimen_fiscal_emisor'],
+            ]));
 
         } catch (\Exception $e) {
             return response()->json(['error' => 'Error al procesar el XML: ' . $e->getMessage()], 422);
@@ -599,6 +620,9 @@ class ReimbursementController extends Controller
             $fecha = date('Y-m-d', strtotime($fecha));
         }
         $tipo = (string)$xml['TipoDeComprobante'];
+        $metodoPago = (string)$xml['MetodoPago'];
+        $formaPago = (string)$xml['FormaPago'];
+        $lugarExpedicion = (string)$xml['LugarExpedicion'];
 
         // Extraction of Taxes (Impuestos)
         $impuestos = 0;
@@ -623,6 +647,10 @@ class ReimbursementController extends Controller
         $tfd = $xml->xpath('//tfd:TimbreFiscalDigital');
         $uuid = $tfd ? (string)$tfd[0]['UUID'] : null;
 
+        // Extraction of Additional Metadata (UsoCFDI, RegimenFiscal)
+        $usoCfdi = $receptor ? (string)$receptor['UsoCFDI'] : null;
+        $regimenFiscalEmisor = $emisor ? (string)$emisor['RegimenFiscal'] : null;
+
         return [
             'uuid' => $uuid,
             'rfc_emisor' => $emisor ? (string)$emisor['Rfc'] : 'N/A',
@@ -633,9 +661,14 @@ class ReimbursementController extends Controller
             'fecha' => $fecha,
             'total' => $total,
             'subtotal' => $subtotal,
-            'impuestos' => $impuestos, // Added this
+            'impuestos' => $impuestos,
             'moneda' => $moneda,
             'tipo_comprobante' => $tipo,
+            'metodo_pago' => $metodoPago,
+            'forma_pago' => $formaPago,
+            'uso_cfdi' => $usoCfdi,
+            'lugar_expedicion' => $lugarExpedicion,
+            'regimen_fiscal_emisor' => $regimenFiscalEmisor,
         ];
     }
 
@@ -670,6 +703,7 @@ class ReimbursementController extends Controller
             'trip_end_date' => 'nullable|date|after_or_equal:trip_start_date|required_if:type,viaje',
             'title' => 'nullable|string|required_if:type,viaje',
             'extra_files.*' => 'file|max:10240', // 10MB max
+            'ticket_file' => 'nullable|file|max:10240', // Nuevo slot para ticket/pruebas
             'parent_id' => 'nullable|exists:reimbursements,id',
             'confirm_company' => Rule::requiredIf($request->type !== 'viaje'),
         ]);
@@ -693,6 +727,7 @@ class ReimbursementController extends Controller
 
         $xmlPath = $request->file('xml_file') ? $request->file('xml_file')->store('xmls') : null;
         $pdfPath = $request->file('pdf_file') ? $request->file('pdf_file')->store('pdfs') : null;
+        $ticketPath = $request->file('ticket_file') ? $request->file('ticket_file')->store('tickets') : null;
 
         // Ownership Validation & Event Context
         $travelEvent = $request->travel_event_id ? \App\Models\TravelEvent::findOrFail($request->travel_event_id) : null;
@@ -761,9 +796,14 @@ class ReimbursementController extends Controller
             'subtotal' => $request->subtotal,
             'impuestos' => $request->impuestos ?? ($request->total - $request->subtotal), // Added this
             'moneda' => $request->moneda,
-            'tipo_comprobante' => $request->tipo_comprobante,
+            'metodo_pago' => $request->metodo_pago,
+            'forma_pago' => $request->forma_pago,
+            'uso_cfdi' => $request->uso_cfdi,
+            'lugar_expedicion' => $request->lugar_expedicion,
+            'regimen_fiscal_emisor' => $request->regimen_fiscal_emisor,
             'xml_path' => $xmlPath,
             'pdf_path' => $pdfPath,
+            'ticket_path' => $ticketPath,
             'status' => $initialStatus,
             'current_step_id' => $currentStepId,
             'observaciones' => ($request->observaciones ?? "") . $autoNote,
@@ -840,6 +880,32 @@ class ReimbursementController extends Controller
 
         return redirect()->route('reimbursements.index')
                          ->with('success', 'Reembolso guardado exitosamente.');
+    }
+
+    /**
+     * Show the form for editing (resuming draft).
+     */
+    public function edit(Reimbursement $reimbursement)
+    {
+        $user = Auth::user();
+        if ($reimbursement->user_id !== $user->id) {
+            abort(403);
+        }
+
+        if ($reimbursement->status !== 'borrador' && $reimbursement->status !== 'requiere_correccion') {
+            return redirect()->route('reimbursements.show', $reimbursement);
+        }
+
+        $type = $reimbursement->type;
+        $hasInvoice = !empty($reimbursement->xml_path) || $reimbursement->folio !== 'SIN-FACTURA';
+        
+        // Standard list of cost centers (reuse logic from create if possible)
+        $costCenters = CostCenter::orderBy('name')->get();
+        $currentWeek = $reimbursement->week;
+        $categories = $this->getCategories();
+        $travelEvents = \App\Models\TravelEvent::where('status', 'active')->get();
+
+        return view('reimbursements.create', compact('reimbursement', 'type', 'hasInvoice', 'costCenters', 'currentWeek', 'categories', 'travelEvents'));
     }
 
     /**
@@ -941,6 +1007,7 @@ class ReimbursementController extends Controller
                 'fecha' => 'nullable|date',
                 'subtotal' => 'nullable|numeric',
                 'total' => 'nullable|numeric',
+                'ticket_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png,txt|max:32768',
             ]);
             
             $data = array_filter($request->only([
@@ -952,6 +1019,11 @@ class ReimbursementController extends Controller
             // Safety: If reimbursement has a UUID, we MUST NOT allow changing core fiscal fields manually
             if (!empty($reimbursement->uuid)) {
                 unset($data['nombre_emisor'], $data['fecha'], $data['subtotal'], $data['total']);
+            }
+
+            if ($request->hasFile('ticket_file')) {
+                if ($reimbursement->ticket_path) Storage::delete($reimbursement->ticket_path);
+                $data['ticket_path'] = $request->file('ticket_file')->store('tickets');
             }
 
             if ($request->hasFile('pdf_file')) {
@@ -1147,8 +1219,8 @@ class ReimbursementController extends Controller
         
         $reimbursement->delete();
 
-        return redirect()->route('reimbursements.index')
-                         ->with('success', 'Reembolso eliminado.');
+        return redirect()->back()
+                         ->with('success', 'Borrador eliminado.');
     }
 
     /**
@@ -1237,6 +1309,11 @@ class ReimbursementController extends Controller
                 'Receptor',
                 'Fecha Expedición XML',
                 'Fecha Creación Reembolso',
+                'Método de Pago',
+                'Forma de Pago',
+                'Uso CFDI',
+                'CP Expedición',
+                'Régimen Fiscal Emisor',
                 'Total',
                 'Estatus',
                 'Aprobaciones',
@@ -1307,6 +1384,11 @@ class ReimbursementController extends Controller
                     $r->nombre_receptor . " (" . $r->rfc_receptor . ")",
                     $r->fecha ? $r->fecha->format('d/m/Y H:i') : 'N/A',
                     $r->created_at ? $r->created_at->format('d/m/Y H:i') : 'N/A',
+                    $r->metodo_pago ?? 'N/A',
+                    $r->forma_pago ?? 'N/A',
+                    $r->uso_cfdi ?? 'N/A',
+                    $r->lugar_expedicion ?? 'N/A',
+                    $r->regimen_fiscal_emisor ?? 'N/A',
                     "$ " . number_format((float)$r->total, 2) . " " . ($r->moneda ?? 'MXN'),
                     ucwords(str_replace('_', ' ', $r->status)),
                     $approvalsStr,
@@ -1500,6 +1582,14 @@ class ReimbursementController extends Controller
 
             $cleanName = 'comprobante-' . ($reimbursement->folio ?? 'gasto') . '.' . $extension;
             return Storage::download($reimbursement->pdf_path, $cleanName);
+        } elseif ($type === 'ticket') {
+            if (!$reimbursement->ticket_path || !Storage::exists($reimbursement->ticket_path)) {
+                abort(404, 'Ticket / Prueba no encontrado.');
+            }
+            
+            $extension = pathinfo($reimbursement->ticket_path, PATHINFO_EXTENSION);
+            $cleanName = 'ticket-' . ($reimbursement->folio ?? 'prueba') . '.' . $extension;
+            return Storage::download($reimbursement->ticket_path, $cleanName);
         }
         
         abort(404);
@@ -1526,6 +1616,18 @@ class ReimbursementController extends Controller
             return response()->file($path, [
                 'Content-Type' => $mimeType,
                 'Content-Disposition' => 'inline; filename="' . basename($reimbursement->pdf_path) . '"'
+            ]);
+        } elseif ($type === 'ticket') {
+            if (!$reimbursement->ticket_path || !Storage::exists($reimbursement->ticket_path)) {
+                abort(404, 'Ticket / Prueba no encontrado.');
+            }
+            
+            $path = Storage::path($reimbursement->ticket_path);
+            $mimeType = Storage::mimeType($reimbursement->ticket_path);
+            
+            return response()->file($path, [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => 'inline; filename="' . basename($reimbursement->ticket_path) . '"'
             ]);
         }
         
@@ -1674,6 +1776,134 @@ class ReimbursementController extends Controller
         if (isset($map[$order])) {
             $data[$map[$order][0]] = $userId;
             $data[$map[$order][1]] = now();
+        }
+    }
+
+    /**
+     * Auto-save or Manual Draft Save.
+     */
+    public function autoStore(Request $request)
+    {
+        set_time_limit(180); // Higher limit for file uploads in drafts
+        
+        try {
+            $user = Auth::user();
+            $items = $request->input('items', []);
+            $draftIds = [];
+
+            // If it's a 'viaje' type, it's a single record form
+            if ($request->input('type') === 'viaje') {
+                $items = [ $request->all() ]; // Wrap as a single item for uniform processing
+                if ($request->input('draft_id')) {
+                    $items[0]['draft_id'] = $request->input('draft_id');
+                }
+            }
+
+            foreach ($items as $index => $itemData) {
+                try {
+                    $id = $itemData['draft_id'] ?? null;
+                    
+                    $data = [
+                        'type' => $request->input('type'),
+                        'cost_center_id' => $request->input('cost_center_id'),
+                        'travel_event_id' => $request->input('travel_event_id'),
+                        'week' => $request->input('week'),
+                        'title' => $request->input('title') ?: ($itemData['nombre_emisor'] ?? 'Sin Título'),
+                        'user_id' => $user->id,
+                        'status' => 'borrador',
+                    ];
+
+                    // Merge specific fields from the item
+                    $fields = [
+                        'nombre_emisor', 'fecha', 'total', 'subtotal', 'impuestos', 'moneda',
+                        'rfc_emisor', 'rfc_receptor', 'nombre_receptor', 'observaciones',
+                        'metodo_pago', 'forma_pago', 'uso_cfdi', 'lugar_expedicion', 'regimen_fiscal_emisor',
+                        'trip_destination', 'trip_nights', 'trip_start_date', 'trip_end_date', 'location',
+                        'uuid', 'folio', 'category'
+                    ];
+                    foreach ($fields as $field) {
+                        if (isset($itemData[$field])) $data[$field] = $itemData[$field];
+                    }
+
+                    // Enhanced and Safer File Handling (10MB limit)
+                    $maxSize = 10 * 1024 * 1024;
+                    if ($request->hasFile("items.{$index}.xml_file") && $request->file("items.{$index}.xml_file")->isValid()) {
+                        if ($request->file("items.{$index}.xml_file")->getSize() <= $maxSize) {
+                            $data['xml_path'] = $request->file("items.{$index}.xml_file")->store('reimbursements/xmls/drafts');
+                        }
+                    }
+                    if ($request->hasFile("items.{$index}.pdf_file") && $request->file("items.{$index}.pdf_file")->isValid()) {
+                        if ($request->file("items.{$index}.pdf_file")->getSize() <= $maxSize) {
+                            $data['pdf_path'] = $request->file("items.{$index}.pdf_file")->store('reimbursements/pdfs/drafts');
+                        }
+                    }
+                    if ($request->hasFile("items.{$index}.ticket_file") && $request->file("items.{$index}.ticket_file")->isValid()) {
+                        if ($request->file("items.{$index}.ticket_file")->getSize() <= $maxSize) {
+                            $data['ticket_path'] = $request->file("items.{$index}.ticket_file")->store('reimbursements/tickets/drafts');
+                        }
+                    }
+
+                    // Support for 'viaje' type where files are at top level
+                    if ($request->input('type') === 'viaje') {
+                        if ($request->hasFile('xml_file') && $request->file('xml_file')->isValid()) {
+                            $data['xml_path'] = $request->file('xml_file')->store('reimbursements/xmls/drafts');
+                        }
+                        if ($request->hasFile('pdf_file') && $request->file('pdf_file')->isValid()) {
+                            $data['pdf_path'] = $request->file('pdf_file')->store('reimbursements/pdfs/drafts');
+                        }
+                        if ($request->hasFile('ticket_file') && $request->file('ticket_file')->isValid()) {
+                            $data['ticket_path'] = $request->file('ticket_file')->store('reimbursements/tickets/drafts');
+                        }
+                    }
+
+                    // FIND EXISTING: Prevent duplicate records by matching ID or UUID for the same user
+                    $reimbursement = null;
+                    if ($id) {
+                        $reimbursement = Reimbursement::where('user_id', $user->id)->find($id);
+                    } 
+                    
+                    if (!$reimbursement && isset($data['uuid'])) {
+                        $reimbursement = Reimbursement::where('user_id', $user->id)
+                                                    ->where('uuid', $data['uuid'])
+                                                    ->where('status', 'borrador')
+                                                    ->first();
+                    }
+
+                    if ($reimbursement) {
+                        $reimbursement->update($data);
+                    } else {
+                        $reimbursement = Reimbursement::create($data);
+                    }
+
+                    if (!$reimbursement->folio) {
+                        $prefix = strtoupper(substr($reimbursement->type, 0, 3)) ?: 'REE';
+                        $reimbursement->folio = 'DRAFT-' . $prefix . '-' . str_pad($reimbursement->id, 5, '0', STR_PAD_LEFT);
+                        $reimbursement->save();
+                    }
+
+                    $draftIds[$index] = [
+                        'id' => $reimbursement->id,
+                        'has_xml' => !empty($reimbursement->xml_path),
+                        'has_pdf' => !empty($reimbursement->pdf_path),
+                        'has_ticket' => !empty($reimbursement->ticket_path),
+                        'folio' => $reimbursement->folio
+                    ];
+                    Log::info("Draft saved for item {$index}: ID {$reimbursement->id}");
+
+                } catch (\Exception $e) {
+                    Log::error("Failed to save draft item {$index}: " . $e->getMessage());
+                    // For AJAX drafts, we continue the loop but log the error
+                }
+            }
+
+            return response()->json([
+                'success' => true, 
+                'ids' => $draftIds,
+                'main_id' => !empty($draftIds) ? $draftIds[0]['id'] : null
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Draft Save Error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
 }

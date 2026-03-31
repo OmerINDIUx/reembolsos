@@ -28,6 +28,13 @@
                                     <input type="file" id="pdf_file_input" name="pdf_file" accept="{{ $reimbursement->uuid ? '.pdf' : '.pdf,image/*,.txt' }}" class="mt-1 block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900 dark:file:text-indigo-300">
                                     <div id="pdf-validation-result" class="mt-2 text-sm hidden"></div>
                                 </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Actualizar Ticket / Pruebas (Opcional)
+                                    </label>
+                                    <input type="file" name="ticket_file" accept=".pdf,.jpg,.jpeg,.png,.txt" class="mt-1 block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900 dark:file:text-indigo-300">
+                                </div>
 
                                 @if($reimbursement->type === 'comida')
                                     <div>
@@ -182,6 +189,20 @@
                         <div class="bg-gray-50 dark:bg-gray-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                             <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Receptor</dt>
                             <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">{{ $reimbursement->nombre_receptor }} ({{ $reimbursement->rfc_receptor }})</dd>
+                        </div>
+                        @endif
+                        @if($reimbursement->uuid)
+                        <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Detalles CFDI</dt>
+                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div><span class="text-gray-500 block uppercase text-[10px] font-bold">Método Pago:</span> {{ $reimbursement->metodo_pago }}</div>
+                                    <div><span class="text-gray-500 block uppercase text-[10px] font-bold">Forma Pago:</span> {{ $reimbursement->forma_pago }}</div>
+                                    <div><span class="text-gray-500 block uppercase text-[10px] font-bold">Uso CFDI:</span> {{ $reimbursement->uso_cfdi }}</div>
+                                    <div><span class="text-gray-500 block uppercase text-[10px] font-bold">CP Expedición:</span> {{ $reimbursement->lugar_expedicion }}</div>
+                                    <div class="col-span-2"><span class="text-gray-500 block uppercase text-[10px] font-bold">Régimen Fiscal Emisor:</span> {{ $reimbursement->regimen_fiscal_emisor }}</div>
+                                </div>
+                            </dd>
                         </div>
                         @endif
                         <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
@@ -378,6 +399,20 @@
                                         <div class="ml-4 flex-shrink-0 flex space-x-4">
                                             <a href="{{ route('reimbursements.view_file', ['reimbursement' => $reimbursement, 'type' => 'pdf']) }}" target="_blank" class="font-black text-[10px] text-orange-600 hover:text-orange-800 uppercase tracking-widest bg-orange-50 dark:bg-orange-900/30 px-3 py-1.5 rounded-lg transition-all">Ver Archivo</a>
                                             <a href="{{ route('reimbursements.download_file', ['reimbursement' => $reimbursement, 'type' => 'pdf']) }}" class="font-black text-[10px] text-gray-500 hover:text-gray-700 uppercase tracking-widest bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-lg transition-all">Bajar</a>
+                                        </div>
+                                    </li>
+                                    @endif
+                                    @if($reimbursement->ticket_path)
+                                    <li class="pl-3 pr-4 py-4 flex items-center justify-between text-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                        <div class="w-0 flex-1 flex items-center">
+                                            <div class="bg-emerald-100 dark:bg-emerald-900/50 p-2 rounded-lg mr-3">
+                                                <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path></svg>
+                                            </div>
+                                            <span class="ml-2 flex-1 w-0 truncate font-medium">Ticket / Pruebas Adicionales</span>
+                                        </div>
+                                        <div class="ml-4 flex-shrink-0 flex space-x-4">
+                                            <a href="{{ route('reimbursements.view_file', ['reimbursement' => $reimbursement, 'type' => 'ticket']) }}" target="_blank" class="font-black text-[10px] text-emerald-600 hover:text-emerald-800 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-lg transition-all">Ver Ticket</a>
+                                            <a href="{{ route('reimbursements.download_file', ['reimbursement' => $reimbursement, 'type' => 'ticket']) }}" class="font-black text-[10px] text-gray-500 hover:text-gray-700 uppercase tracking-widest bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-lg transition-all">Bajar</a>
                                         </div>
                                     </li>
                                     @endif

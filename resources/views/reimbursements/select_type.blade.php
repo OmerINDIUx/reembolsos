@@ -23,8 +23,11 @@
                     cancelButton: 'rounded-xl px-10 py-4 font-black text-xs uppercase tracking-widest mb-2'
                 }
             }).then((result) => {
-                let hasInvoice = result.isConfirmed ? 1 : 0;
-                window.location.href = `{{ route('reimbursements.create') }}?type=${type}&has_invoice=${hasInvoice}`;
+                if (result.isConfirmed) {
+                    window.location.href = `{{ route('reimbursements.create') }}?type=${type}&has_invoice=1`;
+                } else if (result.dismiss === Swal.DismissReason.cancel) {
+                    window.location.href = `{{ route('reimbursements.create') }}?type=${type}&has_invoice=0`;
+                }
             });
         }
     }">
@@ -77,6 +80,56 @@
                             </div>
                         </button>
                     </div>
+
+                    @if($drafts->count() > 0)
+                        <div class="mt-20 animate-fadeIn">
+                            <h4 class="text-xs font-black text-gray-400 uppercase tracking-[0.3em] mb-8 text-center border-b pb-4">Borradores Guardados</h4>
+                            <div class="bg-white dark:bg-gray-700 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-600 shadow-sm transition-all hover:shadow-xl">
+                                <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-600 font-bold uppercase tracking-widest text-[10px]">
+                                    <thead class="bg-gray-50 dark:bg-gray-800 text-gray-400">
+                                        <tr>
+                                            <th class="px-6 py-4 text-left">Tipo</th>
+                                            <th class="px-6 py-4 text-left">Título / Emisor</th>
+                                            <th class="px-6 py-4 text-left">Fecha Guardado</th>
+                                            <th class="px-6 py-4 text-right">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-50 dark:divide-gray-600 text-gray-500">
+                                        @foreach($drafts as $draft)
+                                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                                <td class="px-6 py-4">
+                                                    <span class="inline-flex px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
+                                                        {{ str_replace('_', ' ', $draft->type) }}
+                                                    </span>
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <div class="text-sm font-black text-gray-900 dark:text-white capitalize">{{ strtolower($draft->title ?: ($draft->nombre_emisor ?: 'Sin título')) }}</div>
+                                                    <div class="text-[8px] text-gray-400 mt-1">Semana: {{ $draft->week }}</div>
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    {{ $draft->updated_at->format('d/m/Y H:i') }}
+                                                </td>
+                                                <td class="px-6 py-4 text-right">
+                                                    <div class="flex justify-end items-center space-x-3">
+                                                        <a href="{{ route('reimbursements.edit', $draft->id) }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-sm">
+                                                            Continuar
+                                                        </a>
+                                                        <form action="{{ route('reimbursements.destroy', $draft->id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de eliminar este borrador?')">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button type="submit" class="p-2 text-red-400 hover:text-red-600 transition-colors" title="Eliminar Borrador">
+                                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    @endif
 
                     <div class="mt-16 text-center">
                         <a href="{{ route('reimbursements.index') }}" class="inline-flex items-center text-[10px] font-black text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 uppercase tracking-[0.3em] transition-all group">

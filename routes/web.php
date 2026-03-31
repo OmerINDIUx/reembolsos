@@ -33,6 +33,7 @@ Route::middleware(['auth', \App\Http\Middleware\ForcePasswordChange::class])->gr
     Route::get('reimbursements/audit', [ReimbursementController::class, 'audit'])->name('reimbursements.audit');
     Route::resource('reimbursements', ReimbursementController::class);
     Route::post('reimbursements/parse-xml', [ReimbursementController::class, 'parseCfdi'])->name('reimbursements.parse');
+    Route::post('reimbursements/auto-save', [ReimbursementController::class, 'autoStore'])->name('reimbursements.auto_save');
 
     Route::middleware('role:admin,admin_view')->group(function() {
         Route::resource('users', UserController::class);
