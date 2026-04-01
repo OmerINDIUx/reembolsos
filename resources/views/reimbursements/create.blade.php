@@ -263,7 +263,7 @@
                                                 <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3">Comprobante</h4>
                                                 <div>
                                                     <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Ticket / Pruebas Adicionales</label>
-                                                    <input type="file" :name="'items['+index+'][ticket_file]'" accept=".pdf,.jpg,.jpeg,.png,.txt" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-2 mb-4" x-on:change="calculateTotalFileSize()">
+                                                    <input type="file" :name="'items['+index+'][ticket_file]'" accept=".pdf,.jpg,.jpeg,.png,.txt" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-2 mb-4" x-on:change="handleTicketChange($event, index)">
 
                                                     <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Archivo de Respaldado (PDF/Imagen) *</label>
                                                     <input type="file" :name="'items['+index+'][pdf_file]'" accept=".pdf,image/*,.txt" class="block w-full text-xs text-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :required="!hasInvoice && !item.pdfName" x-on:change="handlePdfChange($event, index)">
@@ -562,7 +562,7 @@
 
                             <div class="md:col-span-2">
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Ticket / Pruebas Adicionales (Comprobante único para el viaje)</label>
-                                <input type="file" name="ticket_file" accept=".pdf,.jpg,.jpeg,.png,.txt" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5">
+                                <input type="file" name="ticket_file" accept=".pdf,.jpg,.jpeg,.png,.txt" class="block w-full text-sm text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 focus:outline-none p-2.5 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" x-on:change="handleTicketChange($event)">
                             </div>
 
                             <div class="md:col-span-2" x-show="tripType === 'internacional'">
@@ -625,7 +625,22 @@
                 observacionesGeneral: '',
                 items: [],
                 maxItems: 20,
-                maxFileSize: 10 * 1024 * 1024, // 10MB per file
+                @php
+                    $val = ini_get('upload_max_filesize');
+                    $val = trim($val);
+                    $last = strtolower($val[strlen($val)-1]);
+                    $val = (int)$val;
+                    switch($last) {
+                        case 'g': $val *= 1024;
+                        case 'm': $val *= 1024;
+                        case 'k': $val *= 1024;
+                    }
+                    $phpMax = $val ?: (2 * 1024 * 1024);
+                    // Use the minimum between our 10MB app limit and PHP's hard limit
+                    $appMax = 10 * 1024 * 1024;
+                    $finalMax = min($phpMax, $appMax);
+                @endphp
+                maxFileSize: {{ $finalMax }}, // PHP upload_max_filesize or 10MB
                 maxTotalSize: 64 * 1024 * 1024, // 64 MB Total
                 currentTotalSize: 0,
                 hasInvoice: {{ $hasInvoice ? 'true' : 'false' }},
@@ -826,7 +841,7 @@
                     if (file.size > this.maxFileSize) {
                         Swal.fire({
                             title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Archivo Muy Grande</span>',
-                            html: `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">El archivo <b>${file.name}</b> supera el límite permitido de <b>10MB</b>.</p>`,
+                            html: `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">El archivo <b>${file.name}</b> supera el límite permitido de <b>${(this.maxFileSize / (1024*1024)).toFixed(1)} MB</b> (Límite del servidor).</p>`,
                             icon: 'warning',
                             confirmButtonColor: '#ef4444',
                         });
@@ -929,7 +944,17 @@
                         return;
                     }
 
+                    if (typeof index !== 'undefined') {
+                        this.items[index].ticketName = file.name;
+                    } else {
+                        // For flat viaje type ticket
+                        const dummyItem = { ticketName: file.name }; 
+                        // It updates the visual if there was one for viaje, actually viaje uses global or just relies on the input showing the name. 
+                        // We will rely on native input for viaje, but still trigger auto-save.
+                    }
+
                     this.calculateTotalFileSize();
+                    this.saveDraft(true);
                 },
                 calculateTotalFileSize() {
                     let total = 0;

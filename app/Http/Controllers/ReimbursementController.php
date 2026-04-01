@@ -392,20 +392,44 @@ class ReimbursementController extends Controller
                 $validationData = null;
 
                 if ($hasInvoice) {
-                    $xmlContent = file_get_contents($item['xml_file']->getRealPath());
-                    $xmlData = $this->extractXmlData($xmlContent);
-                    $uuid = $xmlData['uuid'];
+                    if (isset($item['xml_file']) && $item['xml_file'] instanceof \Illuminate\Http\UploadedFile) {
+                        $xmlContent = file_get_contents($item['xml_file']->getRealPath());
+                        $xmlData = $this->extractXmlData($xmlContent);
+                        $uuid = $xmlData['uuid'];
+                        $xmlPath = $item['xml_file']->store('xmls');
+                    } else {
+                        // Fallback if resuming draft without re-uploading XML
+                        $draftId = $item['draft_id'] ?? null;
+                        if ($draftId) {
+                            $existingDraft = Reimbursement::where('id', $draftId)->where('user_id', $user->id)->first();
+                            if ($existingDraft && $existingDraft->xml_path) {
+                                $xmlContent = Storage::get($existingDraft->xml_path);
+                                $xmlData = $this->extractXmlData($xmlContent);
+                                $uuid = $xmlData['uuid'];
+                                $xmlPath = $existingDraft->xml_path;
+                            } else {
+                                throw new \Exception("XML es requerido.");
+                            }
+                        } else {
+                             throw new \Exception("XML es requerido.");
+                        }
+                    }
 
                     // Check for duplicate in DB or current batch
-                    if (in_array($uuid, $processedUuids) || Reimbursement::where('uuid', $uuid)->exists()) {
-                        $errors[] = "Ítem #" . ($index + 1) . ": El CFDI con UUID {$uuid} ya está registrado o duplicado en esta carga.";
+                    $existing = Reimbursement::where('uuid', $uuid)->first();
+                    if ($existing && $existing->status !== 'borrador') {
+                        $errors[] = "Ítem #" . ($index + 1) . ": El CFDI con UUID {$uuid} ya está registrado.";
+                        $failedCount++;
+                        continue;
+                    }
+                    if (in_array($uuid, $processedUuids)) {
+                        $errors[] = "Ítem #" . ($index + 1) . ": El CFDI con UUID {$uuid} está duplicado en esta carga.";
                         $failedCount++;
                         continue;
                     }
                     $processedUuids[] = $uuid;
                     
                     $validationData = $this->getValidationData($xmlData, $pdfFile);
-                    $xmlPath = $item['xml_file']->store('xmls');
                 } else {
                     // Manual data
                     $xmlData = [
@@ -422,9 +446,18 @@ class ReimbursementController extends Controller
                     ];
                 }
 
-                $pdfPath = $pdfFile ? $pdfFile->store('pdfs') : null;
+                // Check for existing draft to reuse files if not re-uploaded
+                $draftId = $item['draft_id'] ?? null;
+                $existingDraft = null;
+                if ($draftId) {
+                    $existingDraft = Reimbursement::where('id', $draftId)->where('user_id', $user->id)->where('status', 'borrador')->first();
+                } elseif (isset($uuid)) {
+                    $existingDraft = Reimbursement::where('uuid', $uuid)->where('user_id', $user->id)->where('status', 'borrador')->first();
+                }
+
+                $pdfPath = $pdfFile ? $pdfFile->store('pdfs') : ($existingDraft ? $existingDraft->pdf_path : null);
                 $ticketFile = $item['ticket_file'] ?? null;
-                $ticketPath = $ticketFile ? $ticketFile->store('tickets') : null;
+                $ticketPath = $ticketFile ? $ticketFile->store('tickets') : ($existingDraft ? $existingDraft->ticket_path : null);
 
                 $finalObs = ($item['observaciones'] ?? "") . $autoNote;
 
@@ -465,11 +498,18 @@ class ReimbursementController extends Controller
                     'validation_data' => $validationData, // Saving validation for the table
                 ], $approvalData);
 
-                $reimbursement = Reimbursement::create($reimbursementData);
+                if ($existingDraft) {
+                    $existingDraft->update($reimbursementData);
+                    $reimbursement = $existingDraft;
+                } else {
+                    $reimbursement = Reimbursement::create($reimbursementData);
+                }
 
                 $prefix = strtoupper(substr($type, 0, 3));
-                $reimbursement->folio = $prefix . '-' . str_pad($reimbursement->id, 6, '0', STR_PAD_LEFT);
-                $reimbursement->save();
+                if (!str_starts_with($reimbursement->folio, $prefix . '-')) {
+                    $reimbursement->folio = $prefix . '-' . str_pad($reimbursement->id, 6, '0', STR_PAD_LEFT);
+                    $reimbursement->save();
+                }
 
                 $createdCount++;
             } catch (\Exception $e) {
@@ -725,9 +765,15 @@ class ReimbursementController extends Controller
         
 
 
-        $xmlPath = $request->file('xml_file') ? $request->file('xml_file')->store('xmls') : null;
-        $pdfPath = $request->file('pdf_file') ? $request->file('pdf_file')->store('pdfs') : null;
-        $ticketPath = $request->file('ticket_file') ? $request->file('ticket_file')->store('tickets') : null;
+        $draftId = $request->draft_id;
+        $existingDraft = null;
+        if ($draftId) {
+            $existingDraft = Reimbursement::where('id', $draftId)->where('user_id', Auth::id())->where('status', 'borrador')->first();
+        }
+        
+        $xmlPath = $request->file('xml_file') ? $request->file('xml_file')->store('xmls') : ($existingDraft ? $existingDraft->xml_path : null);
+        $pdfPath = $request->file('pdf_file') ? $request->file('pdf_file')->store('pdfs') : ($existingDraft ? $existingDraft->pdf_path : null);
+        $ticketPath = $request->file('ticket_file') ? $request->file('ticket_file')->store('tickets') : ($existingDraft ? $existingDraft->ticket_path : null);
 
         // Ownership Validation & Event Context
         $travelEvent = $request->travel_event_id ? \App\Models\TravelEvent::findOrFail($request->travel_event_id) : null;
@@ -822,13 +868,19 @@ class ReimbursementController extends Controller
             'user_id' => Auth::id(),
         ], $approvalData);
 
-        $reimbursement = Reimbursement::create($reimbursementData);
+        if ($existingDraft) {
+            $existingDraft->update($reimbursementData);
+            $reimbursement = $existingDraft;
+        } else {
+            $reimbursement = Reimbursement::create($reimbursementData);
+        }
 
         // Generate Custom Folio: XXX-000000
-        // Type Map: REE, FON, COM, VIA
         $prefix = strtoupper(substr($request->type, 0, 3));
-        $reimbursement->folio = $prefix . '-' . str_pad($reimbursement->id, 6, '0', STR_PAD_LEFT);
-        $reimbursement->save();
+        if (!str_starts_with($reimbursement->folio, $prefix . '-')) {
+            $reimbursement->folio = $prefix . '-' . str_pad($reimbursement->id, 6, '0', STR_PAD_LEFT);
+            $reimbursement->save();
+        }
 
         // Notify NEXT person in line
         if ($reimbursement->costCenter) {
