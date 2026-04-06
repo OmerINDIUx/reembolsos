@@ -188,7 +188,7 @@
                                                 
                                                 @if($cc->oldest_pending)
                                                     @php
-                                                        $daysOld = \Carbon\Carbon::parse($cc->oldest_pending)->diffInDays();
+                                                        $daysOld = (int) \Carbon\Carbon::parse($cc->oldest_pending)->diffInDays();
                                                         $statusColor = $daysOld > 7 ? 'text-red-500' : ($daysOld > 3 ? 'text-amber-500' : 'text-gray-400');
                                                     @endphp
                                                     <div class="flex items-center space-x-1 {{ $statusColor }} font-medium">
@@ -204,16 +204,10 @@
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
-                                        <div class="flex flex-wrap gap-2 justify-center max-w-sm">
-                                            @foreach(['Director' => $cc->director, 'Control' => $cc->controlObra, 'Exec' => $cc->directorEjecutivo, 'Conta' => $cc->accountant, 'Dir' => $cc->direccion, 'Teso' => $cc->tesoreria] as $label => $user)
-                                                @if($user)
-                                                <div class="flex flex-col items-center p-1 border border-gray-100 dark:border-gray-700 rounded bg-gray-50 dark:bg-gray-700/30 min-w-[70px]">
-                                                    <span class="font-bold text-[10px] text-indigo-600 dark:text-indigo-400">{{ $label }}</span>
-                                                    <span class="truncate w-16 text-center" title="{{ $user->name }}">{{ $user->name }}</span>
-                                                </div>
-                                                @endif
-                                            @endforeach
+                                    <td class="px-6 py-4 whitespace-nowrap text-xs text-center">
+                                        <div class="flex flex-col items-center group">
+                                            <span class="text-xl font-black text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform">{{ $cc->approval_steps_count }}</span>
+                                            <span class="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Niveles de Flujo</span>
                                         </div>
                                     </td>
                                     @if(Auth::user()->isAdmin() || Auth::user()->isAdminView())

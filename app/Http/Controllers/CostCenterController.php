@@ -26,7 +26,8 @@ class CostCenterController extends Controller
                 },
                 'reimbursements as approved_count' => function($q) {
                     $q->where('status', 'aprobado');
-                }
+                },
+                'approvalSteps'
             ])
             ->withSum([
                 'reimbursements as pending_total' => function($q) {
@@ -47,7 +48,7 @@ class CostCenterController extends Controller
                 'reimbursements as avg_approval_days' => function($q) {
                     $q->where('status', 'aprobado')->whereNotNull('approved_by_treasury_at');
                 }
-            ], DB::raw('TIMESTAMPDIFF(DAY, created_at, approved_by_treasury_at)'))
+            ], DB::raw('TIMESTAMPDIFF(SECOND, created_at, approved_by_treasury_at) / 86400'))
             ->orderBy('code');
 
         if ($user->isAdmin() || $user->isAdminView()) {
@@ -113,7 +114,7 @@ class CostCenterController extends Controller
             'correction_count' => $costCenter->reimbursements()->where('status', 'requiere_correccion')->count(),
             'rejected_count' => $costCenter->reimbursements()->where('status', 'rechazado')->count(),
             'avg_approval_days' => $approvedQuery->whereNotNull('approved_by_treasury_at')
-                ->avg(DB::raw('TIMESTAMPDIFF(DAY, created_at, approved_by_treasury_at)')) ?? 0,
+                ->avg(DB::raw('TIMESTAMPDIFF(SECOND, created_at, approved_by_treasury_at) / 86400')) ?? 0,
         ];
 
         // 2. Status Breakdown (for chart/overview)
