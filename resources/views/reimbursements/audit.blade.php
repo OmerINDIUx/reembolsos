@@ -165,51 +165,94 @@
                             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                 <thead class="bg-gray-50/50 dark:bg-gray-800/80">
                                     <tr>
-                                        <th class="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Identificador</th>
-                                        <th class="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Fecha</th>
-                                        <th class="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Emisor / Solicitante</th>
-                                        <th class="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Estatus</th>
-                                        <th class="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Monto Neto</th>
-                                        <th class="px-6 py-4"></th>
+                                        <th class="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">ID Auditoría</th>
+                                        <th class="px-4 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Validación</th>
+                                        <th class="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Emisor / Solicitante</th>
+                                        <th class="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Método / Uso</th>
+                                        <th class="px-4 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Forma</th>
+                                        <th class="px-4 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Monto Neto</th>
+                                        <th class="px-4 py-4"></th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                                     @forelse($auditItems as $r)
-                                        <tr class="hover:bg-gray-50/50 dark:hover:bg-indigo-900/5 transition-colors">
-                                            <td class="px-6 py-5">
+                                        @php
+                                            $typeAbbr = strtoupper(substr($r->type, 0, 3));
+                                            $ccAbbr = $r->costCenter->abbreviation ?? 'SCC';
+                                            $year = $r->fecha ? $r->fecha->format('Y') : date('Y');
+                                            $compositeId = "{$ccAbbr}-{$typeAbbr}-{$year}-{$r->week}-" . str_pad($r->id, 3, '0', STR_PAD_LEFT);
+                                            
+                                            $val = $r->validation_data ?? [];
+                                            $uuidMatch = $val['uuid_match'] ?? true; 
+                                            $totalMatch = $val['total_match'] ?? true;
+                                        @endphp
+                                        <tr class="hover:bg-gray-50/50 dark:hover:bg-indigo-900/5 transition-colors border-b border-gray-50 dark:border-gray-800">
+                                            <td class="px-4 py-4">
                                                 <div class="flex flex-col">
-                                                    <span class="text-xs font-black text-gray-800 dark:text-gray-100">{{ $r->folio }}</span>
-                                                    <span class="text-[9px] text-gray-400 font-medium truncate max-w-[130px]">{{ $r->uuid }}</span>
+                                                    <span class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 italic mb-0.5 tracking-tight">{{ $compositeId }}</span>
+                                                    <span class="text-[11px] font-bold text-gray-800 dark:text-gray-100">{{ $r->fecha ? $r->fecha->format('d/m/Y') : 'S/F' }}</span>
+                                                    <span class="text-[9px] text-gray-400 font-mono font-medium uppercase tracking-tighter">{{ $r->uuid ?? 'SIN UUID' }}</span>
                                                 </div>
                                             </td>
-                                            <td class="px-6 py-5">
-                                                <span class="text-[11px] font-bold text-gray-500 whitespace-nowrap italic">
-                                                    {{ $r->fecha ? \Carbon\Carbon::parse($r->fecha)->format('d/m/Y') : 'S/F' }}
-                                                </span>
-                                            </td>
-                                            <td class="px-6 py-5">
-                                                <div class="flex flex-col">
-                                                    <span class="text-[11px] font-black text-gray-700 dark:text-gray-300 truncate max-w-[220px]">{{ $r->nombre_emisor }}</span>
-                                                    <span class="text-[10px] text-indigo-500 font-bold opacity-60 uppercase">{{ $r->user->name ?? 'N/A' }}</span>
+                                            <td class="px-4 py-4 text-center">
+                                                <div class="flex flex-col items-center justify-center space-y-1">
+                                                    <div class="flex items-center space-x-1.5">
+                                                        <span class="text-[8px] font-black uppercase text-gray-400">UUID</span>
+                                                        @if($r->uuid)
+                                                            <svg class="w-3.5 h-3.5 {{ $uuidMatch ? 'text-emerald-500' : 'text-red-500' }}" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                                            </svg>
+                                                        @else
+                                                            <span class="text-[8px] font-black text-amber-500">N/A</span>
+                                                        @endif
+                                                    </div>
+                                                    <div class="flex items-center space-x-1.5">
+                                                        <span class="text-[8px] font-black uppercase text-gray-400">Total</span>
+                                                        <svg class="w-3.5 h-3.5 {{ $totalMatch ? 'text-emerald-500' : 'text-red-500' }}" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                                        </svg>
+                                                    </div>
                                                 </div>
                                             </td>
-                                            <td class="px-6 py-5 text-center">
-                                                <span class="px-2 py-0.5 text-[9px] font-black rounded-full uppercase leading-none
-                                                    {{ $r->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
-                                                    {{ str_contains($r->status, 'aprobado_') ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
-                                                    {{ $r->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
-                                                    {{ $r->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
-                                                ">
-                                                    {{ str_replace('_', ' ', $r->status) }}
-                                                </span>
+                                            <td class="px-4 py-4">
+                                                <div class="flex flex-col">
+                                                    <span class="text-[11px] font-black text-gray-700 dark:text-gray-200 truncate max-w-[180px]">{{ $r->nombre_emisor }}</span>
+                                                    <div class="flex items-center space-x-1 mt-0.5">
+                                                        <span class="w-1.5 h-1.5 rounded-full 
+                                                            {{ $r->status === 'aprobado' ? 'bg-green-500' : '' }}
+                                                            {{ str_contains($r->status, 'aprobado_') ? 'bg-blue-500' : '' }}
+                                                            {{ $r->status === 'pendiente' ? 'bg-amber-500' : '' }}
+                                                            {{ $r->status === 'rechazado' ? 'bg-red-500' : '' }}
+                                                        "></span>
+                                                        <span class="text-[9px] text-gray-400 font-bold uppercase truncate max-w-[120px]">{{ $r->user->name ?? 'N/A' }}</span>
+                                                    </div>
+                                                </div>
                                             </td>
-                                            <td class="px-6 py-5 text-right font-mono font-black text-sm text-gray-900 dark:text-gray-100">
-                                                ${{ number_format($r->total, 2) }}
+                                            <td class="px-4 py-4">
+                                                <div class="flex flex-col space-y-1">
+                                                    <div class="flex items-center space-x-1.5">
+                                                        <span class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded text-[8px] font-black border border-gray-200 dark:border-gray-700 uppercase">{{ $r->metodo_pago ?? 'N/A' }}</span>
+                                                        <span class="text-[9px] font-bold text-gray-400 italic">Pago</span>
+                                                    </div>
+                                                    <div class="flex items-center space-x-1.5">
+                                                        <span class="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded text-[8px] font-black border border-indigo-100 dark:border-indigo-800 uppercase">{{ $r->uso_cfdi ?? 'N/A' }}</span>
+                                                        <span class="text-[9px] font-bold text-gray-400 italic">Uso</span>
+                                                    </div>
+                                                </div>
                                             </td>
-                                            <td class="px-6 py-5 text-right">
+                                            <td class="px-4 py-4 text-center">
+                                                <span class="px-2 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg text-[10px] font-black border border-gray-200 dark:border-gray-700 shadow-sm">{{ $r->forma_pago ?? '--' }}</span>
+                                            </td>
+                                            <td class="px-4 py-4 text-right">
+                                                <div class="flex flex-col items-end">
+                                                    <span class="font-mono font-black text-sm text-gray-900 dark:text-gray-100">${{ number_format($r->total, 2) }}</span>
+                                                    <span class="text-[8px] font-black text-indigo-500 uppercase tracking-widest italic opacity-60">Base: ${{ number_format($r->subtotal, 2) }}</span>
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-4 text-right">
                                                 <a href="{{ route('reimbursements.show', $r->id) }}"
-                                                   class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-md shadow-indigo-200 dark:shadow-none hover:-translate-y-0.5">
-                                                    Audit. Gasto
+                                                   class="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors block">
+                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                                                 </a>
                                             </td>
                                         </tr>
