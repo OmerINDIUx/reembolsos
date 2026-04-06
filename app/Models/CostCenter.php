@@ -67,6 +67,13 @@ class CostCenter extends Model
         return $this->hasMany(Reimbursement::class);
     }
 
+    public function authorizedUsers()
+    {
+        return $this->belongsToMany(User::class, 'cost_center_user')
+                    ->withPivot('can_do_special')
+                    ->withTimestamps();
+    }
+
     /**
      * Get an abbreviation for the cost center.
      * Rule: Use $this->code if present, else intelligent acronym.

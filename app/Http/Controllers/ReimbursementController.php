@@ -257,23 +257,39 @@ class ReimbursementController extends Controller
                                 ->get();
 
         if (!$type || !in_array($type, $allowedTypes)) {
-            return view('reimbursements.select_type', compact('drafts'));
+            $isMarkedInAnyCC = $user->isAdmin() || $user->authorizedCostCenters()->wherePivot('can_do_special', true)->exists();
+            return view('reimbursements.select_type', compact('drafts', 'isMarkedInAnyCC'));
         }
 
         $user = Auth::user();
         
-        // Filter cost centers based on role
+        // Filter cost centers based on role and permissions
         if ($user->isAdmin()) {
             $costCenters = CostCenter::orderBy('name')->get();
-        } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
-            $costCenters = CostCenter::where(function($q) use ($user) {
-                if ($user->isDirector()) $q->orWhere('director_id', $user->id);
-                if ($user->isControlObra()) $q->orWhere('control_obra_id', $user->id);
-                if ($user->isExecutiveDirector()) $q->orWhere('director_ejecutivo_id', $user->id);
-            })->orderBy('name')->get();
         } else {
-            // Standard users see all for now (unless specified otherwise)
-            $costCenters = CostCenter::orderBy('name')->get();
+            // Only show cost centers where the user is authorized
+            $costCenters = $user->authorizedCostCenters()->withPivot('can_do_special')->orderBy('name')->get();
+
+            // Filter based on type and "one reimbursement" rule
+            $costCenters = $costCenters->filter(function($cc) use ($user, $type) {
+                $isMarked = $cc->pivot->can_do_special;
+
+                // Special types (Fondo Fijo, Comida, Viaje) are restricted to marked users
+                if (in_array($type, ['fondo_fijo', 'comida', 'viaje'])) {
+                    return $isMarked;
+                }
+
+                // Standard reimbursement: unmarked users can only have ONE (none pending/approved)
+                if (!$isMarked) {
+                    $hasExisting = Reimbursement::where('cost_center_id', $cc->id)
+                        ->where('user_id', $user->id)
+                        ->where('status', '!=', 'rechazado')
+                        ->exists();
+                    return !$hasExisting;
+                }
+
+                return true;
+            });
         }
         
         // Auto-fill week: WeekNumber-Year (Starts Saturday, Ends Friday)
@@ -420,6 +436,14 @@ class ReimbursementController extends Controller
 
         foreach ($request->items as $index => $item) {
             try {
+                $costCenterId = $item['cost_center_id'] ?? $request->cost_center_id;
+                $travelEventId = $item['travel_event_id'] ?? $request->travel_event_id;
+
+                // Permissions and Limits Check
+                if (!$this->canCreateReimbursement($user, $type, $costCenterId)) {
+                    throw new \Exception("No tienes permiso para registrar este tipo de reembolso en este Centro de Costos o ya has alcanzado tu límite de 1 reembolso activo.");
+                }
+
                 $xmlData = null;
                 $uuid = null;
                 $xmlPath = null;
@@ -857,6 +881,11 @@ class ReimbursementController extends Controller
         // Inherit cost center from travel event if applicable
         $effectiveCostCenterId = $travelEvent ? $travelEvent->cost_center_id : $request->cost_center_id;
         $costCenter = $effectiveCostCenterId ? CostCenter::findOrFail($effectiveCostCenterId) : null;
+
+        // Permissions and Limits Check
+        if (!$this->canCreateReimbursement($user, $request->type, $effectiveCostCenterId)) {
+            return back()->withInput()->with('error', 'No tienes permiso para registrar este tipo de reembolso en este Centro de Costos o ya has alcanzado tu límite de 1 reembolso activo.');
+        }
 
         if ($costCenter && ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector())) {
             $isAuthorized = false;
@@ -2062,5 +2091,36 @@ class ReimbursementController extends Controller
             Log::error('Draft Save Error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
+    }
+
+    private function canCreateReimbursement(\App\Models\User $user, $type, $costCenterId)
+    {
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        $cc = \App\Models\CostCenter::find($costCenterId);
+        if (!$cc) return false;
+
+        $authorizedUser = $cc->authorizedUsers()->where('users.id', $user->id)->first();
+        if (!$authorizedUser) return false;
+
+        $isMarked = $authorizedUser->pivot->can_do_special;
+
+        // Special types (Fondo Fijo, Comida, Viaje) are restricted to marked users
+        if (in_array($type, ['fondo_fijo', 'comida', 'viaje'])) {
+            return (bool)$isMarked;
+        }
+
+        // Standard reimbursement: unmarked users can only have ONE (none pending/approved)
+        if (!$isMarked) {
+            $hasExisting = Reimbursement::where('cost_center_id', $cc->id)
+                ->where('user_id', $user->id)
+                ->where('status', '!=', 'rechazado')
+                ->exists();
+            return !$hasExisting;
+        }
+
+        return true;
     }
 }

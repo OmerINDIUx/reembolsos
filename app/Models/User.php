@@ -133,4 +133,11 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(TravelEvent::class, 'travel_event_user');
     }
+
+    public function authorizedCostCenters()
+    {
+        return $this->belongsToMany(CostCenter::class, 'cost_center_user')
+                    ->withPivot('can_do_special')
+                    ->withTimestamps();
+    }
 }

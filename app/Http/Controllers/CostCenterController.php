@@ -94,14 +94,21 @@ class CostCenterController extends Controller
         $costCenter->load(['director', 'controlObra', 'directorEjecutivo', 'accountant', 'direccion', 'tesoreria', 'approvalSteps.user']);
 
         // 1. Basic Stats
+        // ONLY marked users affect the budget
+        $markedUserIds = $costCenter->authorizedUsers()->wherePivot('can_do_special', true)->pluck('users.id');
+
         $pendingQuery = $costCenter->reimbursements()->whereNotIn('status', ['aprobado', 'rechazado']);
         $approvedQuery = $costCenter->reimbursements()->where('status', 'aprobado');
 
+        // Budget affecting queries
+        $pendingBudgetQuery = (clone $pendingQuery)->whereIn('user_id', $markedUserIds);
+        $approvedBudgetQuery = (clone $approvedQuery)->whereIn('user_id', $markedUserIds);
+
         $stats = [
             'pending_count' => (clone $pendingQuery)->count(),
-            'pending_amount' => (clone $pendingQuery)->sum('total'),
+            'pending_amount' => (clone $pendingBudgetQuery)->sum('total'),
             'approved_count' => (clone $approvedQuery)->count(),
-            'approved_amount' => (clone $approvedQuery)->sum('total'),
+            'approved_amount' => (clone $approvedBudgetQuery)->sum('total'),
             'correction_count' => $costCenter->reimbursements()->where('status', 'requiere_correccion')->count(),
             'rejected_count' => $costCenter->reimbursements()->where('status', 'rechazado')->count(),
             'avg_approval_days' => $approvedQuery->whereNotNull('approved_by_treasury_at')
@@ -191,6 +198,9 @@ class CostCenterController extends Controller
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.user_id' => ['required', 'exists:users,id'],
             'steps.*.name' => ['required', 'string', 'max:255'],
+            'allowed_users' => ['nullable', 'array'],
+            'allowed_users.*.user_id' => ['required', 'exists:users,id'],
+            'allowed_users.*.can_do_special' => ['nullable'],
         ]);
 
         $cc = CostCenter::create([
@@ -214,6 +224,16 @@ class CostCenterController extends Controller
                 'name' => $step['name'],
                 'order' => $index + 1,
             ]);
+        }
+
+        if ($request->has('allowed_users')) {
+            $syncData = [];
+            foreach ($request->allowed_users as $user) {
+                $syncData[$user['user_id']] = [
+                    'can_do_special' => isset($user['can_do_special']) && $user['can_do_special'] ? true : false
+                ];
+            }
+            $cc->authorizedUsers()->sync($syncData);
         }
 
         return redirect()->route('cost_centers.index')->with('success', 'Centro de Costos creado con ' . count($request->steps) . ' niveles de aprobación.');
@@ -248,6 +268,9 @@ class CostCenterController extends Controller
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.user_id' => ['required', 'exists:users,id'],
             'steps.*.name' => ['required', 'string', 'max:255'],
+            'allowed_users' => ['nullable', 'array'],
+            'allowed_users.*.user_id' => ['required', 'exists:users,id'],
+            'allowed_users.*.can_do_special' => ['nullable'],
         ]);
 
         $costCenter->update([
@@ -265,6 +288,18 @@ class CostCenterController extends Controller
                 'name' => $step['name'],
                 'order' => $index + 1,
             ]);
+        }
+
+        if ($request->has('allowed_users')) {
+            $syncData = [];
+            foreach ($request->allowed_users as $user) {
+                $syncData[$user['user_id']] = [
+                    'can_do_special' => isset($user['can_do_special']) && $user['can_do_special'] ? true : false
+                ];
+            }
+            $costCenter->authorizedUsers()->sync($syncData);
+        } else {
+            $costCenter->authorizedUsers()->sync([]);
         }
 
         return redirect()->route('cost_centers.index')->with('success', 'Centro de Costos actualizado con ' . count($request->steps) . ' niveles de aprobación.');
