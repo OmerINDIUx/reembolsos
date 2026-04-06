@@ -65,6 +65,7 @@
                 <input type="hidden" name="type" value="{{ $type }}">
                 <input type="hidden" name="week" value="{{ $currentWeek }}">
                 <input type="hidden" name="has_invoice" value="{{ $hasInvoice ? 1 : 0 }}">
+                <input type="hidden" name="draft_id" :value="draftId">
 
                 <!-- Paso 1: Clasificación de Gasto -->
                 <div class="bg-white dark:bg-gray-800 shadow-xl rounded-3xl mb-10 overflow-hidden border border-gray-100 dark:border-gray-700">
@@ -132,6 +133,7 @@
                 <div x-show="type !== 'viaje'" class="space-y-16">
                     <template x-for="(item, index) in items" :key="item.id">
                         <div class="bg-white dark:bg-gray-800 shadow-2xl rounded-[2.5rem] border border-gray-100 dark:border-gray-700 overflow-hidden animate-fadeIn relative">
+                            <input type="hidden" :name="'items['+index+'][draft_id]'" :value="item.draftId">
                             
                             <!-- Card Header -->
                             <div class="bg-gray-50 dark:bg-gray-900/40 px-8 md:px-10 py-6 flex justify-between items-center border-b border-gray-100 dark:border-gray-700">

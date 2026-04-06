@@ -181,6 +181,30 @@ class ReimbursementController extends Controller
         $selectedCcName  = $request->input('cc');
         $selectedType    = $request->input('type');
 
+        // Build stats for dashboard panels
+        $auditStats = null;
+        if ($selectedWeek) {
+            $itemsForStats = $allReimbursements->where('week', $selectedWeek);
+            if ($selectedCcName) {
+                $itemsForStats = $itemsForStats->filter(fn($r) => ($r->costCenter->name ?? 'Sin Centro de Costos') === $selectedCcName);
+            }
+            if ($selectedType) {
+                $itemsForStats = $itemsForStats->where('type', $selectedType);
+            }
+
+            if ($itemsForStats->count() > 0) {
+                $auditStats = [
+                    'total' => $itemsForStats->sum('total'),
+                    'count' => $itemsForStats->count(),
+                    'avg' => $itemsForStats->avg('total'),
+                    'status_counts' => $itemsForStats->groupBy('status')->map->count(),
+                    'category_totals' => $itemsForStats->groupBy('category')->map->sum('total'),
+                    'validation_passed' => $itemsForStats->filter(fn($r) => ($r->validation_data['uuid_match'] ?? false) && ($r->validation_data['total_match'] ?? false))->count(),
+                    'manual_count' => $itemsForStats->where('folio', 'SIN-FACTURA')->count(),
+                ];
+            }
+        }
+
         // Build grouped data
         $groupedByWeek = $allReimbursements->groupBy('week');
 
@@ -203,7 +227,7 @@ class ReimbursementController extends Controller
             ];
         }
 
-        return view('reimbursements.audit', compact('groupedByWeek', 'auditItems', 'auditMeta', 'selectedWeek', 'selectedCcName', 'selectedType'));
+        return view('reimbursements.audit', compact('groupedByWeek', 'auditItems', 'auditMeta', 'selectedWeek', 'selectedCcName', 'selectedType', 'auditStats'));
     }
 
 
@@ -319,7 +343,8 @@ class ReimbursementController extends Controller
         
         // If a travel event is selected, it MUST use its cost center
         $costCenterId = $travelEvent ? $travelEvent->cost_center_id : $request->cost_center_id;
-        $week = $request->week;
+        // AUTO-FILL WEEK: Always use current week on publication
+        $week = now()->addDays(2)->format('W-Y');
         
         $costCenter = $costCenterId ? CostCenter::find($costCenterId) : null;
 
@@ -429,7 +454,9 @@ class ReimbursementController extends Controller
                     }
                     $processedUuids[] = $uuid;
                     
-                    $validationData = $this->getValidationData($xmlData, $pdfFile);
+                    // Check for existing PDF if new one is missing
+                    $pdfToValidate = $pdfFile ?: ($existingDraft ? $existingDraft->pdf_path : null);
+                    $validationData = $this->getValidationData($xmlData, $pdfToValidate);
                 } else {
                     // Manual data
                     $xmlData = [
@@ -617,7 +644,15 @@ class ReimbursementController extends Controller
 
         try {
             $parser = new \Smalot\PdfParser\Parser();
-            $pdf = $parser->parseFile($pdfFile->getRealPath());
+            
+            // Handle both UploadedFile and existing storage paths
+            $filePath = ($pdfFile instanceof \Illuminate\Http\UploadedFile) 
+                ? $pdfFile->getRealPath() 
+                : Storage::path($pdfFile);
+
+            if (!file_exists($filePath)) return null;
+
+            $pdf = $parser->parseFile($filePath);
             $text = $pdf->getText();
             
             // UUID Check
@@ -825,11 +860,19 @@ class ReimbursementController extends Controller
 
         $finalObs = ($request->observaciones ?? "") . $autoNote;
 
+        // Re-run validation if missing (important for drafts)
+        $validationData = $request->validation_data ? json_decode($request->validation_data, true) : null;
+        if (!$validationData && $request->uuid) {
+            $xmlDataForVal = ['uuid' => $request->uuid, 'total' => $request->total];
+            $pdfToValidate = ($request->file('pdf_file')) ? $request->file('pdf_file') : ($existingDraft ? $existingDraft->pdf_path : null);
+            $validationData = $this->getValidationData($xmlDataForVal, $pdfToValidate);
+        }
+
         $reimbursementData = array_merge([
             'type' => $request->type,
             'cost_center_id' => $effectiveCostCenterId,
             'travel_event_id' => $request->travel_event_id,
-            'week' => $request->week,
+            'week' => now()->addDays(2)->format('W-Y'),
             'category' => $request->category ?? 'viaticos', // Default for trips if not set
             'uuid' => $request->uuid,
             'rfc_emisor' => $request->rfc_emisor,
@@ -861,10 +904,11 @@ class ReimbursementController extends Controller
             'trip_destination' => $request->trip_destination,
             'trip_start_date' => $request->trip_start_date,
             'trip_end_date' => $request->trip_end_date,
+            'trip_status' => $request->trip_status, // Added this field from request
             'title' => $request->title,
             'parent_id' => $request->parent_id,
             'company_confirmed' => $request->has('confirm_company') ? true : false,
-            'validation_data' => $request->validation_data ? json_decode($request->validation_data, true) : null,
+            'validation_data' => $validationData,
             'user_id' => Auth::id(),
         ], $approvalData);
 
@@ -953,7 +997,8 @@ class ReimbursementController extends Controller
         
         // Standard list of cost centers (reuse logic from create if possible)
         $costCenters = CostCenter::orderBy('name')->get();
-        $currentWeek = $reimbursement->week;
+        // Display CURRENT processing week, not the draft's original week
+        $currentWeek = now()->addDays(2)->format('W-Y');
         $categories = $this->getCategories();
         $travelEvents = \App\Models\TravelEvent::where('status', 'active')->get();
 
