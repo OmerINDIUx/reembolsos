@@ -318,8 +318,12 @@ class ReimbursementController extends Controller
             'items.*.category' => ['required', Rule::in($this->getCategories())],
             'items.*.xml_file' => $hasInvoice ? 'required|file' : 'nullable',
             'items.*.pdf_file' => $hasInvoice ? 'nullable|file|max:15360' : 'required|file|max:15360',
-            'items.*.ticket_file' => 'nullable|file|max:10240', // Nuevo: Ticket/Pruebas
+            'items.*.ticket_file' => 'nullable|file|max:10240',
             'items.*.confirm_company' => $hasInvoice ? 'required' : 'nullable',
+            // Stricter publication fields
+            'items.*.uuid' => $hasInvoice ? 'required_without:items.*.draft_id' : 'nullable',
+            'items.*.total' => 'required',
+            'items.*.fecha' => 'required',
         ];
 
         if (!$hasInvoice) {
@@ -488,42 +492,43 @@ class ReimbursementController extends Controller
 
                 $finalObs = ($item['observaciones'] ?? "") . $autoNote;
 
+                // DATA PRESERVATION: Use draft value if request value is empty
                 $reimbursementData = array_merge([
                     'type' => $type,
                     'cost_center_id' => $costCenterId,
                     'travel_event_id' => $travelEventId,
                     'week' => $week,
-                    'category' => $item['category'],
-                    'uuid' => $uuid,
-                    'rfc_emisor' => $xmlData['rfc_emisor'],
-                    'nombre_emisor' => $xmlData['nombre_emisor'],
-                    'rfc_receptor' => $xmlData['rfc_receptor'],
-                    'nombre_receptor' => $xmlData['nombre_receptor'],
-                    'folio' => $xmlData['folio'], 
-                    'fecha' => $xmlData['fecha'],
-                    'total' => $xmlData['total'],
-                    'subtotal' => $xmlData['subtotal'],
-                    'impuestos' => $xmlData['impuestos'] ?? 0,
-                    'moneda' => $xmlData['moneda'],
-                    'tipo_comprobante' => $xmlData['tipo_comprobante'],
-                    'metodo_pago' => $xmlData['metodo_pago'] ?? null,
-                    'forma_pago' => $xmlData['forma_pago'] ?? null,
-                    'uso_cfdi' => $xmlData['uso_cfdi'] ?? null,
-                    'lugar_expedicion' => $xmlData['lugar_expedicion'] ?? null,
-                    'regimen_fiscal_emisor' => $xmlData['regimen_fiscal_emisor'] ?? null,
+                    'category' => !empty($item['category']) ? $item['category'] : ($existingDraft ? $existingDraft->category : 'viaticos'),
+                    'uuid' => !empty($uuid) ? $uuid : ($existingDraft ? $existingDraft->uuid : null),
+                    'rfc_emisor' => !empty($xmlData['rfc_emisor']) ? $xmlData['rfc_emisor'] : ($existingDraft ? $existingDraft->rfc_emisor : null),
+                    'nombre_emisor' => !empty($xmlData['nombre_emisor']) ? $xmlData['nombre_emisor'] : ($existingDraft ? $existingDraft->nombre_emisor : null),
+                    'rfc_receptor' => !empty($xmlData['rfc_receptor']) ? $xmlData['rfc_receptor'] : ($existingDraft ? $existingDraft->rfc_receptor : null),
+                    'nombre_receptor' => !empty($xmlData['nombre_receptor']) ? $xmlData['nombre_receptor'] : ($existingDraft ? $existingDraft->nombre_receptor : null),
+                    'folio' => !empty($xmlData['folio']) ? $xmlData['folio'] : ($existingDraft ? $existingDraft->folio : null),
+                    'fecha' => !empty($xmlData['fecha']) ? $xmlData['fecha'] : ($existingDraft ? $existingDraft->fecha : null),
+                    'total' => !empty($xmlData['total']) ? $xmlData['total'] : ($existingDraft ? $existingDraft->total : 0),
+                    'subtotal' => !empty($xmlData['subtotal']) ? $xmlData['subtotal'] : ($existingDraft ? $existingDraft->subtotal : 0),
+                    'impuestos' => !empty($xmlData['impuestos']) ? $xmlData['impuestos'] : ($existingDraft ? $existingDraft->impuestos : 0),
+                    'moneda' => !empty($xmlData['moneda']) ? $xmlData['moneda'] : ($existingDraft ? $existingDraft->moneda : 'MXN'),
+                    'tipo_comprobante' => !empty($xmlData['tipo_comprobante']) ? $xmlData['tipo_comprobante'] : ($existingDraft ? $existingDraft->tipo_comprobante : null),
                     'xml_path' => $xmlPath,
                     'pdf_path' => $pdfPath,
                     'ticket_path' => $ticketPath,
                     'status' => $initialStatus,
                     'current_step_id' => $currentStepId,
                     'observaciones' => trim($finalObs),
-                    'attendees_count' => $item['attendees_count'] ?? null,
-                    'attendees_names' => $item['attendees_names'] ?? null,
-                    'location' => $item['location'] ?? null,
+                    'attendees_count' => $item['attendees_count'] ?? ($existingDraft ? $existingDraft->attendees_count : 0),
+                    'attendees_names' => $item['attendees_names'] ?? ($existingDraft ? $existingDraft->attendees_names : null),
+                    'location' => $item['location'] ?? ($existingDraft ? $existingDraft->location : null),
                     'user_id' => $user->id,
                     'company_confirmed' => isset($item['confirm_company']),
-                    'validation_data' => $validationData, // Saving validation for the table
+                    'validation_data' => $validationData,
                 ], $approvalData);
+
+                // FINAL SAFETY CHECK
+                if ($hasInvoice && empty($reimbursementData['uuid'])) {
+                     throw new \Exception("Faltan datos críticos del XML. Por favor sube el archivo nuevamente.");
+                }
 
                 if ($existingDraft) {
                     $existingDraft->update($reimbursementData);
@@ -595,19 +600,40 @@ class ReimbursementController extends Controller
         set_time_limit(120);
 
         $request->validate([
-            'xml_file' => 'required|file',
+            'xml_file' => 'required_without:draft_id|file|nullable',
             'pdf_file' => 'nullable|file',
+            'draft_id' => 'required_without:xml_file|exists:reimbursements,id|nullable',
         ]);
 
         try {
-            $xmlContent = file_get_contents($request->file('xml_file')->getRealPath());
+            $xmlContent = null;
+            if ($request->hasFile('xml_file')) {
+                $xmlContent = file_get_contents($request->file('xml_file')->getRealPath());
+            } elseif ($request->draft_id) {
+                $reimbursement = Reimbursement::findOrFail($request->draft_id);
+                if ($reimbursement->xml_path && Storage::exists($reimbursement->xml_path)) {
+                    $xmlContent = Storage::get($reimbursement->xml_path);
+                } else {
+                    return response()->json(['error' => 'No se encontró un archivo XML en el borrador especificado.'], 422);
+                }
+            }
+
+            if (!$xmlContent) {
+                return response()->json(['error' => 'No se proporcionó un archivo XML válido.'], 422);
+            }
+
             $data = $this->extractXmlData($xmlContent);
 
             if (empty($data['uuid'])) {
                 return response()->json(['error' => 'No se encontró un UUID válido en el XML provided.'], 422);
             }
 
-            $existingReimbursement = Reimbursement::where('uuid', $data['uuid'])->first();
+            // Ignore self if draft_id is provided
+            $existingReimbursement = Reimbursement::where('uuid', $data['uuid'])
+                ->when($request->draft_id, function($q) use ($request) {
+                    return $q->where('id', '!=', $request->draft_id);
+                })
+                ->first();
             if ($existingReimbursement) {
                 return response()->json([
                     'error' => 'duplicate_cfdi',
@@ -619,15 +645,24 @@ class ReimbursementController extends Controller
             }
 
             $pdfFile = $request->file('pdf_file');
+            
+            // If PDF is missing but draft_id is provided, look for stored PDF
+            if (!$pdfFile && $request->draft_id) {
+                $reimbursement = Reimbursement::find($request->draft_id);
+                if ($reimbursement && $reimbursement->pdf_path && Storage::exists($reimbursement->pdf_path)) {
+                    $pdfFile = $reimbursement->pdf_path; // Pass as string (path) to helper
+                }
+            }
+
             $pdfValidation = $this->getValidationData($data, $pdfFile);
 
             return response()->json(array_merge($data, [
                 'pdf_validation' => $pdfValidation,
-                'metodo_pago' => $data['metodo_pago'],
-                'forma_pago' => $data['forma_pago'],
-                'uso_cfdi' => $data['uso_cfdi'],
-                'lugar_expedicion' => $data['lugar_expedicion'],
-                'regimen_fiscal_emisor' => $data['regimen_fiscal_emisor'],
+                'metodo_pago' => $data['metodo_pago'] ?? null,
+                'forma_pago' => $data['forma_pago'] ?? null,
+                'uso_cfdi' => $data['uso_cfdi'] ?? null,
+                'lugar_expedicion' => $data['lugar_expedicion'] ?? null,
+                'regimen_fiscal_emisor' => $data['regimen_fiscal_emisor'] ?? null,
             ]));
 
         } catch (\Exception $e) {
@@ -873,18 +908,18 @@ class ReimbursementController extends Controller
             'cost_center_id' => $effectiveCostCenterId,
             'travel_event_id' => $request->travel_event_id,
             'week' => now()->addDays(2)->format('W-Y'),
-            'category' => $request->category ?? 'viaticos', // Default for trips if not set
-            'uuid' => $request->uuid,
-            'rfc_emisor' => $request->rfc_emisor,
-            'nombre_emisor' => $request->nombre_emisor,
-            'rfc_receptor' => $request->rfc_receptor,
-            'nombre_receptor' => $request->nombre_receptor,
-            'folio' => $request->folio, // Placeholder, updated below
-            'fecha' => $request->fecha,
-            'total' => $request->total,
-            'subtotal' => $request->subtotal,
-            'impuestos' => $request->impuestos ?? ($request->total - $request->subtotal), // Added this
-            'moneda' => $request->moneda,
+            'category' => !empty($request->category) ? $request->category : ($existingDraft ? $existingDraft->category : 'viaticos'),
+            'uuid' => !empty($request->uuid) ? $request->uuid : ($existingDraft ? $existingDraft->uuid : null),
+            'rfc_emisor' => !empty($request->rfc_emisor) ? $request->rfc_emisor : ($existingDraft ? $existingDraft->rfc_emisor : null),
+            'nombre_emisor' => !empty($request->nombre_emisor) ? $request->nombre_emisor : ($existingDraft ? $existingDraft->nombre_emisor : null),
+            'rfc_receptor' => !empty($request->rfc_receptor) ? $request->rfc_receptor : ($existingDraft ? $existingDraft->rfc_receptor : null),
+            'nombre_receptor' => !empty($request->nombre_receptor) ? $request->nombre_receptor : ($existingDraft ? $existingDraft->nombre_receptor : null),
+            'folio' => !empty($request->folio) ? $request->folio : ($existingDraft ? $existingDraft->folio : null),
+            'fecha' => !empty($request->fecha) ? $request->fecha : ($existingDraft ? $existingDraft->fecha : null),
+            'total' => !empty($request->total) ? $request->total : ($existingDraft ? $existingDraft->total : 0),
+            'subtotal' => !empty($request->subtotal) ? $request->subtotal : ($existingDraft ? $existingDraft->subtotal : 0),
+            'impuestos' => !empty($request->impuestos) ? $request->impuestos : ($existingDraft ? $existingDraft->impuestos : ($request->total - $request->subtotal)),
+            'moneda' => !empty($request->moneda) ? $request->moneda : ($existingDraft ? $existingDraft->moneda : 'MXN'),
             'metodo_pago' => $request->metodo_pago,
             'forma_pago' => $request->forma_pago,
             'uso_cfdi' => $request->uso_cfdi,
@@ -896,16 +931,16 @@ class ReimbursementController extends Controller
             'status' => $initialStatus,
             'current_step_id' => $currentStepId,
             'observaciones' => ($request->observaciones ?? "") . $autoNote,
-            'attendees_count' => $request->attendees_count,
-            'attendees_names' => $request->attendees_names,
-            'location' => $request->location,
+            'attendees_count' => $request->attendees_count ?? ($existingDraft ? $existingDraft->attendees_count : 0),
+            'attendees_names' => $request->attendees_names ?? ($existingDraft ? $existingDraft->attendees_names : null),
+            'location' => $request->location ?? ($existingDraft ? $existingDraft->location : null),
             'trip_nights' => $request->trip_nights,
             'trip_type' => $request->trip_type,
             'trip_destination' => $request->trip_destination,
             'trip_start_date' => $request->trip_start_date,
             'trip_end_date' => $request->trip_end_date,
-            'trip_status' => $request->trip_status, // Added this field from request
-            'title' => $request->title,
+            'trip_status' => $request->trip_status,
+            'title' => !empty($request->title) ? $request->title : ($existingDraft ? $existingDraft->title : null),
             'parent_id' => $request->parent_id,
             'company_confirmed' => $request->has('confirm_company') ? true : false,
             'validation_data' => $validationData,
@@ -991,6 +1026,8 @@ class ReimbursementController extends Controller
         if ($reimbursement->status !== 'borrador' && $reimbursement->status !== 'requiere_correccion') {
             return redirect()->route('reimbursements.show', $reimbursement);
         }
+
+        $reimbursement->load('children');
 
         $type = $reimbursement->type;
         $hasInvoice = !empty($reimbursement->xml_path) || $reimbursement->folio !== 'SIN-FACTURA';
@@ -1932,7 +1969,11 @@ class ReimbursementController extends Controller
                         'uuid', 'folio', 'category'
                     ];
                     foreach ($fields as $field) {
-                        if (isset($itemData[$field])) $data[$field] = $itemData[$field];
+                        // PREVENT DATA LOSS: Only update if the field in the request is NOT empty
+                        // This prevents a cleared frontend state from wiping valid DB data
+                        if (isset($itemData[$field]) && $itemData[$field] !== "" && $itemData[$field] !== "null" && $itemData[$field] !== null) {
+                            $data[$field] = $itemData[$field];
+                        }
                     }
 
                     // Enhanced and Safer File Handling (10MB limit)

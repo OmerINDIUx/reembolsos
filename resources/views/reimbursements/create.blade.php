@@ -651,45 +651,87 @@
                 isSaving: false,
                 init() { 
                     @if(isset($reimbursement))
-                        this.chargeType = '{{ $reimbursement->travel_event_id ? "travel_event" : "cost_center" }}';
-                        this.tripType = '{{ $reimbursement->trip_type ?? "nacional" }}';
-                        this.title = `{!! addslashes($reimbursement->title) !!}`;
-                        this.tripDestination = `{!! addslashes($reimbursement->trip_destination) !!}`;
+                        this.chargeType = @json($reimbursement->travel_event_id ? "travel_event" : "cost_center");
+                        this.tripType = @json($reimbursement->trip_type ?? "nacional");
+                        this.title = @json($reimbursement->title);
+                        this.tripDestination = @json($reimbursement->trip_destination);
                         this.tripNights = {{ $reimbursement->trip_nights ?? 0 }};
-                        this.tripStartDate = '{{ $reimbursement->trip_start_date ? $reimbursement->trip_start_date->format("Y-m-d") : "" }}';
-                        this.tripEndDate = '{{ $reimbursement->trip_end_date ? $reimbursement->trip_end_date->format("Y-m-d") : "" }}';
-                        this.observacionesGeneral = `{!! addslashes($reimbursement->observaciones) !!}`;
+                        this.tripStartDate = @json($reimbursement->trip_start_date ? $reimbursement->trip_start_date->format("Y-m-d") : "");
+                        this.tripEndDate = @json($reimbursement->trip_end_date ? $reimbursement->trip_end_date->format("Y-m-d") : "");
+                        this.observacionesGeneral = @json($reimbursement->observaciones);
                         
-                        this.addItem({
-                            draftId: '{{ $reimbursement->id }}',
-                            fileName: '{{ $reimbursement->xml_path ? "Factura: " . ($reimbursement->folio ?: (substr($reimbursement->uuid, 0, 8) ?: 'Cargada')) : "" }}',
-                            pdfName: '{{ $reimbursement->pdf_path ? "PDF Guardado" : "" }}',
-                            ticketName: '{{ $reimbursement->ticket_path ? "Ticket/Prueba Guardado" : "" }}',
-                            xmlParsed: {{ $reimbursement->xml_path ? 'true' : 'false' }},
-                            data: {
-                                uuid: '{{ $reimbursement->uuid }}',
-                                folio: '{{ $reimbursement->folio }}',
-                                rfc_emisor: '{{ $reimbursement->rfc_emisor }}',
-                                nombre_emisor: '{{ $reimbursement->nombre_emisor }}',
-                                rfc_receptor: '{{ $reimbursement->rfc_receptor }}',
-                                nombre_receptor: '{{ $reimbursement->nombre_receptor }}',
-                                fecha: '{{ $reimbursement->fecha ? $reimbursement->fecha->format("Y-m-d") : "" }}',
-                                total: {{ $reimbursement->total ?: 0 }},
-                                subtotal: {{ $reimbursement->subtotal ?: 0 }},
-                                impuestos: {{ $reimbursement->impuestos ?: 0 }},
-                                moneda: '{{ $reimbursement->moneda ?: "MXN" }}',
-                                metodo_pago: '{{ $reimbursement->metodo_pago }}',
-                                forma_pago: '{{ $reimbursement->forma_pago }}',
-                                uso_cfdi: '{{ $reimbursement->uso_cfdi }}',
-                                lugar_expedicion: '{{ $reimbursement->lugar_expedicion }}',
-                                regimen_fiscal_emisor: '{{ $reimbursement->regimen_fiscal_emisor }}',
-                                category: '{{ $reimbursement->category }}',
-                                observaciones: `{!! addslashes($reimbursement->observaciones) !!}`
-                            }
-                        });
+                        @if($reimbursement->type === 'viaje')
+                            @foreach($reimbursement->children as $child)
+                                this.addItem({
+                                    draftId: @json($child->id),
+                                    fileName: @json($child->xml_path ? "Factura: " . ($child->folio ?: (substr($child->uuid, 0, 8) ?: 'Cargada')) : ""),
+                                    pdfName: @json($child->pdf_path ? "PDF Guardado" : ""),
+                                    ticketName: @json($child->ticket_path ? "Ticket/Prueba Guardado" : ""),
+                                    xmlParsed: {{ $child->xml_path ? 'true' : 'false' }},
+                                    data: {
+                                        uuid: @json($child->uuid),
+                                        folio: @json($child->folio),
+                                        rfc_emisor: @json($child->rfc_emisor),
+                                        nombre_emisor: @json($child->nombre_emisor),
+                                        rfc_receptor: @json($child->rfc_receptor),
+                                        nombre_receptor: @json($child->nombre_receptor),
+                                        fecha: @json($child->fecha ? $child->fecha->format("Y-m-d") : ""),
+                                        total: {{ $child->total ?: 0 }},
+                                        subtotal: {{ $child->subtotal ?: 0 }},
+                                        impuestos: {{ $child->impuestos ?: 0 }},
+                                        moneda: @json($child->moneda ?: "MXN"),
+                                        metodo_pago: @json($child->metodo_pago),
+                                        forma_pago: @json($child->forma_pago),
+                                        uso_cfdi: @json($child->uso_cfdi),
+                                        lugar_expedicion: @json($child->lugar_expedicion),
+                                        regimen_fiscal_emisor: @json($child->regimen_fiscal_emisor),
+                                        category: @json($child->category),
+                                        pdf_validation: @json($child->validation_data),
+                                        observaciones: @json($child->observaciones)
+                                    }
+                                });
+                            @endforeach
+                            if (this.items.length === 0) this.addItem();
+                        @else
+                            this.addItem({
+                                draftId: @json($reimbursement->id),
+                                fileName: @json($reimbursement->xml_path ? "Factura: " . ($reimbursement->folio ?: (substr($reimbursement->uuid, 0, 8) ?: 'Cargada')) : ""),
+                                pdfName: @json($reimbursement->pdf_path ? "PDF Guardado" : ""),
+                                ticketName: @json($reimbursement->ticket_path ? "Ticket/Prueba Guardado" : ""),
+                                xmlParsed: {{ $reimbursement->xml_path ? 'true' : 'false' }},
+                                data: {
+                                    uuid: @json($reimbursement->uuid),
+                                    folio: @json($reimbursement->folio),
+                                    rfc_emisor: @json($reimbursement->rfc_emisor),
+                                    nombre_emisor: @json($reimbursement->nombre_emisor),
+                                    rfc_receptor: @json($reimbursement->rfc_receptor),
+                                    nombre_receptor: @json($reimbursement->nombre_receptor),
+                                    fecha: @json($reimbursement->fecha ? $reimbursement->fecha->format("Y-m-d") : ""),
+                                    total: {{ $reimbursement->total ?: 0 }},
+                                    subtotal: {{ $reimbursement->subtotal ?: 0 }},
+                                    impuestos: {{ $reimbursement->impuestos ?: 0 }},
+                                    moneda: @json($reimbursement->moneda ?: "MXN"),
+                                    metodo_pago: @json($reimbursement->metodo_pago),
+                                    forma_pago: @json($reimbursement->forma_pago),
+                                    uso_cfdi: @json($reimbursement->uso_cfdi),
+                                    lugar_expedicion: @json($reimbursement->lugar_expedicion),
+                                    regimen_fiscal_emisor: @json($reimbursement->regimen_fiscal_emisor),
+                                    category: @json($reimbursement->category),
+                                    pdf_validation: @json($reimbursement->validation_data),
+                                    observaciones: @json($reimbursement->observaciones)
+                                }
+                            });
+                        @endif
                     @else
                         if (this.type !== 'viaje') this.addItem(); 
                     @endif
+
+                    // Trigger validation for items that have both files but no validation record yet
+                    this.items.forEach((item, index) => {
+                        if (item.draftId && item.xmlParsed && item.pdfName && (!item.data || !item.data.pdf_validation)) {
+                            this.validateFiles(index);
+                        }
+                    });
 
                     // Auto-save every 30 seconds
                     setInterval(() => this.saveDraft(true), 30000);
@@ -975,12 +1017,21 @@
                     const xmlInput = document.querySelector(`input[name="items[${index}][xml_file]"]`);
                     const pdfInput = document.querySelector(`input[name="items[${index}][pdf_file]"]`);
                     
-                    if (!xmlInput || !xmlInput.files[0]) return;
+                    // Allow validation if we have EITHER a new file OR a draft file for both
+                    const hasXml = (xmlInput && xmlInput.files[0]) || (item.draftId && item.xmlParsed);
+                    const hasPdf = (pdfInput && pdfInput.files[0]) || (item.draftId && item.pdfName);
+                    
+                    if (!hasXml || !hasPdf) return;
 
                     const formData = new FormData();
-                    formData.append('xml_file', xmlInput.files[0]);
+                    if (xmlInput && xmlInput.files[0]) {
+                        formData.append('xml_file', xmlInput.files[0]);
+                    }
                     if (pdfInput && pdfInput.files[0]) {
                         formData.append('pdf_file', pdfInput.files[0]);
+                    }
+                    if (item.draftId) {
+                        formData.append('draft_id', item.draftId);
                     }
                     formData.append('_token', '{{ csrf_token() }}');
 
