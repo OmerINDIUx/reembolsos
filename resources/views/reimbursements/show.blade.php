@@ -5,601 +5,470 @@
         </h2>
     </x-slot>
 
-    <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            <!-- User Correction Panel -->
+    <div class="py-12 bg-gray-50/50 dark:bg-gray-950/50 min-h-screen font-sans text-gray-800 dark:text-gray-200">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            
+            <!-- User Correction Panel (High Priority) -->
             @if(!Auth::user()->isAdminView() && Auth::user()->id === $reimbursement->user_id && $reimbursement->status === 'requiere_correccion')
-                <div class="bg-yellow-50 dark:bg-yellow-900/20 shadow sm:rounded-lg border-2 border-yellow-300 dark:border-yellow-600">
-                    <div class="p-6">
-                        <h4 class="text-lg font-bold text-yellow-800 dark:text-yellow-300 mb-2">Requiere Corrección</h4>
-                        <p class="text-sm text-yellow-700 dark:text-yellow-400 mb-4">
-                            Esta solicitud requiere que corrijas los archivos o proporciones más información.
-                        </p>
-                        <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST" enctype="multipart/form-data" class="space-y-4">
-                            @csrf
-                            @method('PUT')
-                            <input type="hidden" name="is_resubmission" value="1">
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        {{ $reimbursement->uuid ? 'Actualizar archivo PDF (Opcional)' : 'Actualizar Comprobante (PDF, Imagen, Texto)' }}
-                                    </label>
-                                    <input type="file" id="pdf_file_input" name="pdf_file" accept="{{ $reimbursement->uuid ? '.pdf' : '.pdf,image/*,.txt' }}" class="mt-1 block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900 dark:file:text-indigo-300">
-                                    <div id="pdf-validation-result" class="mt-2 text-sm hidden"></div>
-                                </div>
-                                
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Actualizar Ticket / Pruebas (Opcional)
-                                    </label>
-                                    <input type="file" name="ticket_file" accept=".pdf,.jpg,.jpeg,.png,.txt" class="mt-1 block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900 dark:file:text-indigo-300">
-                                </div>
-
-                                @if($reimbursement->type === 'comida')
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="attendees_count">Número de Asistentes</label>
-                                        <input type="number" name="attendees_count" id="attendees_count" value="{{ old('attendees_count', $reimbursement->attendees_count) }}" min="1" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="location">Lugar</label>
-                                        <input type="text" name="location" id="location" value="{{ old('location', $reimbursement->location) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                    </div>
-                                    <div class="md:col-span-2">
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="attendees_names">Nombre de los Asistentes</label>
-                                        <textarea name="attendees_names" id="attendees_names" rows="2" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">{{ old('attendees_names', $reimbursement->attendees_names) }}</textarea>
-                                    </div>
-                                @endif
-
-                                @if($reimbursement->type === 'viaje')
-                                    <div class="md:col-span-2">
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="title">Título del Viaje / Gasto</label>
-                                        <input type="text" name="title" id="title" value="{{ old('title', $reimbursement->title) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="trip_destination">Lugar de Destino</label>
-                                        <input type="text" name="trip_destination" id="trip_destination" value="{{ old('trip_destination', $reimbursement->trip_destination) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="trip_nights">Noches</label>
-                                        <input type="number" name="trip_nights" id="trip_nights" value="{{ old('trip_nights', $reimbursement->trip_nights) }}" min="0" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="trip_start_date">Fecha de Inicio</label>
-                                        <input type="date" name="trip_start_date" id="trip_start_date" value="{{ old('trip_start_date', $reimbursement->trip_start_date) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="trip_end_date">Fecha Final</label>
-                                        <input type="date" name="trip_end_date" id="trip_end_date" value="{{ old('trip_end_date', $reimbursement->trip_end_date) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                    </div>
-                                @endif
-                                
-                                <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                                    @if(empty($reimbursement->uuid))
-                                    <div class="md:col-span-2">
-                                        <p class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-2 italic">Solo si es necesario corregir datos del comprobante:</p>
-                                    </div>
-                                    @endif
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="nombre_emisor">Nombre Emisor</label>
-                                        <input type="text" name="nombre_emisor" id="nombre_emisor" value="{{ old('nombre_emisor', $reimbursement->nombre_emisor) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm {{ $reimbursement->uuid ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-gray-500' : '' }}" {{ $reimbursement->uuid ? 'readonly' : '' }}>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="fecha">Fecha de Emisión</label>
-                                        <input type="date" name="fecha" id="fecha" value="{{ old('fecha', $reimbursement->fecha ? \Carbon\Carbon::parse($reimbursement->fecha)->format('Y-m-d') : '') }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm {{ $reimbursement->uuid ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-gray-500' : '' }}" {{ $reimbursement->uuid ? 'readonly' : '' }}>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="subtotal">Subtotal</label>
-                                        <input type="number" step="0.01" name="subtotal" id="subtotal" value="{{ old('subtotal', $reimbursement->subtotal) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm {{ $reimbursement->uuid ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-gray-500' : '' }}" {{ $reimbursement->uuid ? 'readonly' : '' }}>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="total">Total</label>
-                                        <input type="number" step="0.01" name="total" id="total" value="{{ old('total', $reimbursement->total) }}" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm {{ $reimbursement->uuid ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-gray-500' : '' }}" {{ $reimbursement->uuid ? 'readonly' : '' }}>
-                                    </div>
-                                </div>
-
-                                <div class="md:col-span-2">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="observaciones_update">Justificación / Información Adicional</label>
-                                    <textarea name="user_correction_comment" id="observaciones_update" rows="2" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Añade nueva información o describe las correcciones..." required></textarea>
-                                </div>
+                <div class="mb-8 rounded-xl border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 shadow-sm">
+                    <div class="p-6 md:p-8">
+                        <div class="flex items-start gap-4">
+                            <div class="p-3 bg-yellow-100 text-yellow-600 rounded-full dark:bg-yellow-800 dark:text-yellow-300">
+                                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                             </div>
+                            <div class="flex-1">
+                                <h4 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Acción Requerida: Ajustes Necesarios</h4>
+                                <p class="text-gray-700 dark:text-gray-300 text-base mb-6">Esta solicitud ha sido devuelta para corrección. Revisa las observaciones del aprobador y actualiza la información o archivos.</p>
+                                
+                                <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST" enctype="multipart/form-data" class="space-y-6">
+                                    @csrf
+                                    @method('PUT')
+                                    <input type="hidden" name="is_resubmission" value="1">
+                                    
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div class="space-y-2">
+                                            <label class="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                                                {{ $reimbursement->uuid ? 'Actualizar PDF (Opcional)' : 'Nuevo Comprobante (PDF/IMG)' }}
+                                            </label>
+                                            <div class="relative group">
+                                                <input type="file" id="pdf_file_input" name="pdf_file" accept="{{ $reimbursement->uuid ? '.pdf' : '.pdf,image/*,.txt' }}" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                                                <div class="p-4 border-2 border-dashed border-gray-300 rounded-lg group-hover:border-indigo-500 bg-white dark:bg-gray-800 transition-colors text-center">
+                                                    <svg class="w-6 h-6 text-gray-400 group-hover:text-indigo-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                                                    <span class="text-sm text-gray-500 dark:text-gray-400">Seleccionar Archivo...</span>
+                                                </div>
+                                            </div>
+                                            <div id="pdf-validation-result" class="mt-2 text-sm hidden"></div>
+                                        </div>
+                                        
+                                        <div class="space-y-2">
+                                            <label class="text-sm font-semibold text-gray-600 dark:text-gray-400">Actualizar Ticket (Opcional)</label>
+                                            <div class="relative group">
+                                                <input type="file" name="ticket_file" accept=".pdf,.jpg,.jpeg,.png,.txt" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                                                <div class="p-4 border-2 border-dashed border-gray-300 rounded-lg group-hover:border-emerald-500 bg-white dark:bg-gray-800 transition-colors text-center">
+                                                    <svg class="w-6 h-6 text-gray-400 group-hover:text-emerald-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path></svg>
+                                                    <span class="text-sm text-gray-500 dark:text-gray-400">Seleccionar Ticket...</span>
+                                                </div>
+                                            </div>
+                                        </div>
 
-                            <div class="flex justify-end mt-6">
-                                <button type="submit" class="inline-flex items-center px-6 py-3 bg-indigo-600 border border-transparent rounded-md font-bold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition ease-in-out duration-150 shadow-md">
-                                    Reenviar para Aprobación
-                                </button>
+                                        @if($reimbursement->type === 'comida')
+                                            <div class="space-y-2">
+                                                <label class="text-sm font-semibold text-gray-600 dark:text-gray-400">Asistentes</label>
+                                                <input type="number" name="attendees_count" value="{{ old('attendees_count', $reimbursement->attendees_count) }}" class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600">
+                                            </div>
+                                            <div class="space-y-2">
+                                                <label class="text-sm font-semibold text-gray-600 dark:text-gray-400">Lugar</label>
+                                                <input type="text" name="location" value="{{ old('location', $reimbursement->location) }}" class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600">
+                                            </div>
+                                        @endif
+                                        
+                                        <div class="md:col-span-2 space-y-2">
+                                            <label class="text-sm font-semibold text-indigo-700 dark:text-indigo-400">Justificación de los Cambios</label>
+                                            <textarea name="user_correction_comment" rows="3" class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600" placeholder="Explica qué corregiste..." required></textarea>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex justify-end pt-2">
+                                        <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-colors">
+                                            Reenviar para Aprobación
+                                        </button>
+                                    </div>
+                                </form>
                             </div>
-                        </form>
+                        </div>
                     </div>
                 </div>
             @endif
 
             @if(!$reimbursement->uuid || $reimbursement->folio === 'SIN-FACTURA')
-                <div class="bg-gradient-to-r from-orange-500 to-orange-600 shadow-lg rounded-2xl mb-6 overflow-hidden animate-fadeIn">
-                    <div class="px-6 py-4 flex items-center justify-between">
-                        <div class="flex items-center">
-                            <div class="bg-white/20 p-2 rounded-xl mr-4">
-                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                            </div>
-                            <div>
-                                <h4 class="text-lg font-black text-white uppercase tracking-tight">Registro Manual Sin Factura (Sin XML)</h4>
-                                <p class="text-orange-100 text-xs font-bold uppercase tracking-widest opacity-80">Este gasto se registró manualmente y solo cuenta con comprobante de pago/imagen.</p>
-                            </div>
-                        </div>
-                        <div class="hidden md:block">
-                            <span class="bg-white/20 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">Aprobación Especial Requerida</span>
-                        </div>
+                <div class="bg-orange-50 border border-orange-200 rounded-xl mb-6 p-4 flex items-center shadow-sm dark:bg-orange-900/20 dark:border-orange-800">
+                    <svg class="w-6 h-6 text-orange-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    <div>
+                        <h4 class="text-sm font-bold text-orange-800 dark:text-orange-300">Registro Manual Sin Factura (Sin XML)</h4>
+                        <p class="text-orange-600 dark:text-orange-400 text-xs">Este gasto requiere validación manual, no tiene datos XML fiscales asociados.</p>
                     </div>
                 </div>
             @endif
 
-            <div class="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
-                <div class="px-4 py-5 sm:px-6">
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100">
-                            {{ $reimbursement->title ?? 'Información General' }}
-                        </h3>
-                        <button disabled title="Próximamente" class="inline-flex items-center px-4 py-2 bg-gray-600 dark:bg-gray-700 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest cursor-not-allowed opacity-75">
-                            <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            Próximamente
-                        </button>
+            <!-- Main Status Header -->
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+                <div>
+                    <div class="flex items-center space-x-3 mb-2">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                            {{ ucfirst(str_replace('_', ' ', $reimbursement->type ?? 'Reembolso')) }}
+                        </span>
+
+                        <span class="text-xs text-gray-500 bg-white border border-gray-200 px-2.5 py-0.5 rounded-md dark:bg-gray-800 dark:border-gray-700">
+                            Folio: {{ $reimbursement->folio ?? 'PENDIENTE' }}
+                        </span>
                     </div>
-                    <p class="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400 font-bold">
-                        @if($reimbursement->uuid)
-                            UUID: <span class="font-mono text-xs">{{ $reimbursement->uuid }}</span>
-                        @else
-                            <span class="text-orange-500 uppercase italic">Registro sin folio fiscal (XML)</span>
-                        @endif
-                    </p>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white leading-tight">
+                        {{ $reimbursement->title ?? 'Gasto de ' . ucfirst($reimbursement->category) }}
+                    </h1>
                 </div>
-                <div class="border-t border-gray-200 dark:border-gray-700">
-                    <dl>
-                        <div class="bg-gray-50 dark:bg-gray-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Folio</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">{{ $reimbursement->folio ?? 'N/A' }}</dd>
-                        </div>
-                        <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Emisor</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
-                                {{ $reimbursement->nombre_emisor }} 
-                                @if($reimbursement->rfc_emisor && $reimbursement->rfc_emisor !== 'N/A')
-                                    <span class="text-gray-500 font-mono ml-1">({{ $reimbursement->rfc_emisor }})</span>
-                                @endif
-                            </dd>
-                        </div>
-                        <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Tipo de Solicitud</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">{{ ucfirst(str_replace('_', ' ', $reimbursement->type ?? 'Reembolso')) }}</dd>
-                        </div>
-                        <div class="bg-gray-50 dark:bg-gray-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Centro de Costos</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">{{ $reimbursement->costCenter->name ?? 'N/A' }}</dd>
-                        </div>
-                        <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Categoría</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">{{ ucfirst($reimbursement->category ?? 'N/A') }}</dd>
-                        </div>
-                        <div class="bg-gray-50 dark:bg-gray-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Semana</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">{{ $reimbursement->week ?? 'N/A' }}</dd>
-                        </div>
-                        @if($reimbursement->uuid && $reimbursement->nombre_receptor)
-                        <div class="bg-gray-50 dark:bg-gray-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Receptor</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">{{ $reimbursement->nombre_receptor }} ({{ $reimbursement->rfc_receptor }})</dd>
-                        </div>
-                        @endif
-                        @if($reimbursement->uuid)
-                        <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Detalles CFDI</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div><span class="text-gray-500 block uppercase text-[10px] font-bold">Método Pago:</span> {{ $reimbursement->metodo_pago }}</div>
-                                    <div><span class="text-gray-500 block uppercase text-[10px] font-bold">Forma Pago:</span> {{ $reimbursement->forma_pago }}</div>
-                                    <div><span class="text-gray-500 block uppercase text-[10px] font-bold">Uso CFDI:</span> {{ $reimbursement->uso_cfdi }}</div>
-                                    <div><span class="text-gray-500 block uppercase text-[10px] font-bold">CP Expedición:</span> {{ $reimbursement->lugar_expedicion }}</div>
-                                    <div class="col-span-2"><span class="text-gray-500 block uppercase text-[10px] font-bold">Régimen Fiscal Emisor:</span> {{ $reimbursement->regimen_fiscal_emisor }}</div>
+                
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        @php
+                            $statusColors = [
+                                'aprobado' => 'text-green-700 bg-green-50 ring-green-600/20',
+                                'rechazado' => 'text-red-700 bg-red-50 ring-red-600/10',
+                                'requiere_correccion' => 'text-yellow-800 bg-yellow-50 ring-yellow-600/20',
+                                'pendiente' => 'text-gray-600 bg-gray-50 ring-gray-500/10',
+                            ];
+                            $defaultColor = 'text-indigo-700 bg-indigo-50 ring-indigo-600/20';
+                            $statusClasses = $statusColors[$reimbursement->status] ?? $defaultColor;
+                            
+                            $statusLabel = match($reimbursement->status) {
+                                'aprobado' => 'PAGADO',
+                                'aprobado_cxp' => 'APROBADO SUBDIRECCIÓN',
+                                'aprobado_direccion' => 'APROBADO DIRECCIÓN',
+                                default => str_replace('_', ' ', strtoupper($reimbursement->status))
+                            };
+                        @endphp
+                        <span class="inline-flex items-center rounded-md px-3 py-1 text-sm font-semibold {{ $statusClasses }} ring-1 ring-inset">
+                            {{ $statusLabel }}
+                        </span>
+                    </div>
+                    <a href="{{ route('reimbursements.index') }}" class="p-2 text-gray-400 hover:text-gray-600 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:hover:text-gray-300">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Page Layout: Grid System -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                <!-- Left Column: Details -->
+                <div class="lg:col-span-2 space-y-6">
+                    
+                    <!-- Hero Section: Total & Subtotal -->
+                    <div class="bg-indigo-600 rounded-xl overflow-hidden shadow-sm">
+                        <div class="p-6 md:p-8 text-white flex flex-col md:flex-row md:justify-between md:items-center gap-6">
+                            <div>
+                                <p class="text-indigo-200 text-sm font-semibold mb-1">Monto Total</p>
+                                <div class="text-4xl md:text-5xl font-bold tracking-tight">
+                                    <span class="text-indigo-300 font-normal mr-1">$</span>{{ number_format($reimbursement->total, 2) }}
+                                    <span class="text-xl ml-1 text-indigo-300">{{ $reimbursement->moneda }}</span>
                                 </div>
-                            </dd>
-                        </div>
-                        @endif
-                        <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Fecha</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">{{ \Carbon\Carbon::parse($reimbursement->fecha)->format('d/m/Y H:i') }}</dd>
-                        </div>
-                        <div class="bg-gray-50 dark:bg-gray-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Subtotal</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2 font-semibold">${{ number_format($reimbursement->subtotal, 2) }} {{ $reimbursement->moneda }}</dd>
-                        </div>
-                        <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Total</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2 font-bold text-lg">${{ number_format($reimbursement->total, 2) }} {{ $reimbursement->moneda }}</dd>
-                        </div>
-                        <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Estatus</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
-                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                    {{ $reimbursement->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
-                                    {{ $reimbursement->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
-                                    {{ $reimbursement->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
-                                    {{ $reimbursement->status === 'aprobado_director' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
-                                    {{ $reimbursement->status === 'aprobado_control' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : '' }}
-                                    {{ $reimbursement->status === 'aprobado_ejecutivo' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
-                                    {{ $reimbursement->status === 'aprobado_cxp' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300' : '' }}
-                                    {{ $reimbursement->status === 'aprobado_direccion' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
-                                    {{ $reimbursement->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
-                                ">
-                                    @if($reimbursement->status === 'aprobado') Pagado 
-                                    @elseif($reimbursement->status === 'aprobado_cxp') Aprobado Subdirección
-                                    @elseif($reimbursement->status === 'aprobado_direccion') Aprobado Dirección
-                                    @else {{ ucfirst(str_replace('_', ' ', $reimbursement->status)) }} @endif
-                                </span>
-                            </dd>
-                        </div>
-                        <!-- Approval Details -->
-                        <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Aprobaciones</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
-                                <ul class="list-disc list-inside">
-                                    @php $steps = [
-                                        ['label' => 'Director', 'id' => $reimbursement->approved_by_director_id, 'name' => $reimbursement->directorApprover->name ?? 'Director', 'at' => $reimbursement->approved_by_director_at],
-                                        ['label' => 'Control de Obra', 'id' => $reimbursement->approved_by_control_id, 'name' => $reimbursement->controlApprover->name ?? 'Control de Obra', 'at' => $reimbursement->approved_by_control_at],
-                                        ['label' => 'Dir. Ejecutivo', 'id' => $reimbursement->approved_by_executive_id, 'name' => $reimbursement->executiveApprover->name ?? 'Dir. Ejecutivo', 'at' => $reimbursement->approved_by_executive_at],
-                                        ['label' => 'Subdirección', 'id' => $reimbursement->approved_by_cxp_id, 'name' => $reimbursement->cxpApprover->name ?? 'Subdirección', 'at' => $reimbursement->approved_by_cxp_at],
-                                        ['label' => 'Dirección', 'id' => $reimbursement->approved_by_direccion_id, 'name' => $reimbursement->direccionApprover->name ?? 'Dirección', 'at' => $reimbursement->approved_by_direccion_at],
-                                        ['label' => 'Cuentas por Pagar', 'id' => $reimbursement->approved_by_treasury_id, 'name' => $reimbursement->treasuryApprover->name ?? 'Cuentas por Pagar', 'at' => $reimbursement->approved_by_treasury_at],
-                                    ]; @endphp
-
-                                    @foreach($steps as $step)
-                                        @if($step['id'])
-                                            <li class="text-green-600 {{ !$loop->first ? 'mt-1' : '' }}">
-                                                {{ $step['label'] }}: {{ $step['name'] }}
-                                                <span class="text-gray-500 text-xs text-nowrap">({{ $step['at'] ? $step['at']->format('d/m/Y H:i') : '' }})</span>
-                                            </li>
-                                        @else
-                                            <li class="text-gray-500 {{ !$loop->first ? 'mt-1' : '' }}">{{ $step['label'] }}: Pendiente</li>
-                                        @break
-                                        @endif
-                                    @endforeach
-                                </ul>
-                            </dd>
-                        </div>
-
-                        <div class="bg-gray-50 dark:bg-gray-700 px-4 py-8 sm:px-6">
-                            <dt class="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-6 flex items-center">
-                                <span class="bg-indigo-100 dark:bg-indigo-900/50 p-1.5 rounded-lg mr-3">
-                                    <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>
-                                </span>
-                                Bitácora de Observaciones
-                            </dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                                @if($reimbursement->observaciones)
-                                    <div class="space-y-4 max-h-[400px] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
-                                        @foreach(array_reverse(explode("\n", $reimbursement->observaciones)) as $observation)
-                                            @if(trim($observation))
-                                                @php
-                                                    $isRejection = str_contains($observation, 'RECHAZADO');
-                                                    $isCorrection = str_contains($observation, 'REQUIERE CORRECCIÓN');
-                                                    $isUserFix = str_contains($observation, 'CORREGIDO por');
-                                                    
-                                                    $bgColor = 'bg-white dark:bg-gray-800';
-                                                    $borderColor = 'border-gray-100 dark:border-gray-700';
-                                                    $iconColor = 'text-gray-400';
-                                                    
-                                                    if($isRejection) {
-                                                        $bgColor = 'bg-red-50 dark:bg-red-900/10';
-                                                        $borderColor = 'border-red-100 dark:border-red-900/30';
-                                                        $iconColor = 'text-red-500';
-                                                    } elseif ($isCorrection) {
-                                                        $bgColor = 'bg-orange-50 dark:bg-orange-900/10';
-                                                        $borderColor = 'border-orange-100 dark:border-orange-900/30';
-                                                        $iconColor = 'text-orange-500';
-                                                    } elseif ($isUserFix) {
-                                                        $bgColor = 'bg-emerald-50 dark:bg-emerald-900/10';
-                                                        $borderColor = 'border-emerald-100 dark:border-emerald-900/30';
-                                                        $iconColor = 'text-emerald-500';
-                                                    }
-                                                @endphp
-                                                <div class="relative pl-8 pb-1 group">
-                                                    <!-- Timeline Line -->
-                                                    <div class="absolute left-3 top-6 -bottom-4 w-px bg-gray-200 dark:bg-gray-700 group-last:hidden"></div>
-                                                    
-                                                    <!-- Timeline Node -->
-                                                    <div class="absolute left-0 top-1 w-6 h-6 rounded-full {{ $bgColor }} border-2 {{ $borderColor }} flex items-center justify-center z-10">
-                                                        <div class="w-1.5 h-1.5 rounded-full bg-current {{ $iconColor }}"></div>
-                                                    </div>
-
-                                                    <div class="p-4 rounded-2xl border {{ $borderColor }} {{ $bgColor }} shadow-sm transition-all hover:shadow-md">
-                                                        <p class="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                                                            @php
-                                                                $content = $observation;
-                                                                // Extract date/time if exists (e.g. el 25/02/2026 13:20)
-                                                                preg_match('/el \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/', $content, $matches);
-                                                                $timestamp = $matches[0] ?? '';
-                                                                if($timestamp) $content = str_replace($timestamp, '', $content);
-
-                                                                $content = str_replace('RECHAZADO', '<span class="font-black text-red-600 dark:text-red-400">RECHAZADO</span>', $content);
-                                                                $content = str_replace('REQUIERE CORRECCIÓN', '<span class="font-black text-orange-600 dark:text-orange-400">REQUIERE CORRECCIÓN</span>', $content);
-                                                                $content = str_replace('CORREGIDO por', '<span class="font-black text-emerald-600 dark:text-emerald-400">CORREGIDO por</span>', $content);
-                                                            @endphp
-                                                            {!! $content !!}
-                                                        </p>
-                                                        @if($timestamp)
-                                                            <span class="inline-block mt-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                                                {{ str_replace('el ', '', $timestamp) }}
-                                                            </span>
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                            @endif
-                                        @endforeach
-                                    </div>
-                                @else
-                                    <div class="text-center py-6 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-2xl">
-                                        <p class="text-gray-400 text-xs font-medium italic">Sin observaciones o comentarios hasta el momento.</p>
-                                    </div>
-                                @endif
-                            </dd>
-                        </div>
-
-                        @if($reimbursement->uuid)
-                         <!-- Validation Status Row -->
-                        <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Validación XML vs PDF</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
-                                @if($reimbursement->validation_data)
-                                    <div class="flex items-center space-x-4">
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ ($reimbursement->validation_data['uuid_match'] ?? false) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                            UUID: {{ ($reimbursement->validation_data['uuid_match'] ?? false) ? 'Coincide' : 'No Coincide' }}
-                                        </span>
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ ($reimbursement->validation_data['total_match'] ?? false) ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800' }}">
-                                            Monto: {{ ($reimbursement->validation_data['total_match'] ?? false) ? 'Coincide' : 'Revisar' }}
-                                        </span>
-                                    </div>
-                                    @if(!($reimbursement->validation_data['uuid_match'] ?? false))
-                                        <p class="mt-1 text-xs text-red-500">El UUID del XML no fue encontrado en el PDF.</p>
-                                    @endif
-                                @else
-                                    <span class="text-gray-500 italic">No validado automáticamente.</span>
-                                @endif
-                            </dd>
-                        </div>
-                        @endif
-                        
-                        <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Documentación Adjunta</dt>
-                            <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
-                                <ul class="border border-gray-200 rounded-xl divide-y divide-gray-200 dark:border-gray-700 dark:divide-gray-700 overflow-hidden shadow-sm">
-                                    @if($reimbursement->xml_path)
-                                    <li class="pl-3 pr-4 py-4 flex items-center justify-between text-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                        <div class="w-0 flex-1 flex items-center">
-                                            <div class="bg-indigo-100 dark:bg-indigo-900/50 p-2 rounded-lg mr-3">
-                                                <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                                            </div>
-                                            <span class="ml-2 flex-1 w-0 truncate font-medium">Factura Fiscal (XML)</span>
-                                        </div>
-                                        <div class="ml-4 flex-shrink-0 flex space-x-4">
-                                            <a href="{{ route('reimbursements.view_file', ['reimbursement' => $reimbursement, 'type' => 'xml']) }}" target="_blank" class="font-black text-[10px] text-indigo-600 hover:text-indigo-800 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg transition-all">Ver XML</a>
-                                            <a href="{{ route('reimbursements.download_file', ['reimbursement' => $reimbursement, 'type' => 'xml']) }}" class="font-black text-[10px] text-gray-500 hover:text-gray-700 uppercase tracking-widest bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-lg transition-all">Bajar</a>
-                                        </div>
-                                    </li>
-                                    @endif
-                                    @if($reimbursement->pdf_path)
-                                    <li class="pl-3 pr-4 py-4 flex items-center justify-between text-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                        <div class="w-0 flex-1 flex items-center">
-                                            <div class="bg-orange-100 dark:bg-orange-900/50 p-2 rounded-lg mr-3">
-                                                <svg class="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                            </div>
-                                            <span class="ml-2 flex-1 w-0 truncate font-medium">
-                                                {{ $reimbursement->uuid ? 'PDF de Factura' : 'Imagen / Comprobante de Pago' }}
-                                            </span>
-                                        </div>
-                                        <div class="ml-4 flex-shrink-0 flex space-x-4">
-                                            <a href="{{ route('reimbursements.view_file', ['reimbursement' => $reimbursement, 'type' => 'pdf']) }}" target="_blank" class="font-black text-[10px] text-orange-600 hover:text-orange-800 uppercase tracking-widest bg-orange-50 dark:bg-orange-900/30 px-3 py-1.5 rounded-lg transition-all">Ver Archivo</a>
-                                            <a href="{{ route('reimbursements.download_file', ['reimbursement' => $reimbursement, 'type' => 'pdf']) }}" class="font-black text-[10px] text-gray-500 hover:text-gray-700 uppercase tracking-widest bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-lg transition-all">Bajar</a>
-                                        </div>
-                                    </li>
-                                    @endif
-                                    @if($reimbursement->ticket_path)
-                                    <li class="pl-3 pr-4 py-4 flex items-center justify-between text-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                        <div class="w-0 flex-1 flex items-center">
-                                            <div class="bg-emerald-100 dark:bg-emerald-900/50 p-2 rounded-lg mr-3">
-                                                <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path></svg>
-                                            </div>
-                                            <span class="ml-2 flex-1 w-0 truncate font-medium">Ticket / Pruebas Adicionales</span>
-                                        </div>
-                                        <div class="ml-4 flex-shrink-0 flex space-x-4">
-                                            <a href="{{ route('reimbursements.view_file', ['reimbursement' => $reimbursement, 'type' => 'ticket']) }}" target="_blank" class="font-black text-[10px] text-emerald-600 hover:text-emerald-800 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-lg transition-all">Ver Ticket</a>
-                                            <a href="{{ route('reimbursements.download_file', ['reimbursement' => $reimbursement, 'type' => 'ticket']) }}" class="font-black text-[10px] text-gray-500 hover:text-gray-700 uppercase tracking-widest bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-lg transition-all">Bajar</a>
-                                        </div>
-                                    </li>
-                                    @endif
-                                    @if(!$reimbursement->xml_path && !$reimbursement->pdf_path)
-                                        <li class="pl-3 pr-4 py-4 text-sm text-gray-500 italic flex items-center">
-                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
-                                            Sin archivos adjuntos.
-                                        </li>
-                                    @endif
-                                </ul>
-                                
-                                <!-- Validation Data Display -->
-                                @if($reimbursement->validation_data)
-                                    <div class="mt-4 p-4 rounded-md {{ ($reimbursement->validation_data['uuid_match'] ?? false) ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800' }}">
-                                        <h4 class="text-sm font-medium {{ ($reimbursement->validation_data['uuid_match'] ?? false) ? 'text-green-800 dark:text-green-300' : 'text-yellow-800 dark:text-yellow-300' }} mb-2">
-                                            Validación Automática de Archivos
-                                        </h4>
-                                        <ul class="list-disc list-inside text-sm {{ ($reimbursement->validation_data['uuid_match'] ?? false) ? 'text-green-700 dark:text-green-400' : 'text-yellow-700 dark:text-yellow-400' }}">
-                                            <li>
-                                                <strong>UUID en PDF:</strong> 
-                                                @if($reimbursement->validation_data['uuid_match'] ?? false)
-                                                    ✅ Coincide con el XML
-                                                @else
-                                                    ⚠️ NO encontrado o no coincide
-                                                @endif
-                                            </li>
-                                            <li>
-                                                <strong>Monto Total en PDF:</strong> 
-                                                @if($reimbursement->validation_data['total_match'] ?? false)
-                                                    ✅ Coincide con el XML
-                                                @else
-                                                    ⚠️ No detectado automáticamente (verificar manualmente)
-                                                @endif
-                                            </li>
-                                        </ul>
-                                        @if(isset($reimbursement->validation_data['message']))
-                                            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
-                                                Sistema: {{ $reimbursement->validation_data['message'] }}
-                                            </p>
-                                        @endif
-                                    </div>
-                                @endif
-                            </dd>
-                        </div>
-
-                        <!-- Trip Specifics -->
-                        @if($reimbursement->type === 'viaje')
-                            <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Detalles del Viaje</dt>
-                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
-                                    <ul class="list-disc pl-5">
-                                        <li><strong>Tipo:</strong> {{ ucfirst($reimbursement->trip_type) }}</li>
-                                        <li><strong>Destino:</strong> {{ $reimbursement->trip_destination }}</li>
-                                        <li><strong>Duración:</strong> {{ $reimbursement->trip_nights }} noches</li>
-                                        <li><strong>Fechas:</strong> {{ \Carbon\Carbon::parse($reimbursement->trip_start_date)->format('d/m/Y') }} - {{ \Carbon\Carbon::parse($reimbursement->trip_end_date)->format('d/m/Y') }}</li>
-                                    </ul>
-                                </dd>
                             </div>
+                            <div class="flex gap-8 border-l border-indigo-500 pl-8">
+                                <div>
+                                    <p class="text-indigo-200 text-xs uppercase tracking-wider mb-1">Subtotal</p>
+                                    <p class="text-lg font-semibold">${{ number_format($reimbursement->subtotal, 2) }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-indigo-200 text-xs uppercase tracking-wider mb-1">Impuestos</p>
+                                    <p class="text-lg font-semibold">${{ number_format($reimbursement->total - $reimbursement->subtotal, 2) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-                            @if($reimbursement->trip_type === 'internacional')
-                                <div class="bg-gray-50 dark:bg-gray-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-300">Archivos Adjuntos</dt>
-                                    <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100 sm:mt-0 sm:col-span-2">
-                                        @if($reimbursement->files->count() > 0)
-                                            <ul class="border border-gray-200 rounded-md divide-y divide-gray-200 dark:border-gray-600 dark:divide-gray-600">
-                                                @foreach($reimbursement->files as $file)
-                                                    <li class="pl-3 pr-4 py-3 flex items-center justify-between text-sm">
-                                                        <div class="w-0 flex-1 flex items-center">
-                                                            <svg class="flex-shrink-0 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                                                <path fill-rule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clip-rule="evenodd" />
-                                                            </svg>
-                                                            <span class="ml-2 flex-1 w-0 truncate">
-                                                                {{ $file->original_name }}
-                                                            </span>
-                                                        </div>
-                                                        <div class="ml-4 flex-shrink-0">
-                                                            <a href="{{ Storage::url($file->file_path) }}" target="_blank" class="font-medium text-indigo-600 hover:text-indigo-500">
-                                                                Descargar
-                                                            </a>
-                                                        </div>
-                                                    </li>
-                                                @endforeach
-                                            </ul>
-                                        @else
-                                            <span class="text-gray-500">No hay archivos adjuntos.</span>
+                    <!-- Especificaciones Principales -->
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
+                            <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">Detalles del Reembolso</h3>
+                        </div>
+                        <div class="border-t border-gray-100 dark:border-gray-800">
+                            <dl class="divide-y divide-gray-100 dark:divide-gray-800">
+                                @if($reimbursement->uuid)
+                                <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Folio Fiscal (UUID)</dt>
+                                    <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0 dark:text-gray-200 font-mono">
+                                        {{ $reimbursement->uuid }}
+                                    </dd>
+                                </div>
+                                @endif
+                                <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Fecha del Gasto</dt>
+                                    <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0 dark:text-gray-200">
+                                        {{ \Carbon\Carbon::parse($reimbursement->fecha)->format('d \d\e M, Y') }} (Semana Fiscal #{{ $reimbursement->week }})
+                                    </dd>
+                                </div>
+                                <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Centro de Costos</dt>
+                                    <dd class="mt-1 text-sm font-semibold text-gray-900 sm:col-span-2 sm:mt-0 dark:text-gray-200">{{ $reimbursement->costCenter->name ?? 'N/A' }}</dd>
+                                </div>
+                                <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Categoría</dt>
+                                    <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0 dark:text-gray-200 capitalize">{{ $reimbursement->category ?? 'N/A' }}</dd>
+                                </div>
+                                <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 bg-gray-50 dark:bg-gray-900/50">
+                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Emisor Comercial</dt>
+                                    <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0 dark:text-gray-200">
+                                        {{ $reimbursement->nombre_emisor }} <br>
+                                        @if($reimbursement->rfc_emisor && $reimbursement->rfc_emisor !== 'N/A')
+                                        <span class="text-xs text-gray-400 mt-1 font-mono">{{ $reimbursement->rfc_emisor }}</span>
                                         @endif
                                     </dd>
                                 </div>
+                                <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 bg-gray-50 dark:bg-gray-900/50">
+                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Receptor (Entidad)</dt>
+                                    <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0 dark:text-gray-200">
+                                        {{ $reimbursement->nombre_receptor ?? 'Grupo INDI S.A.' }} 
+                                        @if($reimbursement->rfc_receptor)
+                                        <span class="text-xs text-gray-400 ml-2 font-mono">{{ $reimbursement->rfc_receptor }}</span>
+                                        @endif
+                                    </dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </div>
+
+                    <!-- Atributos CFDI (Only if UUID exists and not trip) -->
+                    @if($reimbursement->uuid && $reimbursement->type !== 'viaje')
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center dark:border-gray-700">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Atributos del CFDI</h3>
+                            @if($reimbursement->validation_data)
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                    Sello Validado
+                                </span>
                             @endif
-                        @endif
-                        
-                        <!-- Child Reimbursements (For Nacional Trips) -->
-                        @if($reimbursement->children->count() > 0)
-                            <div class="bg-white dark:bg-gray-800 px-4 py-5 sm:px-6">
-                                <h4 class="text-md font-medium text-gray-900 dark:text-gray-100 mb-4">Gastos Vinculados</h4>
-                                <div class="overflow-x-auto">
-                                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                        <thead class="bg-gray-50 dark:bg-gray-700">
-                                            <tr>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tipo</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fecha</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Total</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Emisor</th>
-                                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                            @foreach($reimbursement->children as $child)
-                                                <tr>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ ucfirst($child->type) }}</td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ \Carbon\Carbon::parse($child->fecha)->format('d/m/Y') }}</td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">${{ number_format($child->total, 2) }}</td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ $child->nombre_emisor }}</td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                        <a href="{{ route('reimbursements.show', $child) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300">Ver</a>
-                                                    </td>
-                                                </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
+                        </div>
+                        <div class="p-6 grid grid-cols-2 md:grid-cols-4 gap-6">
+                            <div><p class="text-xs text-gray-500">Método de Pago</p><p class="text-sm font-medium">{{ $reimbursement->metodo_pago ?? 'N/A' }}</p></div>
+                            <div><p class="text-xs text-gray-500">Forma de Pago</p><p class="text-sm font-medium">{{ $reimbursement->forma_pago ?? 'N/A' }}</p></div>
+                            <div><p class="text-xs text-gray-500">Uso de CFDI</p><p class="text-sm font-medium">{{ $reimbursement->uso_cfdi ?? 'N/A' }}</p></div>
+                            <div><p class="text-xs text-gray-500">Lugar Exp.</p><p class="text-sm font-medium">{{ $reimbursement->lugar_expedicion ?? 'S/N' }}</p></div>
+                            
+                            <div class="col-span-2 md:col-span-4 border-t border-gray-100 pt-4 dark:border-gray-700">
+                                <p class="text-xs text-gray-500">Régimen Fiscal del Emisor</p>
+                                <p class="text-sm font-medium text-indigo-600 dark:text-indigo-400">{{ $reimbursement->regimen_fiscal_emisor ?? 'Sin régimen registrado' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+
+                    <!-- Expediente Digital -->
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Documentación</h3>
+                        </div>
+                        <div class="p-6 flex flex-wrap gap-4">
+                            @if($reimbursement->xml_path)
+                            <div class="flex items-center p-3 border border-gray-200 rounded-lg flex-1 min-w-[200px] dark:border-gray-700">
+                                <div class="p-2 bg-indigo-50 text-indigo-600 rounded-lg mr-3 dark:bg-indigo-900 dark:text-indigo-300">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-sm font-medium text-gray-900 dark:text-white">Factura XML</p>
+                                    <a href="{{ route('reimbursements.view_file', ['reimbursement' => $reimbursement, 'type' => 'xml']) }}" target="_blank" class="text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400">Ver archivo</a>
+                                </div>
+                                <a href="{{ route('reimbursements.download_file', ['reimbursement' => $reimbursement, 'type' => 'xml']) }}" class="p-2 text-gray-400 hover:text-gray-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></a>
+                            </div>
+                            @endif
+
+                            @if($reimbursement->pdf_path)
+                            <div class="flex items-center p-3 border border-gray-200 rounded-lg flex-1 min-w-[200px] dark:border-gray-700">
+                                <div class="p-2 bg-orange-50 text-orange-600 rounded-lg mr-3 dark:bg-orange-900 dark:text-orange-300">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-sm font-medium text-gray-900 dark:text-white">{{ $reimbursement->uuid ? 'PDF (Representación)' : 'Comprobante' }}</p>
+                                    <a href="{{ route('reimbursements.view_file', ['reimbursement' => $reimbursement, 'type' => 'pdf']) }}" target="_blank" class="text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400">Ver archivo</a>
+                                </div>
+                                <a href="{{ route('reimbursements.download_file', ['reimbursement' => $reimbursement, 'type' => 'pdf']) }}" class="p-2 text-gray-400 hover:text-gray-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></a>
+                            </div>
+                            @endif
+
+                            @if($reimbursement->ticket_path)
+                            <div class="flex items-center p-3 border border-gray-200 rounded-lg flex-1 min-w-[200px] dark:border-gray-700">
+                                <div class="p-2 bg-emerald-50 text-emerald-600 rounded-lg mr-3 dark:bg-emerald-900 dark:text-emerald-300">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path></svg>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-sm font-medium text-gray-900 dark:text-white">Evidencia Adicional</p>
+                                    <a href="{{ route('reimbursements.view_file', ['reimbursement' => $reimbursement, 'type' => 'ticket']) }}" target="_blank" class="text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400">Ver archivo</a>
+                                </div>
+                                <a href="{{ route('reimbursements.download_file', ['reimbursement' => $reimbursement, 'type' => 'ticket']) }}" class="p-2 text-gray-400 hover:text-gray-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></a>
+                            </div>
+                            @endif
+                        </div>
+
+                        <!-- IA Validation Context -->
+                        @if($reimbursement->validation_data)
+                            <div class="border-t border-gray-100 bg-gray-50 px-6 py-4 dark:bg-gray-800 dark:border-gray-700">
+                                <p class="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-2 dark:text-indigo-400">Validación SAT Automatizada</p>
+                                <div class="flex items-center gap-4 text-sm">
+                                    <span class="flex items-center text-gray-700 dark:text-gray-300"><div class="w-2 h-2 rounded-full mr-2 {{ ($reimbursement->validation_data['uuid_match'] ?? false) ? 'bg-green-500' : 'bg-red-500' }}"></div> UUID: {{ ($reimbursement->validation_data['uuid_match'] ?? false) ? 'Válido' : 'Inválido' }}</span>
+                                    <span class="flex items-center text-gray-700 dark:text-gray-300"><div class="w-2 h-2 rounded-full mr-2 {{ ($reimbursement->validation_data['total_match'] ?? false) ? 'bg-green-500' : 'bg-amber-500' }}"></div> Monto: {{ ($reimbursement->validation_data['total_match'] ?? false) ? 'Cuadra' : 'Discrepa' }}</span>
+                                    @if(isset($reimbursement->validation_data['message']))
+                                        <span class="text-gray-500 italic">"{{ $reimbursement->validation_data['message'] }}"</span>
+                                    @endif
                                 </div>
                             </div>
                         @endif
-
-                    </dl>
-                </div>
-                
-                <!-- Footer with Action Buttons -->
-                <div class="bg-gray-50 dark:bg-gray-800 px-4 py-4 sm:px-6 flex justify-between items-center border-t border-gray-200 dark:border-gray-700">
-                     <div class="flex space-x-3">
-                        @if(!Auth::user()->isAdminView() && $reimbursement->type === 'viaje' && $reimbursement->trip_type === 'nacional')
-                            <a href="{{ route('reimbursements.create', ['type' => 'reembolso', 'trip_id' => $reimbursement->id]) }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:border-indigo-900 focus:ring ring-indigo-300 disabled:opacity-25 transition ease-in-out duration-150">
-                                + Agregar Reembolso
-                            </a>
-                            <a href="{{ route('reimbursements.create', ['type' => 'comida', 'trip_id' => $reimbursement->id]) }}" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 active:bg-green-900 focus:outline-none focus:border-green-900 focus:ring ring-green-300 disabled:opacity-25 transition ease-in-out duration-150">
-                                + Agregar Comida
-                            </a>
-                        @endif
-                        
-                        @if($reimbursement->parent)
-                             <a href="{{ route('reimbursements.show', $reimbursement->parent) }}" class="text-sm text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300">
-                                &larr; Volver al Viaje: {{ $reimbursement->parent->title }}
-                            </a>
-                        @endif
                     </div>
 
-                    <a href="{{ route('reimbursements.index') }}" class="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md font-semibold text-xs text-gray-700 dark:text-gray-300 uppercase tracking-widest shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-25 transition ease-in-out duration-150">
-                        Regresar al Listado
-                    </a>
+                    <!-- Viaje Info -->
+                    @if($reimbursement->type === 'viaje')
+                        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 p-6 dark:border-gray-700">
+                            <h3 class="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3 mb-4 dark:text-white dark:border-gray-700">Datos del Viaje</h3>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                <div><p class="text-xs text-gray-500">Destino</p><p class="text-sm font-medium">{{ $reimbursement->trip_destination }}</p></div>
+                                <div><p class="text-xs text-gray-500">Duración</p><p class="text-sm font-medium">{{ $reimbursement->trip_nights }} Noches</p></div>
+                                <div class="col-span-2"><p class="text-xs text-gray-500">Cronograma</p><p class="text-sm font-medium">{{ \Carbon\Carbon::parse($reimbursement->trip_start_date)->format('d M') }} — {{ \Carbon\Carbon::parse($reimbursement->trip_end_date)->format('d M, Y') }}</p></div>
+                            </div>
+                        </div>
+                    @endif
+
+                    <!-- Subgastos Vinculados -->
+                    @if($reimbursement->children->count() > 0)
+                        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 overflow-hidden dark:border-gray-700">
+                            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Gastos Vinculados al Viaje</h3>
+                            </div>
+                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+                                <thead class="bg-gray-50 dark:bg-gray-900/50">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Concepto</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                                        <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
+                                        <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
+                                    @foreach($reimbursement->children as $child)
+                                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-200 capitalize">{{ $child->type }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ \Carbon\Carbon::parse($child->fecha)->format('d/m/Y') }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600 text-right dark:text-indigo-400">${{ number_format($child->total, 2) }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <a href="{{ route('reimbursements.show', $child) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400">Detalles</a>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+
                 </div>
 
-                <!-- Approval Actions -->
-                @php
-                    $user = Auth::user();
-                    $cc = $reimbursement->costCenter;
-                    $canApproveDirector = ($user->isAdmin() || ($user->isDirector() && $user->id === $cc->director_id)) && $reimbursement->status === 'pendiente';
-                    $canApproveControl = ($user->isAdmin() || ($user->isControlObra() && $user->id === $cc->control_obra_id)) && $reimbursement->status === 'aprobado_director';
-                    $canApproveExecutive = ($user->isAdmin() || ($user->isExecutiveDirector() && $user->id === $cc->director_ejecutivo_id)) && $reimbursement->status === 'aprobado_control';
-                    $canApproveCXP = ($user->isAdmin() || $user->isCxp()) && $reimbursement->status === 'aprobado_ejecutivo';
-                    $canApproveDireccion = ($user->isAdmin() || $user->isDireccion()) && $reimbursement->status === 'aprobado_cxp';
-                    $canApproveTreasury = ($user->isAdmin() || $user->isTreasury()) && $reimbursement->status === 'aprobado_direccion';
+                <!-- Right Column: Sidebar -->
+                <div class="space-y-6">
                     
-                    $canApproveAny = !$user->isAdminView() && ($canApproveDirector || $canApproveControl || $canApproveExecutive || $canApproveCXP || $canApproveDireccion || $canApproveTreasury);
-                @endphp
+                    <!-- Acción de Aprobación -->
+                    @php
+                        $user = auth()->user();
+                        $cc = $reimbursement->costCenter;
+                        
+                        $canApproveDirector = ($user->isAdmin() || ($user->isDirector() && $user->id === $cc->director_id)) && $reimbursement->status === 'pendiente';
+                        $canApproveControl = ($user->isAdmin() || ($user->isControlObra() && $user->id === $cc->control_obra_id)) && $reimbursement->status === 'aprobado_director';
+                        $canApproveExecutive = ($user->isAdmin() || ($user->isExecutiveDirector() && $user->id === $cc->director_ejecutivo_id)) && $reimbursement->status === 'aprobado_control';
+                        $canApproveCXP = ($user->isAdmin() || $user->isCxp()) && $reimbursement->status === 'aprobado_ejecutivo';
+                        $canApproveDireccion = ($user->isAdmin() || $user->isDireccion()) && $reimbursement->status === 'aprobado_cxp';
+                        $canApproveTreasury = ($user->isAdmin() || $user->isTreasury()) && $reimbursement->status === 'aprobado_direccion';
+                        
+                        $canApproveAny = !$user->isAdminView() && ($canApproveDirector || $canApproveControl || $canApproveExecutive || $canApproveCXP || $canApproveDireccion || $canApproveTreasury);
+                    @endphp
 
-                @if($canApproveAny)
-                    <div class="bg-gray-100 dark:bg-gray-900 p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-4">
-                        <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST">
-                            @csrf
-                            @method('PUT')
-                            <input type="hidden" name="status" value="aprobado">
-                            <button type="submit" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition ease-in-out duration-150">
-                                @if($canApproveTreasury) Marcar como Pagado (Cuentas por Pagar)
-                                @elseif($canApproveDireccion) Aprobar Dirección
-                                @elseif($canApproveCXP) Validar Subdirección
-                                @elseif($canApproveExecutive) Aprobar N3 (Dir. Ejecutivo)
-                                @elseif($canApproveControl) Aprobar N2 (Control Obra)
-                                @else Aprobar N1 (Director)
-                                @endif
+                    @if($canApproveAny)
+                    <div class="bg-indigo-600 rounded-xl p-6 text-white shadow-sm">
+                        <h4 class="font-semibold mb-4 text-indigo-50">Acciones Disponibles</h4>
+                        <div class="space-y-3">
+                            <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST">
+                                @csrf
+                                @method('PUT')
+                                <input type="hidden" name="status" value="aprobado">
+                                <button type="submit" class="w-full flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-indigo-700 bg-white hover:bg-indigo-50 focus:outline-none">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    Aprobar Solicitud
+                                </button>
+                            </form>
+                            <button type="button" x-data @click="$dispatch('open-rejection-modal')" class="w-full flex justify-center items-center px-4 py-2 border border-indigo-400 shadow-sm text-sm font-medium rounded-md text-white bg-indigo-700 hover:bg-indigo-800 hover:text-red-300 hover:border-red-400 focus:outline-none transition-colors">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                Rechazar o Devolver
                             </button>
-                        </form>
-
-                        <button type="button" x-data @click="$dispatch('open-rejection-modal')" class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition ease-in-out duration-150">
-                            Rechazar
-                        </button>
+                        </div>
                     </div>
-                @endif
+                    @endif
+
+                    <!-- Stepper Log -->
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 p-6 dark:border-gray-700">
+                        <h3 class="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3 mb-6 dark:text-white dark:border-gray-700">Flujo de Autorizaciones</h3>
+                        
+                        <div class="relative">
+                            <!-- Track -->
+                            <div class="absolute left-4 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700"></div>
+
+                            @php
+                                $steps = [
+                                    ['label' => 'Revisión N1 (Director)', 'id' => $reimbursement->approved_by_director_id, 'name' => $reimbursement->directorApprover->name ?? 'Por asignar', 'at' => $reimbursement->approved_by_director_at],
+                                    ['label' => 'Control de Obra', 'id' => $reimbursement->approved_by_control_id, 'name' => $reimbursement->controlApprover->name ?? 'Por asignar', 'at' => $reimbursement->approved_by_control_at],
+                                    ['label' => 'Dirección Ejecutiva', 'id' => $reimbursement->approved_by_executive_id, 'name' => $reimbursement->executiveApprover->name ?? 'Por asignar', 'at' => $reimbursement->approved_by_executive_at],
+                                    ['label' => 'Subdirección CXP', 'id' => $reimbursement->approved_by_cxp_id, 'name' => $reimbursement->cxpApprover->name ?? 'Por asignar', 'at' => $reimbursement->approved_by_cxp_at],
+                                    ['label' => 'Dirección Gral.', 'id' => $reimbursement->approved_by_direccion_id, 'name' => $reimbursement->direccionApprover->name ?? 'Por asignar', 'at' => $reimbursement->approved_by_direccion_at],
+                                    ['label' => 'Tesorería y Pagos', 'id' => $reimbursement->approved_by_treasury_id, 'name' => $reimbursement->treasuryApprover->name ?? 'Por asignar', 'at' => $reimbursement->approved_by_treasury_at],
+                                ];
+                            @endphp
+
+                            @foreach($steps as $index => $step)
+                                @php
+                                    $isCompleted = (bool)$step['id'];
+                                    $isCurrent = false;
+                                    if (!$isCompleted) {
+                                        if ($index === 0 && $reimbursement->status === 'pendiente') $isCurrent = true;
+                                        elseif ($index === 1 && $reimbursement->status === 'aprobado_director') $isCurrent = true;
+                                        elseif ($index === 2 && $reimbursement->status === 'aprobado_control') $isCurrent = true;
+                                        elseif ($index === 3 && $reimbursement->status === 'aprobado_ejecutivo') $isCurrent = true;
+                                        elseif ($index === 4 && $reimbursement->status === 'aprobado_cxp') $isCurrent = true;
+                                        elseif ($index === 5 && $reimbursement->status === 'aprobado_direccion') $isCurrent = true;
+                                    }
+                                @endphp
+                                <div class="relative flex gap-4 pb-6 last:pb-0">
+                                    <div class="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white ring-2 ring-white dark:bg-gray-800 dark:ring-gray-800">
+                                        @if($isCompleted)
+                                            <div class="h-6 w-6 rounded-full bg-indigo-600 flex items-center justify-center"><svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg></div>
+                                        @elseif($isCurrent)
+                                            <div class="h-6 w-6 rounded-full border-2 border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center"><span class="h-2 w-2 rounded-full bg-indigo-600 animate-pulse"></span></div>
+                                        @else
+                                            <div class="h-6 w-6 rounded-full bg-gray-100 border border-gray-300 dark:bg-gray-700 dark:border-gray-600"></div>
+                                        @endif
+                                    </div>
+                                    <div class="pt-1 w-full">
+                                        <p class="text-sm font-semibold {{ $isCompleted ? 'text-gray-900 dark:text-white' : ($isCurrent ? 'text-indigo-700 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400') }}">{{ $step['label'] }}</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ $step['name'] }}</p>
+                                        @if($isCompleted && $step['at'])
+                                            <p class="text-[10px] text-gray-400 mt-0.5">{{ $step['at']->format('d/m/Y H:i') }}</p>
+                                        @elseif($isCurrent)
+                                            <span class="inline-flex items-center px-2 py-0.5 mt-1 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">ACCION REQUERIDA</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    <!-- Bitácora Notes -->
+                    @if($reimbursement->observaciones)
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 p-6 dark:border-gray-700">
+                        <h3 class="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3 mb-4 flex items-center dark:text-white dark:border-gray-700">
+                            <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+                            Historial de Comentarios
+                        </h3>
+                        <ul class="space-y-4">
+                            @foreach(array_reverse(explode("\n", $reimbursement->observaciones)) as $observation)
+                                @if(trim($observation))
+                                    @php
+                                        preg_match('/el \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/', $observation, $matches);
+                                        $timestamp = $matches[0] ?? '';
+                                        $content = trim(str_replace($timestamp, '', $observation));
+                                        $isErr = str_contains($content, 'RECHAZADO') || str_contains($content, 'REQUIERE CORRECCIÓN');
+                                    @endphp
+                                    <li class="bg-gray-50 rounded-lg p-3 text-sm dark:bg-gray-900/50">
+                                        <p class="text-gray-700 dark:text-gray-300 {{ $isErr ? 'text-red-700 dark:text-red-400 font-medium' : '' }}">{{ $content }}</p>
+                                        <p class="text-xs text-gray-400 mt-2">{{ str_replace('el ', '', $timestamp) }}</p>
+                                    </li>
+                                @endif
+                            @endforeach
+                        </ul>
+                    </div>
+                    @endif
+
+                </div>
             </div>
         </div>
     </div>
@@ -619,27 +488,17 @@
 
                     const extension = this.files[0].name.split('.').pop().toLowerCase();
                     const hasUuid = @json(!empty($reimbursement->uuid));
-                    const allowedExtensions = hasUuid ? ['pdf'] : ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'jfif', 'txt'];
+                    const allowedExtensions = hasUuid ? ['pdf'] : ['pdf', 'jpg', 'jpeg', 'png', 'txt'];
 
                     if (!allowedExtensions.includes(extension)) {
-                        Swal.fire({
-                            title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Archivo Inválido</span>',
-                            html: `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">Este campo solo acepta archivos <b>${allowedExtensions.join(', ').toUpperCase()}</b>.</p>`,
-                            icon: 'error',
-                            confirmButtonText: 'ENTENDIDO',
-                            confirmButtonColor: '#ef4444',
-                            customClass: {
-                                popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
-                                confirmButton: 'rounded-xl px-8 py-3 font-black text-xs uppercase tracking-widest'
-                            }
-                        });
+                        alert(`Archivo Inválido. Solo se acepta: ${allowedExtensions.join(', ')}`);
                         this.value = '';
                         validationResult.classList.add('hidden');
                         return;
                     }
 
                     validationResult.classList.remove('hidden');
-                    validationResult.innerHTML = '<span class="text-gray-500">Validando archivo PDF en tiempo real...</span>';
+                    validationResult.innerHTML = '<span class="text-xs text-gray-500">Validando documento adjunto...</span>';
 
                     const formData = new FormData();
                     formData.append('pdf_file', this.files[0]);
@@ -648,71 +507,27 @@
                     fetch('{{ route("reimbursements.validate_pdf_correction", $reimbursement->id) }}', {
                         method: 'POST',
                         body: formData,
-                        headers: {
-                            'Accept': 'application/json'
-                        }
+                        headers: { 'Accept': 'application/json' }
                     })
                     .then(response => {
-                        // Skip validation if no UUID exists (Manual Reimbursement)
                         @if(empty($reimbursement->uuid))
-                            validationResult.innerHTML = `
-                                <div class="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/50 flex items-start">
-                                    <svg class="w-5 h-5 text-indigo-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                    <div>
-                                        <p class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1">Registro Manual</p>
-                                        <p class="text-sm font-medium text-indigo-700 dark:text-indigo-300">Archivo recibido. No se requiere validación fiscal (Sin XML).</p>
-                                    </div>
-                                </div>
-                            `;
+                            validationResult.innerHTML = `<span class="text-xs text-indigo-600">Registro manual. No requiere comprobación de sellos XML.</span>`;
                             return null;
                         @endif
                         return response.json();
                     })
                     .then(data => {
-                        if (!data) return; // Already handled manual mode
+                        if (!data) return;
                         if (data.error) {
-                            validationResult.innerHTML = `
-                                <div class="p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 flex items-start">
-                                    <svg class="w-5 h-5 text-red-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                    <div>
-                                        <p class="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest mb-1">Error de Validación</p>
-                                        <p class="text-sm font-medium text-red-700 dark:text-red-300">${data.error}</p>
-                                    </div>
-                                </div>
-                            `;
-                            return;
-                        }
-
-                        if (data.uuid_match) {
-                            validationResult.innerHTML = `
-                                <div class="p-4 rounded-2xl bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/50 flex items-start">
-                                    <svg class="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                    <div>
-                                        <p class="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest mb-1">Validación Exitosa</p>
-                                        <p class="text-sm font-medium text-green-700 dark:text-green-300">Excelente: El UUID coincide con el XML. Puedes continuar.</p>
-                                    </div>
-                                </div>
-                            `;
+                            validationResult.innerHTML = `<span class="text-xs text-red-600">Error: ${data.error}</span>`;
+                        } else if (data.uuid_match) {
+                            validationResult.innerHTML = `<span class="text-xs text-green-600">Validación exitosa (Coincidencia UUID).</span>`;
                         } else {
-                            validationResult.innerHTML = `
-                                <div class="p-4 rounded-2xl bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800/50 flex items-start">
-                                    <svg class="w-5 h-5 text-orange-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                                    <div>
-                                        <p class="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-1">Advertencia</p>
-                                        <p class="text-sm font-medium text-orange-700 dark:text-orange-300">${data.message}</p>
-                                    </div>
-                                </div>
-                            `;
+                            validationResult.innerHTML = `<span class="text-xs text-orange-600">Alerta manual: ${data.message}</span>`;
                         }
                     })
                     .catch(error => {
-                        validationResult.innerHTML = `
-                            <div class="p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 flex items-center">
-                                <svg class="w-5 h-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                <span class="text-xs font-black text-red-700 dark:text-red-400 uppercase">Error crítico al validar el archivo.</span>
-                            </div>
-                        `;
-                        console.error('Error:', error);
+                        validationResult.innerHTML = `<span class="text-xs text-red-600">Error al validar.</span>`;
                     });
                 });
             }
@@ -723,84 +538,54 @@
 
 <!-- Rejection Modal -->
 <div x-data="{ open: false, reasons: [
-    'Falta comprobante fiscal (XML/PDF)',
-    'El monto no coincide con la factura',
-    'Gasto no autorizado',
-    'Fuera de política de viáticos',
-    'Duplicado de solicitud',
-    'Error en centro de costos',
-    'Falta justificación detallada',
-    'Fecha fuera del periodo permitido',
-    'Excede el límite de gastos',
-    'Otro'
+    'Falta comprobante fiscal (XML/PDF)', 'El monto no coincide con la factura',
+    'Gasto no autorizado', 'Fuera de política de viáticos', 'Duplicado de solicitud',
+    'Error en centro de costos', 'Falta justificación detallada', 'Otro'
 ] }" 
      @open-rejection-modal.window="open = true" 
      x-show="open" 
-     class="fixed z-10 inset-0 overflow-y-auto" 
+     class="fixed z-50 inset-0 overflow-y-auto" 
      style="display: none;">
-    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div class="fixed inset-0 transition-opacity" aria-hidden="true">
-            <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
-        </div>
-        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-        <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="open = false" aria-hidden="true"></div>
+        <div class="inline-block bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full dark:bg-gray-800">
             <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST">
                 @csrf
                 @method('PUT')
-                
-                <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <div class="sm:flex sm:items-start">
                         <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-                            <!-- Heroicon name: outline/exclamation -->
-                            <svg class="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
+                            <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                         </div>
                         <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100" id="modal-title">
-                                Rechazar Reembolso
-                            </h3>
-                            <div class="mt-2">
-                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                                    Por favor, seleccione una razón para rechazar este reembolso.
-                                </p>
-                                <label for="rejection_reason" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Razón de Rechazo</label>
-                                <select name="rejection_reason" id="rejection_reason" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white dark:bg-gray-700 dark:text-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" required>
-                                    <option value="">Seleccione una opción</option>
-                                    <template x-for="reason in reasons" :key="reason">
-                                        <option :value="reason" x-text="reason"></option>
-                                    </template>
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Rechazar Solicitud</h3>
+                            <div class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                <label class="block mt-4 mb-1">Razón Principal</label>
+                                <select name="rejection_reason" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 mb-4" required>
+                                    <option value="">Seleccione una razón</option>
+                                    <template x-for="r in reasons"><option :value="r" x-text="r"></option></template>
                                 </select>
                                 
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-4">Tipo de Rechazo</label>
-                                <div class="mt-2 space-y-2">
-                                    <div class="flex items-center">
-                                        <input id="rechazo_correccion" name="status" type="radio" value="requiere_correccion" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:bg-gray-700 dark:border-gray-600" required>
-                                        <label for="rechazo_correccion" class="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Requiere Corrección (El usuario podrá actualizar archivos y reenviar)
-                                        </label>
+                                <label class="block font-medium text-gray-700 dark:text-gray-300 mt-4 mb-2">Acción de Rechazo</label>
+                                <div class="space-y-2">
+                                    <div class="flex items-start">
+                                        <input id="rt1" name="status" type="radio" value="requiere_correccion" class="mt-1 focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" required>
+                                        <label for="rt1" class="ml-3 block text-sm text-gray-700 dark:text-gray-300">Devolver al usuario para <b>corrección</b>.</label>
                                     </div>
-                                    <div class="flex items-center">
-                                        <input id="rechazo_definitivo" name="status" type="radio" value="rechazado" class="focus:ring-red-500 h-4 w-4 text-red-600 border-gray-300 dark:bg-gray-700 dark:border-gray-600">
-                                        <label for="rechazo_definitivo" class="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Rechazo Definitivo (No se podrá modificar)
-                                        </label>
+                                    <div class="flex items-start">
+                                        <input id="rt2" name="status" type="radio" value="rechazado" class="mt-1 focus:ring-red-500 h-4 w-4 text-red-600 border-gray-300">
+                                        <label for="rt2" class="ml-3 block text-sm text-gray-700 dark:text-gray-300"><b>Rechazo definitivo</b> y contable.</label>
                                     </div>
                                 </div>
-                                
-                                <label for="rejection_comment" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-4">Comentario Adicional (Opcional)</label>
-                                <textarea name="rejection_comment" id="rejection_comment" rows="3" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 mt-1 block w-full sm:text-sm border-gray-300 dark:bg-gray-700 dark:text-gray-300 rounded-md"></textarea>
+                                <label class="block mt-4 mb-1">Comentario Libre</label>
+                                <textarea name="rejection_comment" rows="3" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                    <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm">
-                        Confirmar Rechazo
-                    </button>
-                    <button type="button" @click="open = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
-                        Cancelar
-                    </button>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse dark:bg-gray-900/50">
+                    <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">Confirmar Acción</button>
+                    <button type="button" @click="open = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">Cancelar</button>
                 </div>
             </form>
         </div>

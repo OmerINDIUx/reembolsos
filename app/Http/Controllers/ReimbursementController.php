@@ -1009,7 +1009,20 @@ class ReimbursementController extends Controller
             abort(403, 'Aún no tienes permiso para ver este reembolso. Está en una etapa anterior de aprobación.');
         }
 
-        $reimbursement->load(['files', 'children', 'parent', 'costCenter']);
+        $reimbursement->load([
+            'files', 
+            'children', 
+            'parent', 
+            'costCenter.director', 
+            'costCenter.controlObra', 
+            'costCenter.directorEjecutivo', 
+            'directorApprover', 
+            'controlApprover', 
+            'executiveApprover', 
+            'cxpApprover', 
+            'direccionApprover', 
+            'treasuryApprover'
+        ]);
         return view('reimbursements.show', compact('reimbursement'));
     }
 

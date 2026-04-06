@@ -1,3 +1,96 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+    /* Glassmorphic Core */
+    .glass-card {
+        @apply bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-white dark:border-gray-700/50 rounded-[3rem] transition-all duration-300;
+    }
+
+    .glass-card-hover {
+        @apply glass-card hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1;
+    }
+
+    /* Premium Typography */
+    .premium-heading {
+        @apply font-black tracking-tighter leading-tight text-gray-900 dark:text-white;
+    }
+
+    .label-caps {
+        @apply text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 italic;
+    }
+
+    .label-accent {
+        @apply text-[9px] font-black uppercase tracking-[0.3em] text-indigo-500 dark:text-indigo-400 opacity-80;
+    }
+
+    /* Financial Components */
+    .hero-fin-card {
+        @apply bg-gradient-to-br from-indigo-700 via-indigo-800 to-indigo-950 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden;
+    }
+
+    .fin-amount {
+        @apply text-5xl md:text-7xl font-black tracking-tighter leading-none;
+    }
+
+    /* Badges & Indicators */
+    .premium-badge {
+        @apply px-4 py-1.5 rounded-xl border font-black text-[10px] uppercase tracking-[0.2em] shadow-sm backdrop-blur-sm transition-all;
+    }
+
+    .status-ping {
+        @apply relative flex h-3 w-3;
+    }
+
+    .status-ping-inner {
+        @apply animate-ping absolute inline-flex h-full w-full rounded-full opacity-75;
+    }
+
+    .status-ping-dot {
+        @apply relative inline-flex rounded-full h-3 w-3;
+    }
+
+    /* Interactive Elements */
+    .premium-btn-indigo {
+        @apply group relative px-10 py-5 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-[0.2em] text-[10px] rounded-[1.5rem] shadow-2xl shadow-indigo-300/50 dark:shadow-none transition-all hover:-translate-y-1 active:scale-95 overflow-hidden;
+    }
+
+    .premium-btn-white {
+        @apply bg-white text-indigo-600 font-black text-xs uppercase tracking-[0.2em] py-5 rounded-2xl shadow-xl hover:bg-gray-50 transition-all active:scale-95 flex items-center justify-center;
+    }
+
+    /* Documentation Grid */
+    .file-card {
+        @apply glass-card-hover p-6 border-gray-100/50 dark:border-gray-700/30 flex flex-col items-center text-center;
+    }
+
+    /* Timeline */
+    .timeline-node {
+        @apply absolute left-4 top-1 w-5 h-5 rounded-full z-10 border-4 border-white dark:border-gray-800 flex items-center justify-center transition-all duration-500;
+    }
+}
+
+@layer utilities {
+    .animate-pulse-slow {
+        animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-fadeIn {
+        animation: fadeIn 0.6s ease-out forwards;
+    }
+
+    @keyframes fadeInLeft {
+        from { opacity: 0; transform: translateX(-20px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+
+    .animate-fadeInLeft {
+        animation: fadeInLeft 0.8s ease-out forwards;
+    }
+}
