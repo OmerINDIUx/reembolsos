@@ -36,7 +36,7 @@
     </x-slot>
     <style>[x-cloak] { display: none !important; }</style>
 
-    <div class="py-12" x-data="{}">
+    <div class="py-12" x-data="{ openRenewModal: false }">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-8">
             
             <!-- Budget & Performance Statistics -->
@@ -49,7 +49,7 @@
                         <div class="mt-6 flex items-center justify-between">
                             <span class="text-[10px] font-bold text-gray-500 uppercase">Estado Global</span>
                             @if(Auth::user()->isAdmin() || Auth::user()->isControlObra())
-                            <button onclick="window.dispatchEvent(new CustomEvent('show-renew-modal'))" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20">
+                            <button @click="openRenewModal = true" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20">
                                 + Renovar
                             </button>
                             @endif
@@ -315,7 +315,7 @@
             </div>
         </div>
 
-    <div x-data="{ openRenewModal: false }" x-on:show-renew-modal.window="openRenewModal = true">
+    <div x-show="openRenewModal" x-cloak>
         <template x-if="openRenewModal">
             <div class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" x-cloak x-transition>
                 <div @click.away="openRenewModal = false" class="bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-300">
@@ -356,8 +356,7 @@
             </div>
         </template>
     </div>
-
-
+</div>
     @push('scripts')
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
