@@ -18,52 +18,7 @@
                         @endif
                     </div>
 
-                    <!-- Statistics Panel -->
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                        <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 p-4 rounded-xl shadow-sm overflow-hidden relative group">
-                             <div class="absolute -right-4 -top-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <svg class="w-24 h-24 text-indigo-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-                             </div>
-                            <h4 class="text-xs uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-bold mb-1">Reembolsos Pendientes</h4>
-                            <div class="flex items-baseline space-x-2">
-                                <span class="text-2xl font-bold text-gray-900 dark:text-white">{{ $globalStats['total_pending_count'] }}</span>
-                                <span class="text-xs text-gray-500">solicitudes</span>
-                            </div>
-                        </div>
 
-                        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 p-4 rounded-xl shadow-sm overflow-hidden relative group">
-                             <div class="absolute -right-4 -top-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <svg class="w-24 h-24 text-amber-600" fill="currentColor" viewBox="0 0 24 24"><path d="M11.88 3L4.97 10h13.82l-6.91-7zM5 12v9h14v-9H5zm7 7a2 2 0 110-4 2 2 0 010 4z"/></svg>
-                             </div>
-                            <h4 class="text-xs uppercase tracking-wider text-amber-600 dark:text-amber-400 font-bold mb-1">Monto en Aprobación</h4>
-                            <div class="flex items-baseline space-x-2">
-                                <span class="text-2xl font-bold text-gray-900 dark:text-white">${{ number_format($globalStats['total_pending_amount'], 2) }}</span>
-                                <span class="text-xs text-gray-500">MXN</span>
-                            </div>
-                        </div>
-
-                        <div class="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 p-4 rounded-xl shadow-sm overflow-hidden relative group">
-                             <div class="absolute -right-4 -top-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <svg class="w-24 h-24 text-emerald-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5l-4-4 1.41-1.41L11 13.67l7.09-7.09L19.5 8 11 16.5z"/></svg>
-                             </div>
-                            <h4 class="text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold mb-1">Total Pagado (Histórico)</h4>
-                            <div class="flex items-baseline space-x-2">
-                                <span class="text-2xl font-bold text-gray-900 dark:text-white">${{ number_format($globalStats['total_approved_amount'], 2) }}</span>
-                                <span class="text-xs text-gray-500">MXN</span>
-                            </div>
-                        </div>
-
-                        <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 p-4 rounded-xl shadow-sm overflow-hidden relative group">
-                             <div class="absolute -right-4 -top-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <svg class="w-24 h-24 text-indigo-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-                             </div>
-                            <h4 class="text-xs uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-bold mb-1">Presupuesto Total Mensual</h4>
-                            <div class="flex items-baseline space-x-2">
-                                <span class="text-2xl font-bold text-gray-900 dark:text-white">${{ number_format($globalStats['total_budget'], 2) }}</span>
-                                <span class="text-xs text-gray-500">MXN</span>
-                            </div>
-                        </div>
-                    </div>
                     
                     <!-- Search & Filter Form -->
                     <div class="mb-6 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">

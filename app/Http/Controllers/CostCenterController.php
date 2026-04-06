@@ -80,19 +80,9 @@ class CostCenterController extends Controller
             ->get()
             ->groupBy('cost_center_id');
 
-        // Global stats for the overview panel
-        $globalStats = [
-            'total_pending_count' => \App\Models\Reimbursement::whereNotIn('status', ['aprobado', 'rechazado'])->count(),
-            'total_pending_amount' => \App\Models\Reimbursement::whereNotIn('status', ['aprobado', 'rechazado'])->sum('total'),
-            'total_approved_amount' => \App\Models\Reimbursement::where('status', 'aprobado')->sum('total'),
-            'total_budget' => CostCenter::sum('budget'),
-            'top_cost_centers' => CostCenter::withCount(['reimbursements as total_count'])
-                ->orderBy('total_count', 'desc')
-                ->limit(5)
-                ->get()
-        ];
 
-        return view('cost_centers.index', compact('costCenters', 'globalStats', 'stepBreakdown'));
+
+        return view('cost_centers.index', compact('costCenters', 'stepBreakdown'));
     }
 
     /**
