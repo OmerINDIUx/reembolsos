@@ -193,6 +193,11 @@ class ReimbursementController extends Controller
             }
 
             if ($itemsForStats->count() > 0) {
+                $topSolicitor = $itemsForStats->groupBy('user_id')
+                    ->map(fn($group) => ['user' => $group->first()->user->name ?? 'N/A', 'total' => $group->sum('total')])
+                    ->sortByDesc('total')
+                    ->first();
+
                 $auditStats = [
                     'total' => $itemsForStats->sum('total'),
                     'count' => $itemsForStats->count(),
@@ -201,6 +206,7 @@ class ReimbursementController extends Controller
                     'category_totals' => $itemsForStats->groupBy('category')->map->sum('total'),
                     'validation_passed' => $itemsForStats->filter(fn($r) => ($r->validation_data['uuid_match'] ?? false) && ($r->validation_data['total_match'] ?? false))->count(),
                     'manual_count' => $itemsForStats->where('folio', 'SIN-FACTURA')->count(),
+                    'top_solicitor' => $topSolicitor,
                 ];
             }
         }

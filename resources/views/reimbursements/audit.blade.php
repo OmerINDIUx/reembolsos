@@ -38,10 +38,23 @@
                                 <h3 class="text-2xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight leading-none">
                                     {{ $auditMeta['cc_name'] }}
                                 </h3>
-                                <div class="flex items-center space-x-2 pt-1">
+                                <div class="flex items-center space-x-3 pt-1">
                                     <span class="px-2 py-0.5 bg-indigo-600 text-white rounded text-[8px] font-black uppercase tracking-widest">Semana {{ $auditMeta['week'] }}</span>
                                     <span class="px-2 py-0.5 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded text-[8px] font-black uppercase tracking-widest border border-gray-200 dark:border-gray-600">{{ ucfirst(str_replace('_', ' ', $auditMeta['type'])) }}</span>
+                                    @if(isset($auditItems) && $auditItems->count() > 0)
+                                        @php 
+                                            $ccModel = $auditItems->first()->costCenter;
+                                            $reportId = ($ccModel->abbreviation ?? 'SCC') . '-' . $auditMeta['week'] . '-AUD';
+                                            $solicitors = $auditItems->pluck('user.name')->unique();
+                                        @endphp
+                                        <span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[8px] font-black uppercase tracking-widest border border-amber-200">ID: {{ $reportId }}</span>
+                                    @endif
                                 </div>
+                                @if(isset($solicitors) && $solicitors->count() > 0)
+                                    <p class="text-[10px] text-gray-500 font-bold mt-2 italic opacity-80">
+                                        Solicitantes: {{ $solicitors->take(3)->implode(', ') }}{{ $solicitors->count() > 3 ? ' y ' . ($solicitors->count() - 3) . ' más' : '' }}
+                                    </p>
+                                @endif
                             </div>
                             <div class="flex items-center space-x-4">
                                 <a href="{{ route('reimbursements.audit', ['week' => $selectedWeek]) }}" class="text-[10px] font-black text-indigo-600 hover:underline uppercase tracking-widest">Ver toda la semana</a>
@@ -82,39 +95,63 @@
                              </div>
                         </div>
 
-                        <!-- Card 3: Estatus Mix -->
+                        <!-- Card 3: Gasto Promedio -->
+                        <div class="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                             <div class="relative z-10">
+                                <span class="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1 block">Gasto Promedio</span>
+                                <span class="text-3xl font-black text-blue-600 dark:text-blue-400 tracking-tighter leading-none">${{ number_format($auditStats['avg'], 2) }}</span>
+                                <p class="text-[9px] text-gray-400 font-bold mt-2 uppercase tracking-tight italic">Por comprobante</p>
+                             </div>
+                             <div class="absolute -right-2 -bottom-2 opacity-5 group-hover:scale-110 transition-transform">
+                                <svg class="w-20 h-20 text-blue-600" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+                             </div>
+                        </div>
+
+                        <!-- Card 4: Top Solicitante -->
+                        <div class="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                             <div class="relative z-10">
+                                <span class="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1 block">Top Solicitante</span>
+                                @if(isset($auditStats['top_solicitor']))
+                                    <span class="text-xl font-black text-gray-900 dark:text-white truncate block w-full tracking-tight">{{ $auditStats['top_solicitor']['user'] }}</span>
+                                    <p class="text-[9px] text-indigo-500 font-black mt-2 uppercase tracking-tight italic">${{ number_format($auditStats['top_solicitor']['total'], 2) }} gastados</p>
+                                @else
+                                    <span class="text-xl font-black text-gray-400">N/A</span>
+                                @endif
+                             </div>
+                             <div class="absolute -right-2 -bottom-2 opacity-5 group-hover:scale-110 transition-transform">
+                                <svg class="w-20 h-20 text-indigo-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                             </div>
+                        </div>
+                    </div>
+
+                    {{-- Segunda Fila de Metricas --}}
+                    <div class="px-6 md:px-8 pb-8 grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 dark:bg-gray-900/20">
+                        <!-- Card 5: Estatus Mix -->
                         <div class="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
                              <div class="relative z-10">
                                 <span class="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1 block">Estatus de Solicitudes</span>
-                                <div class="space-y-1.5 pt-1">
+                                <div class="grid grid-cols-2 gap-2 pt-1">
                                     @foreach($auditStats['status_counts'] as $status => $count)
-                                        @if($loop->index < 4)
-                                        <div class="flex justify-between items-center text-[9px]">
-                                            <span class="font-black uppercase text-gray-500 truncate w-24 italic">{{ str_replace('_', ' ', $status) }}</span>
-                                            <span class="font-black text-gray-900 dark:text-white">{{ $count }}</span>
+                                        <div class="flex justify-between items-center text-[9px] bg-gray-50 dark:bg-gray-700/50 p-2 rounded-lg border border-gray-100 dark:border-gray-600">
+                                            <span class="font-black uppercase text-gray-500 truncate italic">{{ str_replace('_', ' ', $status) }}</span>
+                                            <span class="font-black text-indigo-600 dark:text-indigo-400">{{ $count }}</span>
                                         </div>
-                                        @endif
                                     @endforeach
                                 </div>
                              </div>
                         </div>
 
-                        <!-- Card 4: Categorías -->
+                        <!-- Card 6: Categorías -->
                         <div class="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
                              <div class="relative z-10">
                                 <span class="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1 block">Distribución de Gasto</span>
-                                <div class="space-y-1.5 pt-1">
+                                <div class="grid grid-cols-2 gap-2 pt-1">
                                     @foreach($auditStats['category_totals'] as $category => $amount)
-                                        @if($loop->index < 3)
-                                        <div class="flex justify-between items-center text-[9px]">
-                                            <span class="font-black uppercase text-gray-500 truncate w-20">{{ $category }}</span>
-                                            <span class="font-black text-gray-900 dark:text-white">${{ number_format($amount, 0) }}</span>
+                                        <div class="flex justify-between items-center text-[9px] bg-gray-50 dark:bg-gray-700/50 p-2 rounded-lg border border-gray-100 dark:border-gray-600">
+                                            <span class="font-black uppercase text-gray-500 truncate">{{ $category }}</span>
+                                            <span class="font-black text-indigo-600 dark:text-indigo-400">${{ number_format($amount, 0) }}</span>
                                         </div>
-                                        @endif
                                     @endforeach
-                                    @if(count($auditStats['category_totals']) > 3)
-                                        <div class="text-right text-[8px] font-black text-indigo-500 uppercase italic">+ otros</div>
-                                    @endif
                                 </div>
                              </div>
                         </div>
@@ -257,6 +294,8 @@
                                             @php
                                                 $cc = $ccItems->first()->costCenter;
                                                 $internalId = ($cc->abbreviation ?? 'SCC') . '-' . $selectedWeek;
+                                                $invoices = $ccItems->whereNotNull('uuid')->count();
+                                                $tickets = $ccItems->where('folio', 'SIN-FACTURA')->count();
                                             @endphp
                                             <span class="text-[10px] font-black text-indigo-500 uppercase tracking-widest italic opacity-70 leading-none mb-1">{{ $internalId }}</span>
                                             <h2 class="text-3xl font-black text-gray-900 dark:text-white tracking-tight leading-none">
@@ -273,24 +312,56 @@
                                 <div class="space-y-3">
                                     @php $groupedByType = $ccItems->groupBy('type'); @endphp
                                     @foreach($groupedByType as $type => $typeItems)
+                                        @php
+                                            $cc = $typeItems->first()->costCenter;
+                                            $typeInitials = strtoupper(substr($type, 0, 3));
+                                            $batchId = ($cc->abbreviation ?? 'SCC') . '-' . $selectedWeek . '-' . $typeInitials;
+                                            
+                                            $invoices = $typeItems->whereNotNull('uuid')->count();
+                                            $tickets = $typeItems->where('folio', 'SIN-FACTURA')->count();
+                                            
+                                            $mainSolicitor = $typeItems->groupBy('user_id')
+                                                ->map(fn($group) => ['name' => $group->first()->user->name ?? 'N/A', 'total' => $group->sum('total')])
+                                                ->sortByDesc('total')
+                                                ->first();
+                                        @endphp
                                         <a href="{{ route('reimbursements.audit', ['week' => $selectedWeek, 'cc' => $ccName, 'type' => $type]) }}"
-                                           class="flex items-center justify-between p-5 bg-gray-50 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-lg transition-all group/type no-underline">
+                                           class="flex flex-col md:flex-row items-center justify-between p-5 bg-gray-50 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-lg transition-all group/type no-underline space-y-4 md:space-y-0">
                                             <div class="flex items-center space-x-5">
                                                 <div class="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center shadow-sm border border-gray-100 dark:border-gray-700 group-hover/type:bg-indigo-600 transition-colors">
-                                                    <svg class="w-5 h-5 text-indigo-500 group-hover/type:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                                    <svg class="w-5 h-5 text-indigo-500 group-hover/type:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                                 </div>
                                                 <div>
-                                                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover/type:text-indigo-400 mb-0.5 block italic">{{ ucfirst(str_replace('_', ' ', $type)) }}</span>
-                                                    <span class="text-sm font-black text-gray-700 dark:text-gray-300">{{ $typeItems->count() }} Comprobantes</span>
+                                                    <span class="text-[9px] font-black uppercase tracking-widest text-indigo-500 group-hover/type:text-indigo-400 mb-0.5 block italic">{{ $batchId }}</span>
+                                                    <span class="text-sm font-black text-gray-700 dark:text-gray-300">{{ ucfirst(str_replace('_', ' ', $type)) }}</span>
                                                 </div>
                                             </div>
-                                            <div class="flex items-center space-x-8">
+
+                                            <div class="flex flex-wrap items-center gap-6 md:gap-12">
+                                                <div class="flex flex-col items-center">
+                                                    <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Compuestos</span>
+                                                    <div class="flex items-center space-x-3">
+                                                        <div class="flex flex-col items-center">
+                                                            <span class="text-[10px] font-black text-gray-700 dark:text-gray-300">{{ $invoices }}</span>
+                                                            <span class="text-[8px] font-black text-gray-400 uppercase tracking-tight">Facturas</span>
+                                                        </div>
+                                                        <span class="text-gray-300">|</span>
+                                                        <div class="flex flex-col items-center">
+                                                            <span class="text-[10px] font-black text-gray-700 dark:text-gray-300">{{ $tickets }}</span>
+                                                            <span class="text-[8px] font-black text-gray-400 uppercase tracking-tight">Tickets</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="hidden sm:flex flex-col items-center max-w-[120px]">
+                                                    <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Responsable</span>
+                                                    <span class="text-[10px] font-bold text-gray-600 dark:text-gray-400 truncate w-full text-center">{{ $mainSolicitor['name'] ?? 'Varios' }}</span>
+                                                </div>
                                                 <div class="text-right">
-                                                    <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Total Tipo</span>
+                                                    <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Total Lote</span>
                                                     <span class="text-xl font-black text-gray-900 dark:text-white">${{ number_format($typeItems->sum('total'), 2) }}</span>
                                                 </div>
                                                 <div class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 group-hover/type:bg-indigo-100 dark:group-hover/type:bg-indigo-900 transition-colors">
-                                                    <svg class="w-4 h-4 text-gray-400 group-hover/type:text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+                                                    <svg class="w-4 h-4 text-gray-400 group-hover/type:text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                                                 </div>
                                             </div>
                                         </a>
