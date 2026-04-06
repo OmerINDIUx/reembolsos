@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CostCenter;
 use App\Models\User;
+use App\Models\BudgetRenewal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -156,7 +157,10 @@ class CostCenterController extends Controller
             ->limit(10)
             ->get();
 
-        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements'));
+        // 8. Budget Renewals
+        $budgetRenewals = $costCenter->budgetRenewals()->with('user')->get();
+
+        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements', 'budgetRenewals'));
     }
 
     /**
@@ -194,6 +198,14 @@ class CostCenterController extends Controller
             'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
             'description' => $request->description,
             'budget' => $request->budget,
+        ]);
+
+        // Create initial renewal record
+        $cc->budgetRenewals()->create([
+            'amount' => $request->budget,
+            'description' => 'Presupuesto inicial',
+            'renewal_date' => now(),
+            'user_id' => Auth::id(),
         ]);
 
         foreach ($request->steps as $index => $step) {
@@ -270,5 +282,36 @@ class CostCenterController extends Controller
         $costCenter->delete();
 
         return redirect()->route('cost_centers.index')->with('success', 'Centro de Costos eliminado.');
+    }
+
+    /**
+     * Add funds to the cost center budget.
+     */
+    public function renewBudget(Request $request, CostCenter $costCenter)
+    {
+        if (!Auth::user()->hasRole('admin', 'control_obra')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'renewal_date' => ['required', 'date'],
+        ]);
+
+        DB::transaction(function() use ($request, $costCenter) {
+            // Create renewal record
+            $costCenter->budgetRenewals()->create([
+                'amount' => $request->amount,
+                'description' => $request->description,
+                'renewal_date' => $request->renewal_date,
+                'user_id' => Auth::id(),
+            ]);
+
+            // Update total budget
+            $costCenter->increment('budget', $request->amount);
+        });
+
+        return redirect()->back()->with('success', 'Presupuesto renovado correctamente.');
     }
 }

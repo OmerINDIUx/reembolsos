@@ -34,76 +34,121 @@
             </div>
         </div>
     </x-slot>
+    <style>[x-cloak] { display: none !important; }</style>
 
-    <div class="py-12">
+    <div class="py-12" x-data="{}">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-8">
             
-            <!-- Summary Stats -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <!-- Pending Count -->
-                <a href="{{ route('reimbursements.index', ['cost_center_id' => $costCenter->id, 'tab' => 'management']) }}" class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group hover:border-indigo-300 transition-all">
+            <!-- Budget & Performance Statistics -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Total Budget allocation -->
+                <div class="bg-gray-900 p-8 rounded-[2.5rem] shadow-xl text-white relative overflow-hidden group">
                     <div class="relative z-10">
-                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500 mb-1">Pendientes Pago / Tránsito</p>
-                        <h4 class="text-4xl font-black text-gray-900 dark:text-white leading-none">{{ $stats['pending_count'] }}</h4>
-                        <p class="text-xs font-bold text-gray-400 mt-2">Monto: <span class="text-gray-900 dark:text-white">${{ number_format($stats['pending_amount'], 2) }}</span></p>
-                    </div>
-                    <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
-                        <svg class="w-32 h-32 text-amber-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-                    </div>
-                </a>
-
-                <!-- Approved History -->
-                <a href="{{ route('reimbursements.index', ['cost_center_id' => $costCenter->id, 'tab' => 'global_history', 'status' => 'aprobado']) }}" class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group hover:border-emerald-300 transition-all text-left">
-                    <div class="relative z-10">
-                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500 mb-1">Total Pagado</p>
-                        <h4 class="text-4xl font-black text-gray-900 dark:text-white leading-none">${{ number_format($stats['approved_amount'], 0) }}</h4>
-                        <p class="text-xs font-bold text-gray-400 mt-2">Histórico: <span class="text-gray-900 dark:text-white">{{ $stats['approved_count'] }}</span> pagos</p>
-                    </div>
-                    <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
-                        <svg class="w-32 h-32 text-emerald-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5l-4-4 1.41-1.41L11 13.67l7.09-7.09L19.5 8 11 16.5z"/></svg>
-                    </div>
-                </a>
-
-                <!-- Corrections & Rejections -->
-                <div class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden">
-                    <div class="relative z-10 grid grid-cols-2 gap-2 h-full">
-                        <a href="{{ route('reimbursements.index', ['cost_center_id' => $costCenter->id, 'status' => 'requiere_correccion']) }}" class="flex flex-col justify-center border-r border-gray-50 dark:border-gray-700 pr-2 hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-colors">
-                            <p class="text-[9px] font-black uppercase text-orange-500 mb-1">Corregir</p>
-                            <h4 class="text-2xl font-black text-gray-900 dark:text-white">{{ $stats['correction_count'] }}</h4>
-                        </a>
-                        <a href="{{ route('reimbursements.index', ['cost_center_id' => $costCenter->id, 'status' => 'rechazado']) }}" class="flex flex-col justify-center pl-2 hover:bg-rose-50 dark:hover:bg-rose-900/10 transition-colors">
-                            <p class="text-[9px] font-black uppercase text-rose-500 mb-1">Rechazos</p>
-                            <h4 class="text-2xl font-black text-gray-900 dark:text-white">{{ $stats['rejected_count'] }}</h4>
-                        </a>
+                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2">Presupuesto Total Asignado</p>
+                        <h4 class="text-4xl font-black leading-none">${{ number_format($costCenter->budget, 2) }}</h4>
+                        <div class="mt-6 flex items-center justify-between">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase">Estado Global</span>
+                            @if(Auth::user()->isAdmin() || Auth::user()->isControlObra())
+                            <button onclick="window.dispatchEvent(new CustomEvent('show-renew-modal'))" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20">
+                                + Renovar
+                            </button>
+                            @endif
+                        </div>
                     </div>
                 </div>
 
-                <!-- Efficiency -->
-                <div class="bg-indigo-600 p-6 rounded-3xl shadow-xl shadow-indigo-500/20 text-white relative overflow-hidden group">
+                <!-- Remaining Budget -->
+                @php
+                    $totalSpent = $stats['approved_amount'] + $stats['pending_amount'];
+                    $remainingBudget = $costCenter->budget - $totalSpent;
+                    $percentageSpent = $costCenter->budget > 0 ? ($totalSpent / $costCenter->budget) * 100 : 0;
+                @endphp
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group">
                     <div class="relative z-10">
-                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200 mb-1">Velocidad de Flujo</p>
-                        <h4 class="text-4xl font-black leading-none">{{ number_format($stats['avg_approval_days'], 1) }} d</h4>
-                        <p class="text-xs font-bold text-indigo-100 mt-2 opacity-80">Tiempo promedio de aprobación</p>
+                        <p class="text-[10px] font-black uppercase tracking-[0.2em] {{ $remainingBudget < 0 ? 'text-red-500' : 'text-emerald-500' }} mb-2">Presupuesto Disponible</p>
+                        <h4 class="text-4xl font-black text-gray-900 dark:text-white leading-none">${{ number_format($remainingBudget, 2) }}</h4>
+                        
+                        <div class="mt-6">
+                            <div class="flex justify-between items-center mb-1 text-[10px] font-bold uppercase">
+                                <span class="text-gray-400">Consumo: {{ number_format($percentageSpent, 1) }}%</span>
+                                <span class="text-gray-900 dark:text-white font-black">${{ number_format($totalSpent, 2) }}</span>
+                            </div>
+                            <div class="w-full bg-gray-100 dark:bg-gray-900 h-2 rounded-full overflow-hidden">
+                                <div class="h-full {{ $percentageSpent > 90 ? 'bg-red-500' : ($percentageSpent > 70 ? 'bg-amber-500' : 'bg-emerald-500') }} transition-all duration-1000" style="width: {{ min(100, $percentageSpent) }}%"></div>
+                            </div>
+                        </div>
                     </div>
+                </div>
+
+                <!-- Efficiency / Flow Stats -->
+                <div class="bg-indigo-600 p-8 rounded-[2.5rem] shadow-xl shadow-indigo-500/20 text-white relative overflow-hidden group">
                     <div class="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
                         <svg class="w-32 h-32 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                     </div>
-                </div>
-
-                <!-- Manager List -->
-                <div class="bg-gray-900 p-6 rounded-3xl shadow-sm text-white relative overflow-hidden group">
-                    <div class="relative z-10 flex flex-col justify-between h-full">
-                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4">Firmas Autorizadas</p>
-                        <div class="flex -space-x-3 overflow-hidden mb-4">
+                    <div class="relative z-10">
+                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200 mb-1">Velocidad de Flujo</p>
+                        <h4 class="text-4xl font-black leading-none">{{ number_format($stats['avg_approval_days'], 1) }} d</h4>
+                        <p class="text-xs font-bold text-indigo-100 mt-2 opacity-80 mb-4">Promedio aprobación</p>
+                        
+                        <div class="flex -space-x-2 overflow-hidden">
                             @foreach(['director', 'controlObra', 'directorEjecutivo', 'accountant', 'direccion', 'tesoreria'] as $role)
                                 @if($costCenter->$role)
-                                    <div class="inline-block h-10 w-10 rounded-full ring-4 ring-gray-900 bg-indigo-500 flex items-center justify-center text-xs font-black uppercase text-white shadow-lg" title="{{ $costCenter->$role->name }}">
+                                    <div class="inline-block h-8 w-8 rounded-full ring-2 ring-indigo-600 bg-indigo-400 flex items-center justify-center text-[10px] font-black uppercase text-white shadow-lg" title="{{ $costCenter->$role->name }}">
                                         {{ substr($costCenter->$role->name, 0, 1) }}
                                     </div>
                                 @endif
                             @endforeach
                         </div>
-                        <p class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">{{ $costCenter->approvalSteps->count() }} niveles configurados</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Operational Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Pending Count -->
+                <a href="{{ route('reimbursements.index', ['cost_center_id' => $costCenter->id, 'tab' => 'management']) }}" class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group hover:shadow-lg transition-all">
+                    <div class="relative z-10 flex items-center">
+                        <div class="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center text-amber-500 mr-4">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        </div>
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">En Proceso</p>
+                            <h4 class="text-xl font-black text-gray-900 dark:text-white">{{ $stats['pending_count'] }} <span class="text-xs text-gray-400">items</span></h4>
+                            <p class="text-[10px] font-bold text-amber-500">${{ number_format($stats['pending_amount'], 2) }}</p>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Approved History -->
+                <a href="{{ route('reimbursements.index', ['cost_center_id' => $costCenter->id, 'tab' => 'global_history', 'status' => 'aprobado']) }}" class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group hover:shadow-lg transition-all">
+                    <div class="relative z-10 flex items-center">
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-500 mr-4">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        </div>
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Pagado (Histórico)</p>
+                            <h4 class="text-xl font-black text-gray-900 dark:text-white">${{ number_format($stats['approved_amount'], 0) }}</h4>
+                            <p class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Aprobados: {{ $stats['approved_count'] }}</p>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Corrections & Rejections -->
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden">
+                    <div class="relative z-10 flex items-center h-full">
+                        <div class="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-900/30 flex items-center justify-center text-rose-500 mr-4">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 flex-1">
+                            <a href="{{ route('reimbursements.index', ['cost_center_id' => $costCenter->id, 'status' => 'requiere_correccion']) }}" class="hover:text-amber-600 transition-colors">
+                                <p class="text-[9px] font-black uppercase text-gray-400">Corrección</p>
+                                <h4 class="text-lg font-black text-gray-900 dark:text-white">{{ $stats['correction_count'] }}</h4>
+                            </a>
+                            <a href="{{ route('reimbursements.index', ['cost_center_id' => $costCenter->id, 'status' => 'rechazado']) }}" class="hover:text-rose-600 transition-colors">
+                                <p class="text-[9px] font-black uppercase text-gray-400">Rechazos</p>
+                                <h4 class="text-lg font-black text-gray-900 dark:text-white">{{ $stats['rejected_count'] }}</h4>
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -191,65 +236,11 @@
                 </div>
             </div>
 
-                <!-- Monthly Trend Chart -->
-                <div class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 p-8">
-                    <h3 class="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter mb-8">
-                        Historial de Gasto Mensual
-                    </h3>
-                    <div class="h-[250px]">
-                        <canvas id="monthlyTrendChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Top Spenders -->
-                <div class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 p-8">
-                    <h3 class="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter mb-8">
-                        Principales Solicitantes
-                    </h3>
-                    <div class="space-y-6">
-                        @forelse($topSpenders as $s)
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center">
-                                <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-black">
-                                    {{ substr($s->user->name ?? '?', 0, 1) }}
-                                </div>
-                                <div class="ml-4 text-xs">
-                                    <p class="font-black text-gray-900 dark:text-white">{{ $s->user->name ?? 'N/A' }}</p>
-                                    <p class="text-gray-400 font-bold uppercase tracking-widest">{{ $s->count }} solicitudes</p>
-                                </div>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-sm font-black text-gray-900 dark:text-white">${{ number_format($s->amount, 0) }}</p>
-                            </div>
-                        </div>
-                        @empty
-                            <p class="text-xs text-center text-gray-400 py-10">Sin datos</p>
-                        @endforelse
-                    </div>
-                </div>
-
-                <!-- Status Distribution -->
-                <div class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 p-8 flex flex-col items-center">
-                    <h3 class="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter mb-4 w-full text-left">
-                        Estatus de Capital
-                    </h3>
-                    <div class="relative w-full h-[200px] flex items-center justify-center">
-                        <canvas id="statusDoughnutChart"></canvas>
-                        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span class="text-[8px] font-black uppercase text-gray-400 tracking-widest leading-none">Global</span>
-                            <h4 class="text-lg font-black text-gray-900 dark:text-white leading-tight">
-                                ${{ number_format($statusBreakdown->sum('amount'), 0) }}
-                            </h4>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-8">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <!-- Recent Activity -->
                 <div class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
-                    <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                        <h3 class="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Actividad Reciente</h3>
+                    <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/10">
+                        <h3 class="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter">Actividad Reciente</h3>
                     </div>
                     <div class="overflow-x-auto flex-1 text-sm">
                         @if($recentReimbursements->count() > 0)
@@ -257,7 +248,6 @@
                             <thead>
                                 <tr class="bg-gray-50/30 dark:bg-gray-900/10">
                                     <th class="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Folio</th>
-                                    <th class="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Solicitante</th>
                                     <th class="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Importe</th>
                                     <th class="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Estatus</th>
                                 </tr>
@@ -269,13 +259,9 @@
                                         <div class="font-black text-gray-900 dark:text-white uppercase">{{ $r->folio }}</div>
                                         <div class="text-[9px] text-gray-400 font-bold italic">{{ $r->created_at->format('d/m/Y') }}</div>
                                     </td>
-                                    <td class="px-8 py-4 font-bold text-gray-900 dark:text-white">{{ explode(' ', $r->user->name)[0] }}</td>
                                     <td class="px-8 py-4 font-black text-gray-900 dark:text-white">${{ number_format($r->total, 2) }}</td>
-                                    <td class="px-8 py-4">
-                                        <span class="px-2.5 py-1 inline-flex text-[9px] leading-4 font-black rounded-lg uppercase tracking-widest
-                                            {{ $r->status === 'aprobado' ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800' }}">
-                                            {{ $r->status === 'aprobado' ? 'Pagado' : Str::limit($r->status, 10) }}
-                                        </span>
+                                    <td class="px-8 py-4 text-xs font-bold uppercase tracking-wider text-gray-500">
+                                        {{ $r->status }}
                                     </td>
                                 </tr>
                                 @endforeach
@@ -283,19 +269,97 @@
                         </table>
                         @else
                             <div class="flex flex-col items-center justify-center p-20">
-                                <div class="bg-gray-50 dark:bg-gray-900 w-16 h-16 rounded-3xl flex items-center justify-center mb-4">
-                                    <svg class="w-8 h-8 text-gray-200 dark:text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                </div>
-                                <p class="text-xs font-black uppercase text-gray-300 tracking-widest">Sin registros activos</p>
+                                <p class="text-xs font-black uppercase text-gray-300 tracking-widest">Sin registros recientes</p>
                             </div>
                         @endif
                     </div>
                 </div>
+
+                <!-- Budget Renewal History -->
+                <div class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
+                    <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/10">
+                        <h3 class="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter">Historial de Budget</h3>
+                    </div>
+                    <div class="overflow-x-auto flex-1 text-sm">
+                        <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-700">
+                            <thead>
+                                <tr class="bg-gray-50/30 dark:bg-gray-900/10">
+                                    <th class="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Fecha</th>
+                                    <th class="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Concepto</th>
+                                    <th class="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Importe</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-50 dark:divide-gray-700">
+                                @forelse($budgetRenewals as $renewal)
+                                <tr>
+                                    <td class="px-8 py-4">
+                                        <div class="font-black text-gray-900 dark:text-white">{{ \Carbon\Carbon::parse($renewal->renewal_date)->format('d/m/Y') }}</div>
+                                        <div class="text-[9px] text-gray-400 font-bold uppercase">Por: {{ $renewal->user->name }}</div>
+                                    </td>
+                                    <td class="px-8 py-4">
+                                        <div class="text-[10px] font-bold text-gray-600 dark:text-gray-400 leading-tight uppercase">{{ $renewal->description ?: 'Renovación de presupuesto' }}</div>
+                                    </td>
+                                    <td class="px-8 py-4">
+                                        <div class="text-sm font-black text-emerald-600 dark:text-emerald-400">+${{ number_format($renewal->amount, 2) }}</div>
+                                    </td>
+                                </tr>
+                                @empty
+                                <tr>
+                                    <td colspan="3" class="px-8 py-10 text-center text-gray-400 text-xs font-bold uppercase tracking-widest italic">No hay historial de renovaciones</td>
+                                </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
+
+    <div x-data="{ openRenewModal: false }" x-on:show-renew-modal.window="openRenewModal = true">
+        <template x-if="openRenewModal">
+            <div class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" x-cloak x-transition>
+                <div @click.away="openRenewModal = false" class="bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-300">
+                    <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/20">
+                        <h3 class="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Renovar Presupuesto</h3>
+                        <button @click="openRenewModal = false" class="text-gray-400 hover:text-gray-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                    
+                    <form action="{{ route('cost_centers.renew_budget', $costCenter) }}" method="POST" class="p-8 space-y-6">
+                        @csrf
+                        <div>
+                            <label for="amount" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Importe a Añadir *</label>
+                            <div class="relative">
+                                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+                                <input type="number" step="0.01" name="amount" id="amount" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-4 pl-8" required placeholder="0.00">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="renewal_date" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Fecha de Renovación *</label>
+                            <input type="date" name="renewal_date" id="renewal_date" value="{{ date('Y-m-d') }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-4 uppercase" required>
+                        </div>
+
+                        <div>
+                            <label for="description" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Referencia / Descripción</label>
+                            <textarea name="description" id="description" rows="2" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium py-4" placeholder="Ej: Renovación Mayo 2024, Ref 123..."></textarea>
+                        </div>
+
+                        <div class="pt-4">
+                            <button type="submit" class="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-indigo-500/30 transition-all">
+                                Confirmar Renovación
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </template>
     </div>
 
+
     @push('scripts')
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {

@@ -57,6 +57,11 @@ class CostCenter extends Model
         return $this->hasMany(ApprovalStep::class)->orderBy('order');
     }
 
+    public function budgetRenewals()
+    {
+        return $this->hasMany(BudgetRenewal::class)->orderBy('renewal_date', 'desc');
+    }
+
     public function reimbursements()
     {
         return $this->hasMany(Reimbursement::class);

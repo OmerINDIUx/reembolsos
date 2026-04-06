@@ -41,6 +41,7 @@ Route::middleware(['auth', \App\Http\Middleware\ForcePasswordChange::class])->gr
 
     Route::middleware('role:admin,admin_view,director,control_obra,director_ejecutivo,accountant')->group(function() {
         Route::resource('cost_centers', CostCenterController::class);
+        Route::post('cost_centers/{cost_center}/renew-budget', [CostCenterController::class, 'renewBudget'])->name('cost_centers.renew_budget');
         Route::resource('travel_events', \App\Http\Controllers\TravelEventController::class);
     });
     

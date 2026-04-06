@@ -86,6 +86,11 @@ class User extends Authenticatable
         return $this->role === 'direccion';
     }
 
+    public function hasRole(...$roles)
+    {
+        return in_array($this->role, $roles);
+    }
+
     /**
      * The attributes that should be hidden for serialization.
      *
