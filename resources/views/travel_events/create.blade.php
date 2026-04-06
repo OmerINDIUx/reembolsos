@@ -17,7 +17,7 @@
     <div class="py-12">
         <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
             
-            <form action="{{ route('travel_events.store') }}" method="POST">
+            <form action="{{ route('travel_events.store') }}" method="POST" enctype="multipart/form-data">
                 @csrf
                 <div class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 p-10 space-y-8">
                     
@@ -46,15 +46,31 @@
                             <input type="text" name="code" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-6 font-bold text-indigo-600 uppercase" required placeholder="Ej: VIAJE-QRO-01">
                         </div>
 
+                        <!-- Tipo de Viaje -->
+                        <div>
+                            <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Tipo de Viaje *</label>
+                            <select name="trip_type" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-6 font-bold" required>
+                                <option value="nacional">Nacional</option>
+                                <option value="internacional">Internacional</option>
+                            </select>
+                        </div>
+
                         <!-- Director Responsable -->
                         <div>
-                            <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Director Autorizador *</label>
+                            <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Aprobador Principal *</label>
                             <select name="director_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-6 font-bold" required>
-                                <option value="">Selecciona al director...</option>
+                                <option value="">Selecciona al aprobador principal...</option>
                                 @foreach($directors as $director)
                                     <option value="{{ $director->id }}">{{ $director->name }}</option>
                                 @endforeach
                             </select>
+                        </div>
+
+                        <!-- Evidencia de Aprobación -->
+                        <div>
+                            <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Evidencia de Aprobación (PDF/JPG)</label>
+                            <input type="file" name="approval_evidence" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-3 px-6 font-bold text-xs" accept=".pdf,.jpg,.jpeg,.png">
+                            <p class="mt-2 text-[10px] text-gray-400 font-medium italic">Adjunta el correo o documento de aprobación oficial.</p>
                         </div>
 
                         <!-- Ubicación -->
@@ -63,69 +79,46 @@
                             <input type="text" name="location" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-6 font-bold uppercase" placeholder="Ej: CIUDAD DE MÉXICO">
                         </div>
 
-                        <!-- Usuarios Autorizados -->
+                        <!-- Usuarios Autorizados (Misma lógica que CostCenter) -->
                         <div class="md:col-span-2" x-data="{ 
-                            search: '',
-                            users: {{ $users->map(fn($u) => ['id' => $u->id, 'name' => strtoupper($u->name)])->toJson() }},
-                            selected: [],
-                            isOpen: false,
-                            get filteredUsers() {
-                                if (this.search === '') return this.users.filter(u => !this.selected.some(s => s.id === u.id));
-                                return this.users.filter(u => 
-                                    !this.selected.some(s => s.id === u.id) && 
-                                    u.name.includes(this.search.toUpperCase())
-                                );
+                            authorizedUsers: [],
+                            addUser() {
+                                this.authorizedUsers.push({ user_id: '' });
                             },
-                            toggleUser(user) {
-                                if (this.selected.some(s => s.id === user.id)) {
-                                    this.selected = this.selected.filter(s => s.id !== user.id);
-                                } else {
-                                    this.selected.push(user);
-                                }
-                                this.search = '';
+                            removeUser(index) {
+                                this.authorizedUsers.splice(index, 1);
                             }
                         }">
-                            <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Usuarios Autorizados para Registros *</label>
+                            <div class="flex justify-between items-center mb-4">
+                                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Usuarios Autorizados para Registros *</label>
+                                <button type="button" @click="addUser()" class="inline-flex items-center px-4 py-2 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-xl text-[10px] font-black uppercase tracking-tight hover:bg-indigo-100 transition-colors">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                    Añadir Usuario
+                                </button>
+                            </div>
                             
-                            <div class="relative">
-                                <!-- Multi-select Trigger / Selected Tags -->
-                                <div class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus-within:ring-4 focus-within:ring-indigo-500/10 focus-within:border-indigo-500 transition-all p-2 flex flex-wrap gap-2 min-h-[4rem] cursor-text" @click="$refs.searchInput.focus(); isOpen = true">
-                                    <template x-for="user in selected" :key="user.id">
-                                        <div class="inline-flex items-center bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-tight">
-                                            <span x-text="user.name"></span>
-                                            <button type="button" @click.stop="toggleUser(user)" class="ml-2 hover:text-indigo-900 dark:hover:text-white">&times;</button>
-                                            <input type="hidden" name="user_ids[]" :value="user.id">
+                            <div class="space-y-3">
+                                <template x-for="(user, index) in authorizedUsers" :key="index">
+                                    <div class="flex items-center gap-4 bg-gray-50/50 dark:bg-gray-900/50 p-3 rounded-2xl border border-gray-100 dark:border-gray-700">
+                                        <div class="flex-1">
+                                            <select :name="'user_ids[]'" x-model="user.user_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-2 px-4 text-xs font-bold" required>
+                                                <option value="">Selecciona un usuario...</option>
+                                                @foreach($users as $u)
+                                                    <option value="{{ $u->id }}">{{ strtoupper($u->name) }}</option>
+                                                @endforeach
+                                            </select>
                                         </div>
-                                    </template>
-                                    
-                                    <input 
-                                        x-ref="searchInput"
-                                        type="text" 
-                                        x-model="search" 
-                                        @keydown.escape="isOpen = false"
-                                        @click.away="isOpen = false"
-                                        @focus="isOpen = true"
-                                        placeholder="Buscar y agregar usuarios..."
-                                        class="flex-grow border-none focus:ring-0 bg-transparent text-sm font-bold uppercase py-2 px-3 placeholder-gray-400 min-w-[150px]">
-                                </div>
+                                        <button type="button" @click="removeUser(index)" class="p-2 text-gray-400 hover:text-red-500 transition-colors">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                        </button>
+                                    </div>
+                                </template>
 
-                                <!-- Dropdown List -->
-                                <div x-show="isOpen && filteredUsers.length > 0" 
-                                     class="absolute z-50 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-2xl rounded-2xl max-h-60 overflow-y-auto transform origin-top transition-all"
-                                     x-transition:enter="transition ease-out duration-100"
-                                     x-transition:enter-start="opacity-0 scale-95"
-                                     x-transition:enter-end="opacity-100 scale-100">
-                                    <template x-for="user in filteredUsers" :key="user.id">
-                                        <div @click="toggleUser(user)" 
-                                             class="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-900/50 cursor-pointer flex items-center justify-between group">
-                                            <span class="text-xs font-bold text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 transition-colors uppercase" x-text="user.name"></span>
-                                            <svg class="w-4 h-4 text-gray-300 group-hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                                        </div>
-                                    </template>
+                                <div x-show="authorizedUsers.length === 0" class="text-center py-10 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-3xl">
+                                    <p class="text-[10px] font-black uppercase text-gray-350 tracking-[0.2em]">Haz clic en "Añadir Usuario" para autorizar colaboradores</p>
                                 </div>
                             </div>
-
-                            <p class="mt-3 text-[10px] text-gray-400 font-medium italic">Empieza a escribir para filtrar por nombre. Solo los seleccionados podrán cargar reembolsos.</p>
+                            <p class="mt-3 text-[10px] text-gray-400 font-medium italic">Solo los usuarios agregados a esta lista podrán cargar reembolsos asociados a este código de viaje.</p>
                         </div>
 
                         <!-- Fecha Inicio -->

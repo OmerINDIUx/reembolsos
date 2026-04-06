@@ -7,6 +7,7 @@ use App\Models\TravelEvent;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class TravelEventController extends Controller
@@ -47,7 +48,14 @@ class TravelEventController extends Controller
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'location' => 'nullable|string|max:255',
             'description' => 'nullable|string',
+            'trip_type' => 'required|in:nacional,internacional',
+            'approval_evidence' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
         ]);
+
+        $evidencePath = null;
+        if ($request->hasFile('approval_evidence')) {
+            $evidencePath = $request->file('approval_evidence')->store('evidence', 'public');
+        }
 
         $travelEvent = TravelEvent::create([
             'cost_center_id' => $request->cost_center_id,
@@ -60,6 +68,8 @@ class TravelEventController extends Controller
             'location' => $request->location,
             'description' => $request->description,
             'status' => 'active',
+            'approval_evidence_path' => $evidencePath,
+            'trip_type' => $request->trip_type,
         ]);
 
         $travelEvent->participants()->sync($request->user_ids);
@@ -103,9 +113,19 @@ class TravelEventController extends Controller
             'location' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'status' => 'required|in:active,completed,cancelled',
+            'trip_type' => 'required|in:nacional,internacional',
+            'approval_evidence' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
         ]);
 
-        $travelEvent->update($request->all());
+        $data = $request->except(['approval_evidence', 'user_ids']);
+        if ($request->hasFile('approval_evidence')) {
+            if ($travelEvent->approval_evidence_path) {
+                Storage::disk('public')->delete($travelEvent->approval_evidence_path);
+            }
+            $data['approval_evidence_path'] = $request->file('approval_evidence')->store('evidence', 'public');
+        }
+
+        $travelEvent->update($data);
         $travelEvent->participants()->sync($request->user_ids);
 
         return redirect()->route('travel_events.index')->with('success', 'Viaje o Evento actualizado.');

@@ -48,8 +48,11 @@
                                             {{ substr($event->name, 0, 1) }}
                                         </div>
                                         <div>
-                                            <div class="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">{{ $event->name }}</div>
-                                            <div class="text-[10px] font-bold text-indigo-500 uppercase">{{ $event->code }}</div>
+                                            <a href="{{ route('travel_events.show', $event) }}" class="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight hover:text-indigo-600 transition-colors">{{ $event->name }}</a>
+                                            <div class="flex items-center gap-2 mt-0.5">
+                                                <div class="text-[10px] font-bold text-indigo-500 uppercase">{{ $event->code }}</div>
+                                                <span class="text-[8px] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded font-black uppercase tracking-tighter">{{ $event->trip_type }}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </td>
@@ -58,6 +61,7 @@
                                     <div class="text-[9px] text-gray-400 font-bold uppercase">Línea de Aprobación</div>
                                 </td>
                                 <td class="px-8 py-5">
+                                    <div class="font-bold text-gray-700 dark:text-gray-300 text-[10px] uppercase mb-1">{{ $event->location ?? 'S/D' }}</div>
                                     <div class="text-[10px] text-gray-400 font-medium">
                                         {{ $event->start_date ? \Carbon\Carbon::parse($event->start_date)->format('d M') : '...' }} 
                                         - 
@@ -66,24 +70,36 @@
                                 </td>
                                 <td class="px-8 py-5">
                                     <div class="text-xs font-bold text-gray-900 dark:text-white">{{ $event->user->name ?? 'Sistema' }}</div>
-                                    <div class="text-[10px] text-amber-500 font-black uppercase">Dir: {{ $event->director->name ?? '-' }}</div>
+                                    <div class="text-[10px] text-amber-500 font-black uppercase tracking-tight">Autoriza: {{ $event->director->name ?? '-' }}</div>
                                 </td>
                                 <td class="px-8 py-5">
-                                    <span class="px-3 py-1 inline-flex text-[9px] leading-4 font-black rounded-full uppercase tracking-widest
-                                        {{ $event->status === 'active' ? 'bg-indigo-100 text-indigo-800' : '' }}
-                                        {{ $event->status === 'completed' ? 'bg-emerald-100 text-emerald-800' : '' }}
-                                        {{ $event->status === 'cancelled' ? 'bg-rose-100 text-rose-800' : '' }}
-                                    ">
-                                        {{ $event->status }}
-                                    </span>
+                                    <div class="flex flex-col gap-2">
+                                        <span class="px-3 py-1 inline-flex text-[9px] leading-4 font-black rounded-full uppercase tracking-widest justify-center
+                                            {{ $event->status === 'active' ? 'bg-indigo-100 text-indigo-800' : '' }}
+                                            {{ $event->status === 'completed' ? 'bg-emerald-100 text-emerald-800' : '' }}
+                                            {{ $event->status === 'cancelled' ? 'bg-rose-100 text-rose-800' : '' }}
+                                        ">
+                                            {{ $event->status }}
+                                        </span>
+                                        @if($event->approval_evidence_path)
+                                            <span class="text-[8px] font-black text-indigo-500 uppercase tracking-widest text-center">Con Evidencia</span>
+                                        @endif
+                                    </div>
                                 </td>
-                                <td class="px-8 py-5 text-right space-x-2">
-                                    <a href="{{ route('travel_events.edit', $event) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 font-black text-xs uppercase underline underline-offset-4 decoration-dotted">Editar</a>
+                                <td class="px-8 py-5 text-right space-x-3">
+                                    <a href="{{ route('travel_events.show', $event) }}" class="text-gray-400 hover:text-indigo-600 transition-colors" title="Ver Detalles">
+                                        <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                    </a>
+                                    <a href="{{ route('travel_events.edit', $event) }}" class="text-gray-400 hover:text-indigo-600 transition-colors" title="Editar">
+                                        <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                    </a>
                                     
                                     <form action="{{ route('travel_events.destroy', $event) }}" method="POST" class="inline" onsubmit="return confirm('¿Seguro que deseas eliminar este registro?')">
                                         @csrf
                                         @method('DELETE')
-                                        <button type="submit" class="text-red-500 hover:text-red-700 font-black text-xs uppercase">Eliminar</button>
+                                        <button type="submit" class="text-gray-400 hover:text-red-600 transition-colors" title="Eliminar">
+                                            <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                        </button>
                                     </form>
                                 </td>
                             </tr>

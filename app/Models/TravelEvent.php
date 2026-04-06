@@ -17,6 +17,8 @@ class TravelEvent extends Model
         'end_date',
         'description',
         'status',
+        'approval_evidence_path',
+        'trip_type',
     ];
 
     public function costCenter()
