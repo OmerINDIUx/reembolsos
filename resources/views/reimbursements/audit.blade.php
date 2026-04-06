@@ -253,9 +253,16 @@
                                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 pb-6 border-b border-gray-50 dark:border-gray-700">
                                     <div>
                                         <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 italic opacity-60">Centro de Costos / Proyecto</h4>
-                                        <h2 class="text-3xl font-black text-gray-900 dark:text-white tracking-tight leading-none">
-                                            {{ $ccName }}
-                                        </h2>
+                                        <div class="flex flex-col">
+                                            @php
+                                                $cc = $ccItems->first()->costCenter;
+                                                $internalId = ($cc->abbreviation ?? 'SCC') . '-' . $selectedWeek;
+                                            @endphp
+                                            <span class="text-[10px] font-black text-indigo-500 uppercase tracking-widest italic opacity-70 leading-none mb-1">{{ $internalId }}</span>
+                                            <h2 class="text-3xl font-black text-gray-900 dark:text-white tracking-tight leading-none">
+                                                {{ $ccName }}
+                                            </h2>
+                                        </div>
                                     </div>
                                     <div class="mt-4 md:mt-0 text-right">
                                         <span class="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">Subtotal Proyecto</span>

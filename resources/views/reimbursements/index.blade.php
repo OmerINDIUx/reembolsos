@@ -246,14 +246,39 @@
                                                 });
                                             @endphp
                                             @foreach($groupedByCC as $ccName => $ccItems)
+                                                @php
+                                                    $cc = $ccItems->first()->costCenter;
+                                                    $internalId = ($cc->abbreviation ?? 'SCC') . '-' . $week;
+                                                    $invoiceCount = $ccItems->whereNotNull('uuid')->count();
+                                                    $ticketCount = $ccItems->where('folio', 'SIN-FACTURA')->count();
+                                                    $userCount = $ccItems->pluck('user_id')->unique()->count();
+                                                @endphp
                                                 <a href="{{ route('reimbursements.audit', ['week' => $week, 'cc' => $ccName]) }}" 
-                                                   class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/30 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-md transition-all group no-underline">
+                                                   class="flex flex-col md:flex-row items-start md:items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/30 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-md transition-all group no-underline space-y-3 md:space-y-0">
                                                     <div class="flex items-center space-x-4">
-                                                        <div class="w-2 h-2 bg-indigo-400 rounded-full group-hover:scale-125 transition-transform"></div>
-                                                        <span class="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{{ $ccName }}</span>
+                                                        <div class="flex flex-col">
+                                                            <span class="text-[10px] font-black text-indigo-500 uppercase tracking-widest italic opacity-70">{{ $internalId }}</span>
+                                                            <span class="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{{ $ccName }}</span>
+                                                        </div>
                                                     </div>
-                                                    <div class="flex items-center space-x-6">
-                                                        <span class="text-sm font-black text-gray-900 dark:text-white">${{ number_format($ccItems->sum('total'), 2) }}</span>
+                                                    
+                                                    <div class="flex flex-wrap items-center gap-4 md:gap-8">
+                                                        <div class="flex flex-col items-center">
+                                                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Facturas</span>
+                                                            <span class="text-sm font-black text-gray-900 dark:text-white">{{ $invoiceCount }}</span>
+                                                        </div>
+                                                        <div class="flex flex-col items-center">
+                                                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Tickets</span>
+                                                            <span class="text-sm font-black text-gray-900 dark:text-white">{{ $ticketCount }}</span>
+                                                        </div>
+                                                        <div class="flex flex-col items-center">
+                                                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Solicitantes</span>
+                                                            <span class="text-sm font-black text-gray-900 dark:text-white">{{ $userCount }}</span>
+                                                        </div>
+                                                        <div class="text-right ml-4">
+                                                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest block">Total</span>
+                                                            <span class="text-lg font-black text-gray-900 dark:text-white">${{ number_format($ccItems->sum('total'), 2) }}</span>
+                                                        </div>
                                                         <div class="p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 group-hover:bg-indigo-600 transition-colors">
                                                             <svg class="w-4 h-4 text-gray-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                                                         </div>
