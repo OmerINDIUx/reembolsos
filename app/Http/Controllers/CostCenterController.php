@@ -20,7 +20,7 @@ class CostCenterController extends Controller
         $user = Auth::user();
 
         // Base query
-        $query = CostCenter::with(['director', 'controlObra', 'directorEjecutivo', 'accountant', 'direccion', 'tesoreria'])
+        $query = CostCenter::with(['director', 'controlObra', 'directorEjecutivo', 'accountant', 'direccion', 'tesoreria', 'beneficiary'])
             ->withCount([
                 'reimbursements as pending_count' => function($q) {
                     $q->whereNotIn('status', ['aprobado', 'rechazado']);
@@ -91,7 +91,7 @@ class CostCenterController extends Controller
      */
     public function show(CostCenter $costCenter)
     {
-        $costCenter->load(['director', 'controlObra', 'directorEjecutivo', 'accountant', 'direccion', 'tesoreria', 'approvalSteps.user']);
+        $costCenter->load(['director', 'controlObra', 'directorEjecutivo', 'accountant', 'direccion', 'tesoreria', 'beneficiary', 'approvalSteps.user']);
 
         // 1. Basic Stats
         // ONLY marked users affect the budget
@@ -194,6 +194,7 @@ class CostCenterController extends Controller
 
         $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:cost_centers,name'],
+            'beneficiary_id' => ['nullable', 'exists:users,id'],
             'budget' => ['required', 'numeric', 'min:0'],
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.user_id' => ['required', 'exists:users,id'],
@@ -208,6 +209,7 @@ class CostCenterController extends Controller
             'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
             'description' => $request->description,
             'budget' => $request->budget,
+            'beneficiary_id' => $request->beneficiary_id,
         ]);
 
         // Create initial renewal record
@@ -264,6 +266,7 @@ class CostCenterController extends Controller
 
         $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('cost_centers')->ignore($costCenter->id)],
+            'beneficiary_id' => ['nullable', 'exists:users,id'],
             'budget' => ['required', 'numeric', 'min:0'],
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.user_id' => ['required', 'exists:users,id'],
@@ -278,6 +281,7 @@ class CostCenterController extends Controller
             'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
             'description' => $request->description,
             'budget' => $request->budget,
+            'beneficiary_id' => $request->beneficiary_id,
         ]);
 
         // Rebuild steps

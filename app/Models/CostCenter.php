@@ -20,6 +20,7 @@ class CostCenter extends Model
         'tesoreria_id',
         'description',
         'budget',
+        'beneficiary_id',
     ];
 
     public function director()
@@ -50,6 +51,11 @@ class CostCenter extends Model
     public function tesoreria()
     {
         return $this->belongsTo(User::class, 'tesoreria_id');
+    }
+
+    public function beneficiary()
+    {
+        return $this->belongsTo(User::class, 'beneficiary_id');
     }
 
     public function approvalSteps()

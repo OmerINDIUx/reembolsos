@@ -18,7 +18,10 @@
                 <h2 class="font-black text-3xl text-gray-900 dark:text-white leading-tight uppercase tracking-tighter">
                     {{ $costCenter->name }}
                 </h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">Código: <span class="font-bold text-indigo-600 dark:text-indigo-400">{{ $costCenter->code }}</span></p>
+                <p class="text-sm text-gray-500 dark:text-gray-400 font-medium italic">
+                    Código: <span class="font-bold text-indigo-600 dark:text-indigo-400 mr-4">{{ $costCenter->code }}</span>
+                    Beneficiario: <span class="font-bold text-gray-900 dark:text-white uppercase not-italic">{{ $costCenter->beneficiary->name ?? 'No asignado' }}</span>
+                </p>
             </div>
             
             <div class="flex items-center gap-3">

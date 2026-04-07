@@ -13,10 +13,19 @@
                         @csrf
                         @method('PUT')
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                             <div>
                                 <label for="name" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Nombre del Centro de Costos *</label>
                                 <input type="text" name="name" id="name" value="{{ $costCenter->name }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3 uppercase" required>
+                            </div>
+                            <div>
+                                <label for="beneficiary_id" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Beneficiario *</label>
+                                <select name="beneficiary_id" id="beneficiary_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3" required>
+                                    <option value="">Seleccione Beneficiario...</option>
+                                    @foreach($users as $u)
+                                        <option value="{{ $u->id }}" {{ $costCenter->beneficiary_id == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
+                                    @endforeach
+                                </select>
                             </div>
                             <div>
                                 <label for="budget" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Presupuesto Total *</label>
