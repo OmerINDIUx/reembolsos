@@ -293,9 +293,6 @@
                                     </div>
                                 @endforelse
                             </div>
-
-                            </div>
-
                         @else
                             <div class="overflow-x-auto relative shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
                                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -495,11 +492,16 @@
                                 </tbody>
                             </table>
                         </div>
-                        @if(!isset($weeklySummary))
-                        <div class="mt-8 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 sm:rounded-b-lg">
-                            {{ $reimbursements->links() }}
-                        </div>
                         @endif
+
+                        @if(isset($weeksPaginator))
+                            <div class="mt-8 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 sm:rounded-b-lg">
+                                {{ $weeksPaginator->links() }}
+                            </div>
+                        @elseif(!isset($weeklySummary) && $reimbursements instanceof \Illuminate\Pagination\AbstractPaginator)
+                            <div class="mt-8 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 sm:rounded-b-lg">
+                                {{ $reimbursements->links() }}
+                            </div>
                         @endif
                     </div>
                  </div>

@@ -97,9 +97,20 @@ class ReimbursementController extends Controller
         }
 
         if ($tab === 'management' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history') {
-            // Get ALL current items for these tabs to allow proper grouping in UI
-            $reimbursements = $query->get();
-            return view('reimbursements.index', compact('reimbursements', 'globalSearch'));
+            // Paginate by weeks (5 weeks per page)
+            $weeksQuery = clone $query;
+            $weeksPaginator = $weeksQuery->reorder()
+                ->select('week')
+                ->groupBy('week')
+                ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
+                ->orderByRaw("SUBSTRING_INDEX(week, '-', 1) DESC")
+                ->paginate(5, ['*'], 'page')
+                ->withQueryString();
+
+            $currentWeeks = $weeksPaginator->pluck('week');
+            $reimbursements = $query->whereIn('week', $currentWeeks)->get();
+            
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'weeksPaginator'));
         }
 
         $reimbursements = $query->paginate(10)->appends($request->all());
