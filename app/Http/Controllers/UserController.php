@@ -61,6 +61,8 @@ class UserController extends Controller
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo,direccion'],
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'clabe' => ['nullable', 'string', 'size:18', 'regex:/^[0-9]+$/'],
         ]);
 
         User::create([
@@ -68,6 +70,8 @@ class UserController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => $request->role,
+            'bank_name' => $request->bank_name,
+            'clabe' => $request->clabe,
             'must_change_password' => ($request->password === 'S20hg00146'),
         ]);
 
@@ -152,12 +156,16 @@ class UserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo,direccion'],
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'clabe' => ['nullable', 'string', 'size:18', 'regex:/^[0-9]+$/'],
         ]);
 
         $data = [
             'name' => $request->name,
             'email' => $request->email,
             'role' => $request->role,
+            'bank_name' => $request->bank_name,
+            'clabe' => $request->clabe,
         ];
 
         if ($request->filled('password')) {

@@ -16,6 +16,20 @@
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
 
+        <!-- Bank Name -->
+        <div class="mt-4">
+            <x-input-label for="bank_name" value="Nombre del Banco" />
+            <x-text-input id="bank_name" class="block mt-1 w-full uppercase" type="text" name="bank_name" :value="old('bank_name')" required />
+            <x-input-error :messages="$errors->get('bank_name')" class="mt-2" />
+        </div>
+
+        <!-- CLABE -->
+        <div class="mt-4">
+            <x-input-label for="clabe" value="CLABE (18 dígitos)" />
+            <x-text-input id="clabe" class="block mt-1 w-full" type="text" name="clabe" :value="old('clabe')" required maxlength="18" minlength="18" oninput="this.value = this.value.replace(/[^0-9]/g, '')" />
+            <x-input-error :messages="$errors->get('clabe')" class="mt-2" />
+        </div>
+
         <!-- Password -->
         <div class="mt-4">
             <x-input-label for="password" :value="__('Password')" />

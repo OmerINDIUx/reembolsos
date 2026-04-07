@@ -83,6 +83,25 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Bank Info -->
+                <div class="bg-indigo-50 dark:bg-indigo-900/10 p-6 rounded-3xl border border-indigo-100 dark:border-indigo-800 relative overflow-hidden group col-span-1 md:col-span-2 lg:col-span-1">
+                    <div class="relative z-10">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 mb-4">Información Bancaria</p>
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"></path></svg>
+                                <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">Banco:</p>
+                                <p class="text-xs font-black text-gray-900 dark:text-white uppercase">{{ $user->bank_name ?? 'No registrado' }}</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                                <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">CLABE:</p>
+                                <p class="text-xs font-black text-gray-900 dark:text-white">{{ $user->clabe ?? 'No registrado' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">

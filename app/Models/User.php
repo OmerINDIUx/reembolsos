@@ -24,6 +24,8 @@ class User extends Authenticatable
         'role',
         'director_id',
         'must_change_password',
+        'bank_name',
+        'clabe',
     ];
 
     public function director()
