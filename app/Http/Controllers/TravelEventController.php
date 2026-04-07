@@ -177,9 +177,23 @@ class TravelEventController extends Controller
             $loopStepId = $currentStepId;
             $creatorId = $reimb->user_id;
 
+            // Herencia de datos del Evento/Viaje
+            $inheritanceData = [
+                'cost_center_id' => $travelEvent->cost_center_id,
+                'location' => $travelEvent->location,
+                'trip_type' => $travelEvent->trip_type,
+                'trip_start_date' => $travelEvent->start_date,
+                'trip_end_date' => $travelEvent->end_date,
+            ];
+
             // Auto-Approval Logic heredado de bulkStore
             while ($loopStep && $loopStep->user_id === $creatorId) {
-                // Registrar aprobación si tuviéramos un sistema de log de notas en vez de null, pero lo dejamos simple.
+                // Registrar aprobación en los campos correspondientes (Simulando lo que hace mapApprovalData en el otro controlador)
+                // Usamos el orden de aprobación definido en el sistema (N1=Director, N2=Control, etc.)
+                if ($loopStep->order == 1) { $inheritanceData['approved_by_director_id'] = $creatorId; $inheritanceData['approved_by_director_at'] = now(); }
+                if ($loopStep->order == 2) { $inheritanceData['approved_by_control_id'] = $creatorId; $inheritanceData['approved_by_control_at'] = now(); }
+                if ($loopStep->order == 3) { $inheritanceData['approved_by_executive_id'] = $creatorId; $inheritanceData['approved_by_executive_at'] = now(); }
+                
                 $nextStep = $costCenter->approvalSteps()->where('order', '>', $loopStep->order)->orderBy('order', 'asc')->first();
                 if ($nextStep) {
                     $loopStep = $nextStep;
@@ -192,11 +206,11 @@ class TravelEventController extends Controller
                 }
             }
 
-            $reimb->update([
+            $reimb->update(array_merge([
                 'status' => $loopStatus,
                 'current_step_id' => $loopStepId,
                 'week' => $currentWeek
-            ]);
+            ], $inheritanceData));
 
             $count++;
         }

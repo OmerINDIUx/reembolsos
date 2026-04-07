@@ -40,27 +40,10 @@
                 </a>
             </div>
 
-            @if ($errors->any())
-                <div class="mb-10 p-6 bg-red-50 dark:bg-red-900/20 border-2 border-red-100 dark:border-red-900/30 rounded-[2rem] animate-shake">
-                    <div class="flex items-center space-x-4 mb-4">
-                        <div class="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center text-white shadow-lg">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                        </div>
-                        <h3 class="text-xl font-black text-red-900 dark:text-red-400 uppercase tracking-tight">Errores en el registro</h3>
-                    </div>
-                    <ul class="space-y-2">
-                        @foreach ($errors->all() as $error)
-                            <li class="flex items-center text-sm font-bold text-red-700 dark:text-red-300 uppercase italic">
-                                <span class="w-2 h-2 bg-red-400 rounded-full mr-3"></span>
-                                {{ $error }}
-                            </li>
-                        @endforeach
-                    </ul>
-                </div>
-            @endif
+            <!-- Static alerts replaced with SweetAlert2 below -->
 
             <!-- Global Form -->
-            <form id="reimbursement-form" :action="type === 'viaje' ? '{{ route('reimbursements.store') }}' : '{{ route('reimbursements.bulk_store') }}'" method="POST" enctype="multipart/form-data" x-on:submit="handleSubmit" novalidate>
+            <form id="reimbursement-form" action="{{ route('reimbursements.bulk_store') }}" method="POST" enctype="multipart/form-data" x-on:submit="handleSubmit" novalidate>
                 @csrf
                 <input type="hidden" name="type" value="{{ $type }}">
                 <input type="hidden" name="week" value="{{ $currentWeek }}">
@@ -129,8 +112,8 @@
                     </div>
                 </div>
 
-                <!-- REPEATER (FOR REEMBOLSO, FONDO FIJO, COMIDA) -->
-                <div x-show="type !== 'viaje'" class="space-y-16">
+                <!-- REPEATER (FOR REEMBOLSO, FONDO FIJO, COMIDA, VIAJE) -->
+                <div class="space-y-16">
                     <template x-for="(item, index) in items" :key="item.id">
                         <div class="bg-white dark:bg-gray-800 shadow-2xl rounded-[2.5rem] border border-gray-100 dark:border-gray-700 overflow-hidden animate-fadeIn relative">
                             <input type="hidden" :name="'items['+index+'][draft_id]'" :value="item.draftId">
@@ -510,7 +493,7 @@
                 </div>
 
                 <!-- VIAJE FORM -->
-                <div x-show="type === 'viaje'" class="animate-fadeIn">
+                <div x-show="false" class="animate-fadeIn"> <!-- DEPRECATED SINGLE TRIP FORM -->
                     <div class="bg-white dark:bg-gray-800 shadow-2xl rounded-[2.5rem] border border-gray-100 dark:border-gray-700 overflow-hidden relative p-8 md:p-10">
                         <div class="flex items-center mb-8">
                             <div class="w-12 h-12 bg-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-purple-500/30 mr-5">
@@ -525,12 +508,12 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div class="md:col-span-2">
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Título del Viaje (Ej: Visita Obra Querétaro) *</label>
-                                <input type="text" name="title" x-model="title" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                                <input type="text" name="title" x-model="title" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5">
                             </div>
 
                             <div>
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Tipo de Viaje *</label>
-                                <select name="trip_type" x-model="tripType" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                                <select name="trip_type" x-model="tripType" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5">
                                     <option value="nacional">Nacional</option>
                                     <option value="internacional">Internacional</option>
                                 </select>
@@ -538,22 +521,22 @@
 
                             <div>
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Destino *</label>
-                                <input type="text" name="trip_destination" x-model="tripDestination" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'" placeholder="Ciudad, Estado/Pais">
+                                <input type="text" name="trip_destination" x-model="tripDestination" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" placeholder="Ciudad, Estado/Pais">
                             </div>
 
                             <div>
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Noches *</label>
-                                <input type="number" name="trip_nights" x-model="tripNights" min="0" value="0" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                                <input type="number" name="trip_nights" x-model="tripNights" min="0" value="0" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5">
                             </div>
 
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Fecha Inicio *</label>
-                                    <input type="date" name="trip_start_date" x-model="tripStartDate" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                                    <input type="date" name="trip_start_date" x-model="tripStartDate" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Fecha Fin *</label>
-                                    <input type="date" name="trip_end_date" x-model="tripEndDate" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5" :required="type === 'viaje'">
+                                    <input type="date" name="trip_end_date" x-model="tripEndDate" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all py-4 px-5">
                                 </div>
                             </div>
 
@@ -581,7 +564,7 @@
                     <a href="{{ route('reimbursements.index') }}" class="text-[10px] font-black text-gray-400 hover:text-gray-900 dark:hover:text-white uppercase tracking-[0.3em] transition-all">CANCELAR TODO</a>
                     
                     <div class="flex items-center space-x-12">
-                        <div x-show="type !== 'viaje' && items.length > 0" class="text-right hidden sm:block">
+                    <div x-show="items.length > 0" class="text-right hidden sm:block">
                             <span class="block text-[10px] font-black text-indigo-400 uppercase mb-1">Total Acumulado</span>
                             <span class="block text-4xl font-black text-gray-900 dark:text-white" x-text="'$ ' + calculateTotal().toLocaleString('es-MX', {minimumFractionDigits: 2})"></span>
                         </div>
@@ -723,7 +706,7 @@
                             });
                         @endif
                     @else
-                        if (this.type !== 'viaje') this.addItem(); 
+                        this.addItem(); 
                     @endif
 
                     // Trigger validation for items that have both files but no validation record yet
@@ -763,21 +746,15 @@
 
                     // NEW: Prevent autosave if Step 2 is empty
                     if (isAuto) {
-                        let hasStep2Data = false;
-                        if (this.type === 'viaje') {
-                            hasStep2Data = (this.title && this.title.trim() !== '') || 
-                                           (this.tripDestination && this.tripDestination.trim() !== '');
-                        } else {
-                            hasStep2Data = this.items.some(item => {
-                                return item.draftId || // Already saved
-                                       item.xmlParsed || // XML exists
-                                       item.pdfName || // PDF preview exists
-                                       item.ticketName || // Ticket preview exists
-                                       parseFloat(item.data.total) > 0 || // Amount exists
-                                       (item.data.nombre_emisor && item.data.nombre_emisor.trim() !== '') ||
-                                       (item.data.observaciones && item.data.observaciones.trim() !== '');
-                            });
-                        }
+                        let hasStep2Data = this.items.some(item => {
+                            return item.draftId || // Already saved
+                                   item.xmlParsed || // XML exists
+                                   item.pdfName || // PDF preview exists
+                                   item.ticketName || // Ticket preview exists
+                                   parseFloat(item.data.total) > 0 || // Amount exists
+                                   (item.data.nombre_emisor && item.data.nombre_emisor.trim() !== '') ||
+                                   (item.data.observaciones && item.data.observaciones.trim() !== '');
+                        });
 
                         if (!hasStep2Data) return; // Ignore if no data in Step 2
                     }
@@ -1017,11 +994,12 @@
                     const xmlInput = document.querySelector(`input[name="items[${index}][xml_file]"]`);
                     const pdfInput = document.querySelector(`input[name="items[${index}][pdf_file]"]`);
                     
-                    // Allow validation if we have EITHER a new file OR a draft file for both
+                    // Allow validation if we have EITHER a new file OR a draft file for XML
                     const hasXml = (xmlInput && xmlInput.files[0]) || (item.draftId && item.xmlParsed);
+                    if (!hasXml) return;
+
+                    // PDF is optional for parsing but data will be cleaner with it.
                     const hasPdf = (pdfInput && pdfInput.files[0]) || (item.draftId && item.pdfName);
-                    
-                    if (!hasXml || !hasPdf) return;
 
                     const formData = new FormData();
                     if (xmlInput && xmlInput.files[0]) {
@@ -1152,6 +1130,7 @@
                     })
                     .catch(e => {
                         console.error(e);
+                        item.fileName = '';
                         Swal.fire({
                             icon: 'error',
                             title: 'Error de Red',
@@ -1257,5 +1236,60 @@
     </script>
 
 
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                @if (session('success'))
+                    Swal.fire({
+                        title: '<span class="text-xl font-black uppercase tracking-tight text-green-600">Registro Exitoso</span>',
+                        html: '<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">{{ session('success') }}</p>',
+                        icon: 'success',
+                        confirmButtonText: 'ENTENDIDO',
+                        confirmButtonColor: '#10b981',
+                        customClass: {
+                            popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                            confirmButton: 'rounded-xl px-12 py-3 font-black text-xs uppercase tracking-widest'
+                        }
+                    });
+                @endif
+
+                @if (session('error'))
+                    Swal.fire({
+                        title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Error en el Proceso</span>',
+                        html: '<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">{{ session('error') }}</p>',
+                        icon: 'error',
+                        confirmButtonText: 'REVISAR',
+                        confirmButtonColor: '#ef4444',
+                        customClass: {
+                            popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                            confirmButton: 'rounded-xl px-12 py-3 font-black text-xs uppercase tracking-widest'
+                        }
+                    });
+                @endif
+
+                @if ($errors->any())
+                    Swal.fire({
+                        title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Errores de Validación</span>',
+                        html: `<div class="mt-4 text-left">
+                                <ul class="space-y-2">
+                                    @foreach ($errors->all() as $error)
+                                        <li class="flex items-center text-xs font-bold text-red-700 dark:text-red-400 uppercase italic">
+                                            <span class="w-1.5 h-1.5 bg-red-400 rounded-full mr-2"></span>
+                                            {{ $error }}
+                                        </li>
+                                    @endforeach
+                                </ul>
+                               </div>`,
+                        icon: 'warning',
+                        confirmButtonText: 'CORREGIR',
+                        confirmButtonColor: '#ef4444',
+                        customClass: {
+                            popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                            confirmButton: 'rounded-xl px-12 py-3 font-black text-xs uppercase tracking-widest'
+                        }
+                    });
+                @endif
+            });
+        </script>
     @endpush
 </x-app-layout>

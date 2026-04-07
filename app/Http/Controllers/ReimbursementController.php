@@ -332,7 +332,7 @@ class ReimbursementController extends Controller
 
 
         $rules = [
-            'type' => 'required|in:reembolso,fondo_fijo,comida',
+            'type' => 'required|in:reembolso,fondo_fijo,comida,viaje',
             'cost_center_id' => 'required_without:travel_event_id|nullable|exists:cost_centers,id',
             'travel_event_id' => 'required_without:cost_center_id|nullable|exists:travel_events,id',
             'week' => 'required|string',
@@ -542,7 +542,10 @@ class ReimbursementController extends Controller
                     'observaciones' => trim($finalObs),
                     'attendees_count' => $item['attendees_count'] ?? ($existingDraft ? $existingDraft->attendees_count : 0),
                     'attendees_names' => $item['attendees_names'] ?? ($existingDraft ? $existingDraft->attendees_names : null),
-                    'location' => $item['location'] ?? ($existingDraft ? $existingDraft->location : null),
+                    'location' => $item['location'] ?? ($travelEvent ? $travelEvent->location : ($existingDraft ? $existingDraft->location : null)),
+                    'trip_type' => $travelEvent ? $travelEvent->trip_type : ($existingDraft ? $existingDraft->trip_type : null),
+                    'trip_start_date' => $travelEvent ? $travelEvent->start_date : ($existingDraft ? $existingDraft->trip_start_date : null),
+                    'trip_end_date' => $travelEvent ? $travelEvent->end_date : ($existingDraft ? $existingDraft->trip_end_date : null),
                     'user_id' => $user->id,
                     'company_confirmed' => isset($item['confirm_company']),
                     'validation_data' => $validationData,
@@ -1974,14 +1977,18 @@ class ReimbursementController extends Controller
                 }
             }
 
+            $travelEventId = $request->input('travel_event_id');
+            $travelEvent = $travelEventId ? \App\Models\TravelEvent::find($travelEventId) : null;
+            $requestCostCenterId = $travelEvent ? $travelEvent->cost_center_id : $request->input('cost_center_id');
+
             foreach ($items as $index => $itemData) {
                 try {
                     $id = $itemData['draft_id'] ?? null;
                     
                     $data = [
                         'type' => $request->input('type'),
-                        'cost_center_id' => $request->input('cost_center_id'),
-                        'travel_event_id' => $request->input('travel_event_id'),
+                        'cost_center_id' => $requestCostCenterId,
+                        'travel_event_id' => $travelEventId,
                         'week' => $request->input('week'),
                         'title' => $request->input('title') ?: ($itemData['nombre_emisor'] ?? 'Sin Título'),
                         'user_id' => $user->id,
@@ -1994,8 +2001,17 @@ class ReimbursementController extends Controller
                         'rfc_emisor', 'rfc_receptor', 'nombre_receptor', 'observaciones',
                         'metodo_pago', 'forma_pago', 'uso_cfdi', 'lugar_expedicion', 'regimen_fiscal_emisor',
                         'trip_destination', 'trip_nights', 'trip_start_date', 'trip_end_date', 'location',
-                        'uuid', 'folio', 'category'
+                        'uuid', 'folio', 'category', 'trip_type'
                     ];
+                    
+                    // Fallback from Travel Event for inheritance
+                    if ($travelEvent) {
+                        $data['location'] = $travelEvent->location;
+                        $data['trip_type'] = $travelEvent->trip_type;
+                        $data['trip_start_date'] = $travelEvent->start_date;
+                        $data['trip_end_date'] = $travelEvent->end_date;
+                    }
+
                     foreach ($fields as $field) {
                         // PREVENT DATA LOSS: Only update if the field in the request is NOT empty
                         // This prevents a cleared frontend state from wiping valid DB data
