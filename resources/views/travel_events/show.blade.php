@@ -132,13 +132,40 @@
                                 <p class="text-xs text-gray-500 mt-1">Estas facturas se enviarán a cobro (ciclo de aprobación) al cerrar el evento.</p>
                             </div>
                             @if($canClose)
-                            <form action="{{ route('travel_events.close', $travelEvent) }}" method="POST" onsubmit="return confirm('¿Estás seguro de cerrar este evento? Esto enviará TODAS las facturas listadas al ciclo de cobro y no se podrán agregar más facturas a este evento.');">
+                            <form id="close-event-form" action="{{ route('travel_events.close', $travelEvent) }}" method="POST">
                                 @csrf
-                                <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-sm transition-colors whitespace-nowrap">
+                                <button type="button" 
+                                    onclick="confirmCloseEvent()"
+                                    class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-sm transition-colors whitespace-nowrap">
                                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                                     Cerrar Evento y Enviar Facturas
                                 </button>
                             </form>
+
+                            <script>
+                                function confirmCloseEvent() {
+                                    Swal.fire({
+                                        title: '<span class="text-xl font-black uppercase tracking-tight text-indigo-600">¿Cerrar Evento?</span>',
+                                        html: '<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">¿Estás seguro de cerrar este evento? Esto enviará <b>TODAS</b> las facturas listadas al ciclo de reembolso y no se podrán agregar más facturas a este evento.</p>',
+                                        icon: 'warning',
+                                        showCancelButton: true,
+                                        confirmButtonText: 'SÍ, CERRAR Y ENVIAR',
+                                        cancelButtonText: 'CANCELAR',
+                                        confirmButtonColor: '#4f46e5',
+                                        cancelButtonColor: '#9ca3af',
+                                        reverseButtons: true,
+                                        customClass: {
+                                            popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                                            confirmButton: 'rounded-xl px-8 py-3 font-black text-xs uppercase tracking-widest',
+                                            cancelButton: 'rounded-xl px-8 py-3 font-black text-xs uppercase tracking-widest'
+                                        }
+                                    }).then((result) => {
+                                        if (result.isConfirmed) {
+                                            document.getElementById('close-event-form').submit();
+                                        }
+                                    });
+                                }
+                            </script>
                             @endif
                         </div>
                         

@@ -520,6 +520,7 @@ class ReimbursementController extends Controller
                     'type' => $type,
                     'cost_center_id' => $costCenterId,
                     'travel_event_id' => $travelEventId,
+                    'title' => $travelEvent ? $travelEvent->name : ($item['title'] ?? ($existingDraft ? $existingDraft->title : null)),
                     'week' => $week,
                     'category' => !empty($item['category']) ? $item['category'] : ($existingDraft ? $existingDraft->category : 'viaticos'),
                     'uuid' => !empty($uuid) ? $uuid : ($existingDraft ? $existingDraft->uuid : null),
@@ -1990,7 +1991,7 @@ class ReimbursementController extends Controller
                         'cost_center_id' => $requestCostCenterId,
                         'travel_event_id' => $travelEventId,
                         'week' => $request->input('week'),
-                        'title' => $request->input('title') ?: ($itemData['nombre_emisor'] ?? 'Sin Título'),
+                        'title' => $request->input('title') ?: ($travelEvent ? $travelEvent->name : ($itemData['nombre_emisor'] ?? 'Sin Título')),
                         'user_id' => $user->id,
                         'status' => 'borrador',
                     ];
