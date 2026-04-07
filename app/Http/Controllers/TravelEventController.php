@@ -139,4 +139,76 @@ class TravelEventController extends Controller
         $travelEvent->delete();
         return redirect()->route('travel_events.index')->with('success', 'Viaje o Evento eliminado.');
     }
+
+    /**
+     * Cerrar el evento y liberar los reembolsos retenidos a la semana en curso.
+     */
+    public function closeEvent(TravelEvent $travelEvent)
+    {
+        // Solo el director del evento o admin
+        if (!Auth::user()->isAdmin() && Auth::id() !== $travelEvent->director_id) {
+            abort(403, 'No tienes permiso para cerrar este evento.');
+        }
+
+        if ($travelEvent->status !== 'active') {
+            return redirect()->back()->with('error', 'El evento ya está cerrado o cancelado.');
+        }
+
+        // Obtener el paso inicial del Centro de Costos correspondiente al evento
+        $costCenter = $travelEvent->costCenter;
+        $firstStep = $costCenter ? $costCenter->approvalSteps()->orderBy('order', 'asc')->first() : null;
+        
+        $initialStatus = $firstStep ? 'pendiente' : 'aprobado';
+        $currentStepId = $firstStep ? $firstStep->id : null;
+        
+        // Semana de facturación actual
+        $currentWeek = now()->addDays(2)->format('W-Y');
+
+        // Buscar todos los reembolsos vinculados en estado 'en_evento'
+        $reimbursements = \App\Models\Reimbursement::where('travel_event_id', $travelEvent->id)
+            ->where('status', 'en_evento')
+            ->get();
+
+        $count = 0;
+        foreach ($reimbursements as $reimb) {
+            // Evaluamos si el creador es el mismo aprobador para un posible auto-avance inmediato
+            $loopStep = $firstStep;
+            $loopStatus = $initialStatus;
+            $loopStepId = $currentStepId;
+            $creatorId = $reimb->user_id;
+
+            // Auto-Approval Logic heredado de bulkStore
+            while ($loopStep && $loopStep->user_id === $creatorId) {
+                // Registrar aprobación si tuviéramos un sistema de log de notas en vez de null, pero lo dejamos simple.
+                $nextStep = $costCenter->approvalSteps()->where('order', '>', $loopStep->order)->orderBy('order', 'asc')->first();
+                if ($nextStep) {
+                    $loopStep = $nextStep;
+                    $loopStepId = $nextStep->id;
+                } else {
+                    $loopStep = null;
+                    $loopStepId = null;
+                    $loopStatus = 'aprobado';
+                    break;
+                }
+            }
+
+            $reimb->update([
+                'status' => $loopStatus,
+                'current_step_id' => $loopStepId,
+                'week' => $currentWeek
+            ]);
+
+            $count++;
+        }
+
+        $travelEvent->update(['status' => 'completed']);
+
+        // Notificar al siguiente en línea (N1, usualmente el Director de Centro de Costos) si hay facturas procesadas
+        if ($count > 0 && $costCenter && $firstStep) {
+            $notifMsg = "El Viaje '{$travelEvent->name}' ha sido CERRADO enviando {$count} facturas al ciclo N1 de aprobación.";
+            $firstStep->user->notify(new \App\Notifications\ReimbursementNotification(null, $notifMsg, "info"));
+        }
+
+        return redirect()->route('travel_events.show', $travelEvent)->with('success', "Evento cerrado exitosamente. Se liberaron {$count} facturas para su cobro.");
+    }
 }

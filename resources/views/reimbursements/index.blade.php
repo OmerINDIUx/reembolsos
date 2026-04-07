@@ -427,10 +427,12 @@
                                                     {{ $r->status === 'aprobado_cxp' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300' : '' }}
                                                     {{ $r->status === 'aprobado_direccion' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
                                                     {{ $r->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
+                                                    {{ $r->status === 'en_evento' ? 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-300 border border-dashed border-slate-300' : '' }}
                                                 ">
                                                     @if($r->status === 'aprobado') Pagado 
                                                     @elseif($r->status === 'aprobado_cxp') Aprobado Subdirección
                                                     @elseif($r->status === 'aprobado_direccion') Aprobado Dirección
+                                                    @elseif($r->status === 'en_evento') En Cola (Evento)
                                                     @else {{ ucfirst(str_replace('_', ' ', $r->status)) }} @endif
                                                 </span>
                                                 <span class="text-[10px] text-gray-400 font-medium italic">
@@ -447,6 +449,7 @@
                                                     @elseif($r->status === 'aprobado_direccion') 
                                                         En: Cuentas por Pagar
                                                     @elseif($r->status === 'aprobado') Finalizado
+                                                    @elseif($r->status === 'en_evento') Esperando cierre de viaje
                                                     @else Rechazado/Corregir
                                                     @endif
                                                 </span>

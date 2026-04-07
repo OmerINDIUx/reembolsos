@@ -57,7 +57,7 @@ class ReimbursementController extends Controller
         } elseif ($tab === 'management') {
             // Approvals & Oversight for designated roles
             if ($user->isAdmin() || $user->isAdminView()) {
-                $query->whereNotIn('status', ['aprobado', 'rechazado']);
+                $query->whereNotIn('status', ['aprobado', 'rechazado', 'en_evento']);
             } else {
                 // DYNAMIC VISIBILITY:
                 // User sees it if they are the assigned approver for the CURRENT step
@@ -379,8 +379,14 @@ class ReimbursementController extends Controller
         
         $currentStepId = null;
         $initialStatus = 'pendiente';
+        $approvalData = [];
+        $autoNote = "";
 
-        if ($costCenter) {
+        if ($travelEvent && $travelEvent->status === 'active') {
+            // Reembolsos de un evento activo se quedan en pausa hasta que el Aprobador Principal "cierre" el evento.
+            $initialStatus = 'en_evento';
+            $currentStepId = null;
+        } elseif ($costCenter) {
             // Ownership Validation: N1, N2, N3 can only register in their own cost centers
             if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
                 $isAuthorized = false;
@@ -399,9 +405,6 @@ class ReimbursementController extends Controller
             $currentStepId = $firstStep ? $firstStep->id : null;
 
             // AUTO-APPROVAL: If creator is the approver, advance
-            $autoNote = "";
-            $approvalData = [];
-            
             while ($firstStep && $firstStep->user_id === $user->id) {
                 $autoNote .= "\n[AUTO-APROBACIÓN: " . $firstStep->name . "]";
                 $this->mapApprovalData($firstStep->order, $user->id, $approvalData);
@@ -417,16 +420,6 @@ class ReimbursementController extends Controller
                     break;
                 }
             }
-        } elseif ($travelEvent) {
-            // Placeholder: Travel events follow a simpler N1 approval by their director
-            // In a more complex system, we'd have travel-specific steps.
-            // For now, let's just mark it as pending and maybe we need 
-            // to update how steps are assigned.
-            $initialStatus = 'pendiente';
-            // We'll need a fallback for current_step_id or a generic task system
-            // For now, since we MUST have a step for the management view to work...
-            // Let's assume Travel Events also have a relationship to some default steps or we just use CC.
-            // USER didn't specify the flow for Travel Events yet, so I'll follow CC pattern if possible.
         }
 
         $createdCount = 0;
@@ -583,7 +576,7 @@ class ReimbursementController extends Controller
         }
 
         // Notify NEXT person in line
-        if ($createdCount > 0 && $costCenter) {
+        if ($createdCount > 0 && $costCenter && $initialStatus !== 'en_evento') {
             $targetUser = null;
             $notifMsg = "Se cargaron {$createdCount} reembolsos. Revísalos en tu listado de reembolsos.";
 

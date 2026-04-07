@@ -43,6 +43,7 @@ Route::middleware(['auth', \App\Http\Middleware\ForcePasswordChange::class])->gr
         Route::resource('cost_centers', CostCenterController::class);
         Route::post('cost_centers/{cost_center}/renew-budget', [CostCenterController::class, 'renewBudget'])->name('cost_centers.renew_budget');
         Route::resource('travel_events', \App\Http\Controllers\TravelEventController::class);
+        Route::post('travel_events/{travel_event}/close', [\App\Http\Controllers\TravelEventController::class, 'closeEvent'])->name('travel_events.close');
     });
     
     // Notifications
