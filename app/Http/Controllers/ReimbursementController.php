@@ -1028,7 +1028,7 @@ class ReimbursementController extends Controller
         $reimbursement->load('children');
 
         $type = $reimbursement->type;
-        $hasInvoice = !empty($reimbursement->xml_path) || $reimbursement->folio !== 'SIN-FACTURA';
+        $hasInvoice = !empty($reimbursement->uuid);
         
         // Standard list of cost centers (reuse logic from create if possible)
         $costCenters = CostCenter::orderBy('name')->get();

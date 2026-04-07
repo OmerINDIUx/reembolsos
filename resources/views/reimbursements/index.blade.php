@@ -250,7 +250,7 @@
                                                     $cc = $ccItems->first()->costCenter;
                                                     $internalId = ($cc->abbreviation ?? 'SCC') . '-' . $week;
                                                     $invoiceCount = $ccItems->whereNotNull('uuid')->count();
-                                                    $ticketCount = $ccItems->where('folio', 'SIN-FACTURA')->count();
+                                                    $ticketCount = $ccItems->whereNull('uuid')->count();
                                                     $userCount = $ccItems->pluck('user_id')->unique()->count();
                                                 @endphp
                                                 <a href="{{ route('reimbursements.audit', ['week' => $week, 'cc' => $ccName, 'tab' => $tab]) }}" 

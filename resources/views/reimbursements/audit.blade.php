@@ -333,7 +333,7 @@
                                                 $cc = $ccItems->first()->costCenter;
                                                 $internalId = ($cc->abbreviation ?? 'SCC') . '-' . $selectedWeek;
                                                 $invoices = $ccItems->whereNotNull('uuid')->count();
-                                                $tickets = $ccItems->where('folio', 'SIN-FACTURA')->count();
+                                                $tickets = $ccItems->whereNull('uuid')->count();
                                             @endphp
                                             <span class="text-[10px] font-black text-indigo-500 uppercase tracking-widest italic opacity-70 leading-none mb-1">{{ $internalId }}</span>
                                             <h2 class="text-3xl font-black text-gray-900 dark:text-white tracking-tight leading-none">
@@ -356,7 +356,7 @@
                                             $batchId = ($cc->abbreviation ?? 'SCC') . '-' . $selectedWeek . '-' . $typeInitials;
                                             
                                             $invoices = $typeItems->whereNotNull('uuid')->count();
-                                            $tickets = $typeItems->where('folio', 'SIN-FACTURA')->count();
+                                            $tickets = $typeItems->whereNull('uuid')->count();
                                             
                                             $mainSolicitor = $typeItems->groupBy('user_id')
                                                 ->map(fn($group) => ['name' => $group->first()->user->name ?? 'N/A', 'total' => $group->sum('total')])
