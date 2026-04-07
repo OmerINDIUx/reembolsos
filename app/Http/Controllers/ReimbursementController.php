@@ -288,10 +288,14 @@ class ReimbursementController extends Controller
             'week' => 'required|string',
             'items' => 'required|array|min:1',
             'items.*.category' => ['required', Rule::in($this->getCategories())],
-            'items.*.xml_file' => $hasInvoice ? 'required|file' : 'nullable',
-            'items.*.pdf_file' => $hasInvoice ? 'nullable|file|max:15360' : 'required|file|max:15360',
-            'items.*.ticket_file' => 'nullable|file|max:10240',
+            'items.*.observaciones' => 'required|string',
+            'items.*.xml_file' => $hasInvoice ? 'required_without:items.*.draft_id' : 'nullable',
+            'items.*.pdf_file' => $hasInvoice ? 'nullable|file|max:15360' : 'required_without:items.*.draft_id|file|max:15360',
+            'items.*.ticket_file' => 'required_without:items.*.draft_id|file|max:10240',
             'items.*.confirm_company' => $hasInvoice ? 'required' : 'nullable',
+            'items.*.attendees_count' => 'required_if:type,comida',
+            'items.*.location' => 'required_if:type,comida',
+            'items.*.attendees_names' => 'required_if:type,comida',
             // Stricter publication fields
             'items.*.uuid' => $hasInvoice ? 'required_without:items.*.draft_id' : 'nullable',
             'items.*.total' => 'required',
@@ -776,12 +780,13 @@ class ReimbursementController extends Controller
             'cost_center_id' => 'required_without:travel_event_id|nullable|exists:cost_centers,id',
             'travel_event_id' => 'required_without:cost_center_id|nullable|exists:travel_events,id',
             'week' => 'required|string',
-            'category' => ['nullable', Rule::requiredIf($request->type !== 'viaje'), Rule::in($this->getCategories())], // strict validation
+            'category' => ['required', Rule::in($this->getCategories())], // strict validation
+            'observaciones' => 'required|string',
             'xml_file' => 'nullable|file', // handled manually below
             'uuid' => 'nullable|string', // handled manually
             'total' => 'nullable|numeric', // handled manually
             'attendees_count' => 'nullable|integer|required_if:type,comida',
-            'attendees_names' => 'nullable|string',
+            'attendees_names' => 'nullable|string|required_if:type,comida',
             'location' => 'nullable|string|required_if:type,comida',
             'trip_nights' => 'nullable|integer|min:0|required_if:type,viaje',
             'trip_type' => 'nullable|in:nacional,internacional|required_if:type,viaje',
@@ -790,9 +795,9 @@ class ReimbursementController extends Controller
             'trip_end_date' => 'nullable|date|after_or_equal:trip_start_date|required_if:type,viaje',
             'title' => 'nullable|string|required_if:type,viaje',
             'extra_files.*' => 'file|max:10240', // 10MB max
-            'ticket_file' => 'nullable|file|max:10240', // Nuevo slot para ticket/pruebas
+            'ticket_file' => 'required|file|max:10240', // Mandatory
             'parent_id' => 'nullable|exists:reimbursements,id',
-            'confirm_company' => Rule::requiredIf($request->type !== 'viaje'),
+            'confirm_company' => 'required',
         ]);
         
         if ($request->type !== 'viaje') {

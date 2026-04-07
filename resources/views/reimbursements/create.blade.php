@@ -192,7 +192,7 @@
                                                             <span>Ticket / Pruebas Adicionales</span>
                                                             <span class="text-[9px] font-black text-gray-400 uppercase italic">Máx 10MB</span>
                                                         </label>
-                                                        <input type="file" :name="'items['+index+'][ticket_file]'" accept=".pdf,.jpg,.jpeg,.png,.txt" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-2" x-on:change="handleTicketChange($event, index)">
+                                                        <input type="file" :name="'items['+index+'][ticket_file]'" accept=".pdf,.jpg,.jpeg,.png,.txt" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-2" :required="!item.ticketName" x-on:change="handleTicketChange($event, index)">
                                                         <template x-if="item.ticketName">
                                                             <div class="mt-1 flex items-center justify-between">
                                                                 <div class="flex items-center text-[10px] text-green-600 font-bold uppercase italic">
@@ -248,7 +248,7 @@
                                                 <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3">Comprobante</h4>
                                                 <div>
                                                     <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Ticket / Pruebas Adicionales</label>
-                                                    <input type="file" :name="'items['+index+'][ticket_file]'" accept=".pdf,.jpg,.jpeg,.png,.txt" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-2 mb-4" x-on:change="handleTicketChange($event, index)">
+                                                    <input type="file" :name="'items['+index+'][ticket_file]'" accept=".pdf,.jpg,.jpeg,.png,.txt" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-2 mb-4" :required="!item.ticketName" x-on:change="handleTicketChange($event, index)">
 
                                                     <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Archivo de Respaldado (PDF/Imagen) *</label>
                                                     <input type="file" :name="'items['+index+'][pdf_file]'" accept=".pdf,image/*,.txt" class="block w-full text-xs text-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :required="!hasInvoice && !item.pdfName" x-on:change="handlePdfChange($event, index)">
@@ -267,7 +267,7 @@
                                             <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3">Clasificación</h4>
                                             <div>
                                                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Categoría *</label>
-                                                <select :name="'items['+index+'][category]'" x-model="item.data.category" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 text-sm py-3" :required="type !== 'viaje'">
+                                                <select :name="'items['+index+'][category]'" x-model="item.data.category" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 text-sm py-3" required>
                                                     <option value="">Selecciona...</option>
                                                     @foreach($categories as $cat)
                                                         <option value="{{ $cat }}">{{ $cat }}</option>
@@ -276,7 +276,7 @@
                                             </div>
                                             <div>
                                                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Justificación *</label>
-                                                <textarea :name="'items['+index+'][observaciones]'" x-model="item.data.observaciones" rows="4" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm text-sm" :required="type !== 'viaje'" placeholder="Motivo del gasto..."></textarea>
+                                                <textarea :name="'items['+index+'][observaciones]'" x-model="item.data.observaciones" rows="4" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm text-sm" required placeholder="Motivo del gasto..."></textarea>
                                             </div>
                                         </div>
                                     </div>
@@ -445,7 +445,7 @@
 
                                                         <div class="md:col-span-12">
                                                             <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Relación de Invitados (Nombres)</label>
-                                                            <textarea :name="'items['+index+'][attendees_names]'" rows="3" class="w-full bg-white dark:bg-gray-900 border-2 border-orange-50 dark:border-orange-900/20 rounded-2xl p-6 text-sm font-medium focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all placeholder-gray-300" placeholder="Escribe los nombres de las personas que asistieron..."></textarea>
+                                                            <textarea :name="'items['+index+'][attendees_names]'" rows="3" class="w-full bg-white dark:bg-gray-900 border-2 border-orange-50 dark:border-orange-900/20 rounded-2xl p-6 text-sm font-medium focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all placeholder-gray-300" :required="type === 'comida'" placeholder="Escribe los nombres de las personas que asistieron..."></textarea>
                                                         </div>
                                                     </div>
                                                 </div>

@@ -216,26 +216,129 @@
                         </div>
                     </div>
 
-                    <!-- Atributos CFDI (Only if UUID exists and not trip) -->
-                    @if($reimbursement->uuid && $reimbursement->type !== 'viaje')
-                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center dark:border-gray-700">
-                            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Atributos del CFDI</h3>
-                            @if($reimbursement->validation_data)
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                    Sello Validado
-                                </span>
-                            @endif
-                        </div>
+                    <!-- Atributos CFDI -->
+                    @if($reimbursement->uuid)
+                    @php
+                        $satMetodoPago = [
+                            'PUE' => 'Pago en una sola exhibición',
+                            'PPD' => 'Pago en parcialidades o diferido'
+                        ];
+                        
+                        $satFormaPago = [
+                            '01' => 'Efectivo', '02' => 'Cheque nominativo', '03' => 'Transferencia electrónica', 
+                            '04' => 'Tarjeta de crédito', '05' => 'Monedero electrónico', '06' => 'Dinero electrónico', 
+                            '08' => 'Vales de despensa', '12' => 'Dación en pago', '13' => 'Pago por subrogación', 
+                            '14' => 'Pago por consignación', '15' => 'Condonación', '17' => 'Compensación', 
+                            '23' => 'Novación', '24' => 'Confusión', '25' => 'Remisión de deuda', 
+                            '26' => 'Prescripción o caducidad', '27' => 'A satisfacción del acreedor', 
+                            '28' => 'Tarjeta de débito', '29' => 'Tarjeta de servicios', '30' => 'Aplicación de anticipos', 
+                            '31' => 'Intermediario pagos', '99' => 'Por definir'
+                        ];
+
+                        $satUsoCfdi = [
+                            'G01' => 'Adquisición de mercancias', 'G02' => 'Devoluciones, descuentos o bonificaciones', 
+                            'G03' => 'Gastos en general', 'I01' => 'Construcciones', 'I02' => 'Mobiliario y equipo', 
+                            'I03' => 'Equipo de transporte', 'I04' => 'Equipo de computo', 'I05' => 'Troqueles, moldes', 
+                            'I06' => 'Comunicaciones telefónicas', 'I07' => 'Comunicaciones satelitales', 
+                            'I08' => 'Otra maquinaria y equipo', 'D01' => 'Honorarios médicos', 'D02' => 'Gastos médicos por incapacidad', 
+                            'D03' => 'Gastos funerales', 'D04' => 'Donativos', 'D05' => 'Intereses por créditos hipotecarios', 
+                            'D06' => 'Aportaciones voluntarias SAR', 'D07' => 'Primas por seguros médicos', 
+                            'D08' => 'Transportación escolar', 'D09' => 'Cuentas para el ahorro', 'D10' => 'Servicios educativos', 
+                            'S01' => 'Sin efectos fiscales', 'CP01' => 'Pagos', 'CN01' => 'Nómina'
+                        ];
+
+                        $satRegimenFiscal = [
+                            '601' => 'General de Ley Personas Morales', '603' => 'Personas Morales con Fines no Lucrativos', 
+                            '605' => 'Sueldos y Salarios', '606' => 'Arrendamiento', '607' => 'Enajenación o Adquisición de Bienes', 
+                            '608' => 'Demás ingresos', '609' => 'Consolidación', '610' => 'Residentes Extranjero', 
+                            '611' => 'Ingresos por Dividendos', '612' => 'Personas Físicas Actividades Empresariales', 
+                            '614' => 'Ingresos por intereses', '615' => 'Ingresos obtención de premios', 
+                            '616' => 'Sin obligaciones fiscales', '620' => 'Sociedades Cooperativas', 
+                            '621' => 'Incorporación Fiscal', '622' => 'Actividades Agrícolas/Ganaderas', 
+                            '623' => 'Opcional para Grupos', '624' => 'Coordinados', '625' => 'Plataformas Tecnológicas', 
+                            '626' => 'Régimen Simplificado de Confianza'
+                        ];
+
+                        $mp = $reimbursement->metodo_pago;
+                        $mpDesc = $satMetodoPago[$mp] ?? '';
+
+                        $fp = $reimbursement->forma_pago;
+                        $fpDesc = $satFormaPago[$fp] ?? '';
+
+                        $uso = $reimbursement->uso_cfdi;
+                        $usoDesc = $satUsoCfdi[$uso] ?? '';
+
+                        $reg = $reimbursement->regimen_fiscal_emisor;
+                        $regDesc = $satRegimenFiscal[$reg] ?? '';
+                    @endphp
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <!-- Prominent Validation Header (Semaphore) -->
+                        @if($reimbursement->validation_data)
+                            @php
+                                $uM = $reimbursement->validation_data['uuid_match'] ?? false;
+                                $tM = $reimbursement->validation_data['total_match'] ?? false;
+                                $statusColor = ($uM && $tM) ? 'emerald' : (($uM) ? 'amber' : 'rose');
+                                $statusLabel = ($uM && $tM) ? 'FACTURA VALIDADA' : (($uM) ? 'ADVERTENCIA EN MONTOS' : 'REVISIÓN DE SEGURIDAD REQUERIDA');
+                                $bgBanner = ($uM && $tM) ? 'bg-emerald-600' : (($uM) ? 'bg-amber-500' : 'bg-rose-600');
+                                $icon = ($uM && $tM) ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' : (($uM) ? 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' : 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z');
+                            @endphp
+                            <div class="{{ $bgBanner }} px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg text-white">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="{{ $icon }}"></path></svg>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-xs font-black uppercase tracking-[0.2em] opacity-80 mb-0.5">Semáforo de Validación SAT</h4>
+                                        <p class="text-lg font-black tracking-tight leading-none">{{ $statusLabel }}</p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-4">
+                                    <div class="bg-black/20 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-3 border border-white/10">
+                                        <div class="flex h-3 w-3">
+                                            <span class="animate-ping absolute inline-flex h-3 w-3 rounded-full {{ $uM ? 'bg-emerald-300' : 'bg-rose-300' }} opacity-75"></span>
+                                            <span class="relative inline-flex rounded-full h-3 w-3 {{ $uM ? 'bg-emerald-400' : 'bg-rose-400' }}"></span>
+                                        </div>
+                                        <span class="text-[10px] font-black uppercase tracking-widest leading-none">UUID: {{ $uM ? 'OK' : 'ERROR' }}</span>
+                                    </div>
+                                    <div class="bg-black/20 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-3 border border-white/10">
+                                        <div class="flex h-3 w-3">
+                                            <span class="animate-ping absolute inline-flex h-3 w-3 rounded-full {{ $tM ? 'bg-emerald-300' : ($uM ? 'bg-amber-300' : 'bg-rose-300') }} opacity-75"></span>
+                                            <span class="relative inline-flex rounded-full h-3 w-3 {{ $tM ? 'bg-emerald-400' : ($uM ? 'bg-amber-400' : 'bg-rose-400') }}"></span>
+                                        </div>
+                                        <span class="text-[10px] font-black uppercase tracking-widest leading-none">MONTO: {{ $tM ? 'OK' : 'DIFF' }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        @else
+                            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20">
+                                <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest dark:text-gray-500">Atributos del CFDI</h3>
+                            </div>
+                        @endif
                         <div class="p-6 grid grid-cols-2 md:grid-cols-4 gap-6">
-                            <div><p class="text-xs text-gray-500">Método de Pago</p><p class="text-sm font-medium">{{ $reimbursement->metodo_pago ?? 'N/A' }}</p></div>
-                            <div><p class="text-xs text-gray-500">Forma de Pago</p><p class="text-sm font-medium">{{ $reimbursement->forma_pago ?? 'N/A' }}</p></div>
-                            <div><p class="text-xs text-gray-500">Uso de CFDI</p><p class="text-sm font-medium">{{ $reimbursement->uso_cfdi ?? 'N/A' }}</p></div>
-                            <div><p class="text-xs text-gray-500">Lugar Exp.</p><p class="text-sm font-medium">{{ $reimbursement->lugar_expedicion ?? 'S/N' }}</p></div>
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Método de Pago</p>
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $mp ?? 'N/A' }}</p>
+                                @if($mpDesc)<p class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 leading-tight">{{ $mpDesc }}</p>@endif
+                            </div>
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Forma de Pago</p>
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $fp ?? 'N/A' }}</p>
+                                @if($fpDesc)<p class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 leading-tight">{{ $fpDesc }}</p>@endif
+                            </div>
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Uso de CFDI</p>
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $uso ?? 'N/A' }}</p>
+                                @if($usoDesc)<p class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 leading-tight">{{ $usoDesc }}</p>@endif
+                            </div>
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">CP Expedición</p>
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $reimbursement->lugar_expedicion ?? 'S/N' }}</p>
+                            </div>
                             
                             <div class="col-span-2 md:col-span-4 border-t border-gray-100 pt-4 dark:border-gray-700">
-                                <p class="text-xs text-gray-500">Régimen Fiscal del Emisor</p>
-                                <p class="text-sm font-medium text-indigo-600 dark:text-indigo-400">{{ $reimbursement->regimen_fiscal_emisor ?? 'Sin régimen registrado' }}</p>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Régimen Fiscal Emisor</p>
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $reg ?? 'S/N' }}</p>
+                                @if($regDesc)<p class="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 mt-0.5 leading-tight">{{ $regDesc }}</p>@endif
                             </div>
                         </div>
                     </div>
@@ -287,19 +390,7 @@
                             @endif
                         </div>
 
-                        <!-- IA Validation Context -->
-                        @if($reimbursement->validation_data)
-                            <div class="border-t border-gray-100 bg-gray-50 px-6 py-4 dark:bg-gray-800 dark:border-gray-700">
-                                <p class="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-2 dark:text-indigo-400">Validación SAT Automatizada</p>
-                                <div class="flex items-center gap-4 text-sm">
-                                    <span class="flex items-center text-gray-700 dark:text-gray-300"><div class="w-2 h-2 rounded-full mr-2 {{ ($reimbursement->validation_data['uuid_match'] ?? false) ? 'bg-green-500' : 'bg-red-500' }}"></div> UUID: {{ ($reimbursement->validation_data['uuid_match'] ?? false) ? 'Válido' : 'Inválido' }}</span>
-                                    <span class="flex items-center text-gray-700 dark:text-gray-300"><div class="w-2 h-2 rounded-full mr-2 {{ ($reimbursement->validation_data['total_match'] ?? false) ? 'bg-green-500' : 'bg-amber-500' }}"></div> Monto: {{ ($reimbursement->validation_data['total_match'] ?? false) ? 'Cuadra' : 'Discrepa' }}</span>
-                                    @if(isset($reimbursement->validation_data['message']))
-                                        <span class="text-gray-500 italic">"{{ $reimbursement->validation_data['message'] }}"</span>
-                                    @endif
-                                </div>
-                            </div>
-                        @endif
+
                     </div>
 
                     <!-- Viaje Info -->
