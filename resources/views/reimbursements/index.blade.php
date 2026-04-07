@@ -208,7 +208,7 @@
 
                     @php
                         $tab = request('tab', $defaultTab);
-                        $isGroupedView = ($tab === 'management' || $tab === 'weekly_summary');
+                        $isGroupedView = ($tab === 'management' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history' || $tab === 'audit');
                     @endphp
 
                     <div id="results-container">
@@ -253,7 +253,7 @@
                                                     $ticketCount = $ccItems->where('folio', 'SIN-FACTURA')->count();
                                                     $userCount = $ccItems->pluck('user_id')->unique()->count();
                                                 @endphp
-                                                <a href="{{ route('reimbursements.audit', ['week' => $week, 'cc' => $ccName]) }}" 
+                                                <a href="{{ route('reimbursements.audit', ['week' => $week, 'cc' => $ccName, 'tab' => $tab]) }}" 
                                                    class="flex flex-col md:flex-row items-start md:items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/30 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-md transition-all group no-underline space-y-3 md:space-y-0">
                                                     <div class="flex items-center space-x-4">
                                                         <div class="flex flex-col">

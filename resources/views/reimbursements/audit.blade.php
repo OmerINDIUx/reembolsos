@@ -1,13 +1,23 @@
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center space-x-3">
-            <a href="{{ route('reimbursements.index', ['tab' => 'management']) }}" class="p-2 rounded-xl bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+            <a href="{{ route('reimbursements.index', ['tab' => request('tab', 'management')]) }}" class="p-2 rounded-xl bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
                 <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                 </svg>
             </a>
+            @php
+                $tab = request('tab', 'management');
+                $tabName = match($tab) {
+                    'management' => 'Módulo de Gestión',
+                    'active' => 'Mis Reembolsos',
+                    'history' => 'Mis Pagados/Rechazados',
+                    'global_history' => 'Todos los Reembolsos (Global)',
+                    default => 'Reembolsos'
+                };
+            @endphp
             <div>
-                <p class="text-[10px] font-black text-indigo-500 uppercase tracking-widest italic opacity-70">Módulo de Gestión</p>
+                <p class="text-[10px] font-black text-indigo-500 uppercase tracking-widest italic opacity-70">{{ $tabName }}</p>
                 <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">Auditoría de Reembolsos</h2>
             </div>
         </div>
@@ -57,7 +67,7 @@
                                 @endif
                             </div>
                             <div class="flex items-center space-x-4">
-                                <a href="{{ route('reimbursements.audit', ['week' => $selectedWeek]) }}" class="text-[10px] font-black text-indigo-600 hover:underline uppercase tracking-widest">Ver toda la semana</a>
+                                <a href="{{ route('reimbursements.audit', ['week' => $selectedWeek, 'tab' => request('tab')]) }}" class="text-[10px] font-black text-indigo-600 hover:underline uppercase tracking-widest">Ver toda la semana</a>
                             </div>
                         </div>
                     </div>
@@ -159,113 +169,98 @@
                     @endif
 
 
-                    {{-- Tabla de detalle --}}
-                    <div class="p-6 md:p-8">
-                        <div class="rounded-[1.5rem] border border-gray-100 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-900/30">
-                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                <thead class="bg-gray-50/50 dark:bg-gray-800/80">
-                                    <tr>
-                                        <th class="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">ID Auditoría</th>
-                                        <th class="px-4 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Validación</th>
-                                        <th class="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Emisor / Solicitante</th>
-                                        <th class="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Método / Uso</th>
-                                        <th class="px-4 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Forma</th>
-                                        <th class="px-4 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Monto Neto</th>
-                                        <th class="px-4 py-4"></th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                                    @forelse($auditItems as $r)
-                                        @php
-                                            $typeAbbr = strtoupper(substr($r->type, 0, 3));
-                                            $ccAbbr = $r->costCenter->abbreviation ?? 'SCC';
-                                            $year = $r->fecha ? $r->fecha->format('Y') : date('Y');
-                                            $compositeId = "{$ccAbbr}-{$typeAbbr}-{$year}-{$r->week}-" . str_pad($r->id, 3, '0', STR_PAD_LEFT);
-                                            
-                                            $val = $r->validation_data ?? [];
-                                            $uuidMatch = $val['uuid_match'] ?? true; 
-                                            $totalMatch = $val['total_match'] ?? true;
-                                        @endphp
-                                        <tr class="hover:bg-gray-50/50 dark:hover:bg-indigo-900/5 transition-colors border-b border-gray-50 dark:border-gray-800">
-                                            <td class="px-4 py-4">
-                                                <div class="flex flex-col">
-                                                    <span class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 italic mb-0.5 tracking-tight">{{ $compositeId }}</span>
-                                                    <span class="text-[11px] font-bold text-gray-800 dark:text-gray-100">{{ $r->fecha ? $r->fecha->format('d/m/Y') : 'S/F' }}</span>
-                                                    <span class="text-[9px] text-gray-400 font-mono font-medium uppercase tracking-tighter">{{ $r->uuid ?? 'SIN UUID' }}</span>
-                                                </div>
-                                            </td>
-                                            <td class="px-4 py-4 text-center">
-                                                <div class="flex flex-col items-center justify-center space-y-1">
-                                                    <div class="flex items-center space-x-1.5">
-                                                        <span class="text-[8px] font-black uppercase text-gray-400">UUID</span>
-                                                        @if($r->uuid)
-                                                            <svg class="w-3.5 h-3.5 {{ $uuidMatch ? 'text-emerald-500' : 'text-red-500' }}" fill="currentColor" viewBox="0 0 20 20">
-                                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                                            </svg>
-                                                        @else
-                                                            <span class="text-[8px] font-black text-amber-500">N/A</span>
-                                                        @endif
-                                                    </div>
-                                                    <div class="flex items-center space-x-1.5">
-                                                        <span class="text-[8px] font-black uppercase text-gray-400">Total</span>
-                                                        <svg class="w-3.5 h-3.5 {{ $totalMatch ? 'text-emerald-500' : 'text-red-500' }}" fill="currentColor" viewBox="0 0 20 20">
-                                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                                        </svg>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td class="px-4 py-4">
-                                                <div class="flex flex-col">
-                                                    <span class="text-[11px] font-black text-gray-700 dark:text-gray-200 truncate max-w-[180px]">{{ $r->nombre_emisor }}</span>
-                                                    <div class="flex items-center space-x-1 mt-0.5">
-                                                        <span class="w-1.5 h-1.5 rounded-full 
-                                                            {{ $r->status === 'aprobado' ? 'bg-green-500' : '' }}
-                                                            {{ str_contains($r->status, 'aprobado_') ? 'bg-blue-500' : '' }}
-                                                            {{ $r->status === 'pendiente' ? 'bg-amber-500' : '' }}
-                                                            {{ $r->status === 'rechazado' ? 'bg-red-500' : '' }}
-                                                        "></span>
-                                                        <span class="text-[9px] text-gray-400 font-bold uppercase truncate max-w-[120px]">{{ $r->user->name ?? 'N/A' }}</span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td class="px-4 py-4">
-                                                <div class="flex flex-col space-y-1">
-                                                    <div class="flex items-center space-x-1.5">
-                                                        <span class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded text-[8px] font-black border border-gray-200 dark:border-gray-700 uppercase">{{ $r->metodo_pago ?? 'N/A' }}</span>
-                                                        <span class="text-[9px] font-bold text-gray-400 italic">Pago</span>
-                                                    </div>
-                                                    <div class="flex items-center space-x-1.5">
-                                                        <span class="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded text-[8px] font-black border border-indigo-100 dark:border-indigo-800 uppercase">{{ $r->uso_cfdi ?? 'N/A' }}</span>
-                                                        <span class="text-[9px] font-bold text-gray-400 italic">Uso</span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td class="px-4 py-4 text-center">
-                                                <span class="px-2 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg text-[10px] font-black border border-gray-200 dark:border-gray-700 shadow-sm">{{ $r->forma_pago ?? '--' }}</span>
-                                            </td>
-                                            <td class="px-4 py-4 text-right">
-                                                <div class="flex flex-col items-end">
-                                                    <span class="font-mono font-black text-sm text-gray-900 dark:text-gray-100">${{ number_format($r->total, 2) }}</span>
-                                                    <span class="text-[8px] font-black text-indigo-500 uppercase tracking-widest italic opacity-60">Base: ${{ number_format($r->subtotal, 2) }}</span>
-                                                </div>
-                                            </td>
-                                            <td class="px-4 py-4 text-right">
-                                                <a href="{{ route('reimbursements.show', $r->id) }}"
-                                                   class="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors block">
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                                                </a>
-                                            </td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="6" class="px-6 py-16 text-center text-sm text-gray-400 font-bold italic">
-                                                Sin reembolsos para este grupo.
-                                            </td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
+                    {{-- Detalle de Items (Card-Style strictly aligned with summary) --}}
+                    <div class="p-4 md:p-8 space-y-3">
+                        @forelse($auditItems as $r)
+                            @php
+                                $typeAbbr = strtoupper(substr($r->type, 0, 3));
+                                $ccAbbr = $r->costCenter->abbreviation ?? 'SCC';
+                                $year = $r->fecha ? $r->fecha->format('Y') : date('Y');
+                                $compositeId = "{$ccAbbr}-{$typeAbbr}-{$year}-{$r->week}-" . str_pad($r->id, 3, '0', STR_PAD_LEFT);
+                                
+                                $val = $r->validation_data ?? [];
+                                $uuidMatch = $val['uuid_match'] ?? true; 
+                                $totalMatch = $val['total_match'] ?? true;
+
+                                // SEMAFORO LOGIC
+                                $semaforoColor = 'bg-emerald-500 shadow-emerald-200'; // Success
+                                $semaforoText = 'Validada';
+                                
+                                if (!$r->uuid) {
+                                    $semaforoColor = 'bg-amber-500 shadow-amber-200'; // Manual (Ticket)
+                                    $semaforoText = 'Manual';
+                                } elseif (!$uuidMatch || !$totalMatch) {
+                                    $semaforoColor = 'bg-red-500 shadow-red-200'; // Error
+                                    $semaforoText = 'Error';
+                                }
+                            @endphp
+                            <a href="{{ route('reimbursements.show', $r->id) }}"
+                               class="flex flex-col md:flex-row items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-lg transition-all group/item no-underline space-y-4 md:space-y-0">
+                                
+                                <div class="flex items-center space-x-5">
+                                    <div class="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center shadow-sm border border-gray-100 dark:border-gray-700 group-hover/item:bg-indigo-600 transition-colors">
+                                        @if($r->uuid)
+                                            <svg class="w-5 h-5 text-indigo-500 group-hover/item:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                        @else
+                                            <svg class="w-5 h-5 text-indigo-500 group-hover/item:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 11h.01M7 15h.01M13 7h.01M13 11h.01M13 15h.01M17 7h.01M17 11h.01M17 15h.01M4 5h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1z"/></svg>
+                                        @endif
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <span class="text-[9px] font-black uppercase tracking-widest text-indigo-500 mb-0.5 block italic">{{ $compositeId }}</span>
+                                        <span class="text-sm font-black text-gray-700 dark:text-gray-300">{{ $r->nombre_emisor ?: 'S/N' }}</span>
+                                        <div class="flex items-center space-x-1 mt-0.5">
+                                            <span class="text-[8px] font-black text-gray-400 uppercase tracking-tighter">{{ $r->fecha ? $r->fecha->format('d/m/Y') : 'S/F' }}</span>
+                                            <span class="text-gray-300 mx-1">|</span>
+                                            <span class="text-[8px] font-black text-gray-400 uppercase tracking-tighter truncate max-w-[150px]">{{ $r->uuid ?? 'SIN UUID' }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-6 md:gap-12">
+                                    {{-- Semaforo --}}
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Validación</span>
+                                        <div class="flex items-center space-x-1.5">
+                                            <div class="w-2.5 h-2.5 rounded-full {{ $semaforoColor }} shadow-sm"></div>
+                                            <span class="text-[10px] font-black text-gray-700 dark:text-gray-300 uppercase tracking-tighter">{{ $semaforoText }}</span>
+                                        </div>
+                                    </div>
+
+                                    {{-- Pago/Uso --}}
+                                    <div class="hidden sm:flex flex-col items-center">
+                                        <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Método / Uso</span>
+                                        <div class="flex items-center space-x-2">
+                                            <span class="text-[10px] font-bold text-gray-600 bg-gray-100 dark:bg-gray-800 px-1.5 rounded-md border border-gray-200 dark:border-gray-700">{{ $r->metodo_pago ?? 'N/A' }}</span>
+                                            <span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 rounded-md border border-indigo-100 dark:border-indigo-800">{{ $r->uso_cfdi ?? 'N/A' }}</span>
+                                        </div>
+                                    </div>
+
+                                    {{-- Solicitante --}}
+                                    <div class="hidden lg:flex flex-col items-center max-w-[100px]">
+                                        <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Solicitante</span>
+                                        <span class="text-[10px] font-bold text-gray-600 dark:text-gray-400 uppercase truncate w-full text-center">{{ $r->user->name ?? 'N/A' }}</span>
+                                    </div>
+
+                                    {{-- Monto --}}
+                                    <div class="text-right">
+                                        <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5 leading-none">Monto Neto</span>
+                                        <div class="flex flex-col items-end">
+                                            <span class="text-xl font-black text-gray-900 dark:text-white">${{ number_format($r->total, 2) }}</span>
+                                            <span class="text-[8px] font-black text-indigo-500 uppercase tracking-widest italic opacity-50">BASE: ${{ number_format($r->subtotal, 2) }}</span>
+                                        </div>
+                                    </div>
+
+                                    {{-- Arrow Button --}}
+                                    <div class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 group-hover/item:bg-indigo-100 dark:group-hover/item:bg-indigo-900 transition-colors">
+                                        <svg class="w-4 h-4 text-gray-400 group-hover/item:text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                    </div>
+                                </div>
+                            </a>
+                        @empty
+                            <div class="px-6 py-16 text-center text-sm text-gray-400 font-bold italic bg-gray-50/50 dark:bg-gray-800/20 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
+                                Sin reembolsos para este grupo.
+                            </div>
+                        @endforelse
                     </div>
                 </div>
 
@@ -294,7 +289,7 @@
                                     </div>
                                 </div>
                                 <div class="flex items-center space-x-2">
-                                    <a href="{{ route('reimbursements.index', ['tab' => 'management']) }}" class="bg-white dark:bg-gray-800 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-indigo-600 transition-colors">Volver a gestión</a>
+                                    <a href="{{ route('reimbursements.index', ['tab' => request('tab', 'management')]) }}" class="bg-white dark:bg-gray-800 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-indigo-600 transition-colors">Volver a listado</a>
                                 </div>
                              </div>
 
@@ -368,7 +363,7 @@
                                                 ->sortByDesc('total')
                                                 ->first();
                                         @endphp
-                                        <a href="{{ route('reimbursements.audit', ['week' => $selectedWeek, 'cc' => $ccName, 'type' => $type]) }}"
+                                        <a href="{{ route('reimbursements.audit', ['week' => $selectedWeek, 'cc' => $ccName, 'type' => $type, 'tab' => request('tab')]) }}"
                                            class="flex flex-col md:flex-row items-center justify-between p-5 bg-gray-50 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-lg transition-all group/type no-underline space-y-4 md:space-y-0">
                                             <div class="flex items-center space-x-5">
                                                 <div class="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center shadow-sm border border-gray-100 dark:border-gray-700 group-hover/type:bg-indigo-600 transition-colors">
@@ -414,8 +409,8 @@
                         @empty
                             <div class="p-20 text-center bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700">
                                 <p class="text-gray-400 font-black uppercase tracking-widest text-sm">No hay reportes registrados.</p>
-                                <a href="{{ route('reimbursements.index', ['tab' => 'management']) }}" class="mt-6 inline-flex items-center text-indigo-600 font-bold hover:underline">
-                                    ← Volver al Módulo de Gestión
+                                <a href="{{ route('reimbursements.index', ['tab' => request('tab', 'management')]) }}" class="mt-6 inline-flex items-center text-indigo-600 font-bold hover:underline">
+                                    ← Volver al listado
                                 </a>
                             </div>
                         @endforelse
@@ -423,7 +418,7 @@
                     @else
                         <div class="p-20 text-center">
                             <h3 class="text-xl font-black text-gray-400 uppercase tracking-widest">Favor de seleccionar una semana fiscal para auditar</h3>
-                            <a href="{{ route('reimbursements.index', ['tab' => 'management']) }}" class="mt-6 inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-xl font-black uppercase tracking-widest text-xs">
+                            <a href="{{ route('reimbursements.index', ['tab' => request('tab', 'management')]) }}" class="mt-6 inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-xl font-black uppercase tracking-widest text-xs">
                                 ← Ver todas las semanas
                             </a>
                         </div>

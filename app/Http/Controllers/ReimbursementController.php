@@ -43,52 +43,8 @@ class ReimbursementController extends Controller
             return view('reimbursements.index', compact('reimbursements', 'globalSearch'));
         }
 
-        // TAB LOGIC: STRICT SCOPING
-        if ($tab === 'active') {
-            // Strictly Personal: Pending
-            $query->where('user_id', $user->id)
-                  ->whereNotIn('status', ['aprobado', 'rechazado']);
-
-        } elseif ($tab === 'history') {
-            // Strictly Personal: Finished
-            $query->where('user_id', $user->id)
-                  ->whereIn('status', ['aprobado', 'rechazado']);
-
-        } elseif ($tab === 'management') {
-            // Approvals & Oversight for designated roles
-            if ($user->isAdmin() || $user->isAdminView()) {
-                $query->whereNotIn('status', ['aprobado', 'rechazado', 'en_evento']);
-            } else {
-                // DYNAMIC VISIBILITY:
-                // User sees it if they are the assigned approver for the CURRENT step
-                $query->whereHas('currentStep', function($q) use ($user) {
-                    $q->where('user_id', $user->id);
-                });
-            }
-
-        } elseif ($tab === 'global_history') {
-            // History for elevated roles (Management context)
-            if ($user->isAdmin() || $user->isAdminView() || $user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
-                if ($globalSearch) {
-                    $query->where('folio', 'like', "%{$globalSearch}%");
-                }
-                $query->whereIn('status', ['aprobado', 'rechazado']);
-            } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
-                // Directors see their cost centers' history
-                $query->whereHas('costCenter', function($q) use ($user) {
-                    if ($user->isDirector()) $q->where('director_id', $user->id);
-                    if ($user->isControlObra()) $q->where('control_obra_id', $user->id);
-                    if ($user->isExecutiveDirector()) $q->where('director_ejecutivo_id', $user->id);
-                })->whereIn('status', ['aprobado', 'rechazado']);
-            } else {
-                // Standard users see ONLY their own history in global_history tab too
-                $query->where('user_id', $user->id)
-                      ->whereIn('status', ['aprobado', 'rechazado']);
-            }
-        } else {
-            // DEFAULT FALLBACK: Personal Scope
-            $query->where('user_id', $user->id);
-        }
+        // Apply Tab Scoping
+        $this->applyTabScope($query, $tab, $user);
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -140,7 +96,7 @@ class ReimbursementController extends Controller
             $query->reorder('created_at', 'desc');
         }
 
-        if ($tab === 'management' || $tab === 'weekly_summary') {
+        if ($tab === 'management' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history') {
             // Get ALL current items for these tabs to allow proper grouping in UI
             $reimbursements = $query->get();
             return view('reimbursements.index', compact('reimbursements', 'globalSearch'));
@@ -163,16 +119,10 @@ class ReimbursementController extends Controller
             abort(403, 'No tienes permiso para ver la auditoría.');
         }
 
-        // Load all management reimbursements (same logic as index tab=management)
+        // Load reimbursements based on tab scope
+        $tab = $request->input('tab', 'management');
         $query = Reimbursement::with(['user', 'costCenter'])->orderBy('created_at', 'desc');
-
-        if ($user->isAdmin() || $user->isAdminView()) {
-            $query->whereNotIn('status', ['aprobado', 'rechazado']);
-        } else {
-            $query->whereHas('currentStep', function($q) use ($user) {
-                $q->where('user_id', $user->id);
-            });
-        }
+        $this->applyTabScope($query, $tab, $user);
 
         $allReimbursements = $query->get();
 
@@ -2132,5 +2082,51 @@ class ReimbursementController extends Controller
         }
 
         return true;
+    }
+
+    /**
+     * Helper to apply tab-specific scoping to a query.
+     */
+    private function applyTabScope($query, $tab, $user)
+    {
+        if ($tab === 'active') {
+            // Strictly Personal: Pending
+            $query->where('user_id', $user->id)
+                  ->whereNotIn('status', ['aprobado', 'rechazado']);
+
+        } elseif ($tab === 'history') {
+            // Strictly Personal: Finished
+            $query->where('user_id', $user->id)
+                  ->whereIn('status', ['aprobado', 'rechazado']);
+
+        } elseif ($tab === 'management') {
+            // Approvals & Oversight for designated roles
+            if ($user->isAdmin() || $user->isAdminView()) {
+                $query->whereNotIn('status', ['aprobado', 'rechazado', 'en_evento']);
+            } else {
+                // DYNAMIC VISIBILITY: User sees it if they are the assigned approver
+                $query->whereHas('currentStep', function($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                });
+            }
+
+        } elseif ($tab === 'global_history') {
+            // History for elevated roles or personal history
+            if ($user->isAdmin() || $user->isAdminView() || $user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
+                $query->whereIn('status', ['aprobado', 'rechazado']);
+            } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
+                $query->whereHas('costCenter', function($q) use ($user) {
+                    if ($user->isDirector()) $q->where('director_id', $user->id);
+                    if ($user->isControlObra()) $q->where('control_obra_id', $user->id);
+                    if ($user->isExecutiveDirector()) $q->where('director_ejecutivo_id', $user->id);
+                })->whereIn('status', ['aprobado', 'rechazado']);
+            } else {
+                $query->where('user_id', $user->id)
+                      ->whereIn('status', ['aprobado', 'rechazado']);
+            }
+        } else {
+            // DEFAULT FALLBACK: Personal Scope (mostly for weekly_summary if needed)
+            $query->where('user_id', $user->id);
+        }
     }
 }
