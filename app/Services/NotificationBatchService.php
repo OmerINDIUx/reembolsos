@@ -28,7 +28,7 @@ class NotificationBatchService
             NotificationBatch::create([
                 'user_id' => $user->id,
                 'reimbursement_ids' => [$reimbursement->id],
-                'send_at' => now()->addHour(),
+                'send_at' => now(), // Temporarily disabled the 1-hour buffer
             ]);
         }
     }
