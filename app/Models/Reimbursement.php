@@ -50,6 +50,7 @@ class Reimbursement extends Model
         'company_confirmed',
         'validation_data',
         'user_id',
+        'payee_id',
         'approved_by_director_id',
         'approved_by_director_at',
         'approved_by_control_id',
@@ -110,6 +111,11 @@ class Reimbursement extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function payee()
+    {
+        return $this->belongsTo(User::class, 'payee_id');
     }
 
     public function costCenter()

@@ -83,12 +83,14 @@
                             <!-- Cost Center Select -->
                             <div x-show="type !== 'viaje' || chargeType === 'cost_center'" class="animate-slideDown">
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Centro de Costos *</label>
-                                <select name="cost_center_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" :required="type !== 'viaje' || chargeType === 'cost_center'">
-                                    <option value="">Selecciona el Centro de Costos...</option>
-                                    @foreach($costCenters as $center)
-                                        <option value="{{ $center->id }}">{{ $center->name }}</option>
-                                    @endforeach
-                                </select>
+                                    <select name="cost_center_id" x-on:change="updateBeneficiary" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" :required="type !== 'viaje' || chargeType === 'cost_center'">
+                                        <option value="">Selecciona el Centro de Costos...</option>
+                                        @foreach($costCenters as $center)
+                                            <option value="{{ $center->id }}" data-beneficiary="{{ $center->beneficiary->name ?? 'Sin Beneficiario' }}" data-beneficiary-id="{{ $center->beneficiary_id }}">
+                                                {{ $center->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
                             </div>
 
                             <!-- Travel/Event Select -->
@@ -108,6 +110,57 @@
                                     {{ $currentWeek }}
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Destinatario del Pago -->
+                        <div class="mt-8 pt-8 border-t border-gray-100 dark:border-gray-700 animate-fadeIn" x-show="selectedCcBeneficiary">
+                            <h4 class="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Destinatario del Pago</h4>
+                            
+                            <template x-if="type === 'fondo_fijo' || type === 'comida'">
+                                <div class="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-800/50 flex items-center space-x-4">
+                                    <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">Pago directo al beneficiario</p>
+                                        <p class="text-lg font-bold text-gray-900 dark:text-white" x-text="selectedCcBeneficiary"></p>
+                                    </div>
+                                    <input type="hidden" name="payee_id" :value="selectedCcBeneficiaryId">
+                                </div>
+                            </template>
+
+                            <template x-if="type === 'reembolso' || type === 'viaje'">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <label class="relative flex p-4 bg-white dark:bg-gray-900 border-2 rounded-2xl cursor-pointer transition-all hover:border-indigo-200" :class="payeeOption === 'creator' ? 'border-indigo-600 ring-4 ring-indigo-500/10' : 'border-gray-100 dark:border-gray-700'">
+                                        <input type="radio" name="payee_option" value="creator" x-model="payeeOption" class="sr-only">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-5 h-5 border-2 rounded-full flex items-center justify-center" :class="payeeOption === 'creator' ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'">
+                                                <div class="w-2 h-2 bg-white rounded-full" x-show="payeeOption === 'creator'"></div>
+                                            </div>
+                                            <div>
+                                                <p class="text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight">Recibir yo el pago</p>
+                                                <p class="text-[10px] text-gray-500 font-bold uppercase italic">Solicitante (Tú)</p>
+                                            </div>
+                                        </div>
+                                    </label>
+
+                                    <label class="relative flex p-4 bg-white dark:bg-gray-900 border-2 rounded-2xl cursor-pointer transition-all hover:border-indigo-200" :class="payeeOption === 'beneficiary' ? 'border-indigo-600 ring-4 ring-indigo-500/10' : 'border-gray-100 dark:border-gray-700'">
+                                        <input type="radio" name="payee_option" value="beneficiary" x-model="payeeOption" class="sr-only">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-5 h-5 border-2 rounded-full flex items-center justify-center" :class="payeeOption === 'beneficiary' ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'">
+                                                <div class="w-2 h-2 bg-white rounded-full" x-show="payeeOption === 'beneficiary'"></div>
+                                            </div>
+                                            <div>
+                                                <p class="text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight">Pago al Beneficiario del CC</p>
+                                                <p class="text-[10px] text-gray-500 font-bold uppercase italic" x-text="selectedCcBeneficiary"></p>
+                                            </div>
+                                        </div>
+                                    </label>
+
+                                    <!-- Final Payee ID Hidden Input for the whole session -->
+                                    <input type="hidden" name="payee_id" :value="payeeOption === 'beneficiary' ? selectedCcBeneficiaryId : '{{ Auth::id() }}'">
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -608,6 +661,9 @@
                 tripStartDate: '',
                 tripEndDate: '',
                 observacionesGeneral: '',
+                selectedCcBeneficiary: '',
+                selectedCcBeneficiaryId: null,
+                payeeOption: 'creator',
                 items: [],
                 maxItems: 20,
                 @php
@@ -642,6 +698,17 @@
                         this.tripStartDate = @json($reimbursement->trip_start_date ? $reimbursement->trip_start_date->format("Y-m-d") : "");
                         this.tripEndDate = @json($reimbursement->trip_end_date ? $reimbursement->trip_end_date->format("Y-m-d") : "");
                         this.observacionesGeneral = @json($reimbursement->observaciones);
+                        
+                        // Handle Payee Initialization
+                        @if($reimbursement->payee_id)
+                            @if($reimbursement->payee_id === Auth::id())
+                                this.payeeOption = 'creator';
+                            @else
+                                this.payeeOption = 'beneficiary';
+                                this.selectedCcBeneficiaryId = @json($reimbursement->payee_id);
+                                this.selectedCcBeneficiary = @json($reimbursement->payee->name ?? 'Beneficiario');
+                            @endif
+                        @endif
                         
                         @if($reimbursement->type === 'viaje')
                             @foreach($reimbursement->children as $child)
@@ -718,6 +785,16 @@
 
                     // Auto-save every 30 seconds
                     setInterval(() => this.saveDraft(true), 30000);
+                },
+                updateBeneficiary(e) {
+                    const selectedOption = e.target.options[e.target.selectedIndex];
+                    if (selectedOption && selectedOption.dataset) {
+                        this.selectedCcBeneficiary = selectedOption.dataset.beneficiary || '';
+                        this.selectedCcBeneficiaryId = selectedOption.dataset.beneficiaryId || null;
+                    } else {
+                        this.selectedCcBeneficiary = '';
+                        this.selectedCcBeneficiaryId = null;
+                    }
                 },
                 addItem(initialData = null) {
                     if (this.items.length >= this.maxItems) return;

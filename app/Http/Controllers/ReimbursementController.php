@@ -226,10 +226,10 @@ class ReimbursementController extends Controller
         
         // Filter cost centers based on role and permissions
         if ($user->isAdmin()) {
-            $costCenters = CostCenter::orderBy('name')->get();
+            $costCenters = CostCenter::with('beneficiary')->orderBy('name')->get();
         } else {
             // Only show cost centers where the user is authorized
-            $costCenters = $user->authorizedCostCenters()->withPivot('can_do_special')->orderBy('name')->get();
+            $costCenters = $user->authorizedCostCenters()->with('beneficiary')->withPivot('can_do_special')->orderBy('name')->get();
 
             // Filter based on type and "one reimbursement" rule
             $costCenters = $costCenters->filter(function($cc) use ($user, $type) {
@@ -338,6 +338,14 @@ class ReimbursementController extends Controller
         $week = now()->addDays(2)->format('W-Y');
         
         $costCenter = $costCenterId ? CostCenter::find($costCenterId) : null;
+        
+        // Payee Logic
+        $payeeId = $user->id;
+        if (in_array($type, ['fondo_fijo', 'comida'])) {
+            $payeeId = $costCenter ? ($costCenter->beneficiary_id ?? $user->id) : $user->id;
+        } else {
+            $payeeId = $request->input('payee_id', $user->id);
+        }
 
         // If it's a travel event, we might want to use its director as the first approver if CC is null
         // For now, let's keep the dynamic workflow logic based on CC if available, or a fallback.
@@ -513,6 +521,7 @@ class ReimbursementController extends Controller
                     'trip_start_date' => $travelEvent ? $travelEvent->start_date : ($existingDraft ? $existingDraft->trip_start_date : null),
                     'trip_end_date' => $travelEvent ? $travelEvent->end_date : ($existingDraft ? $existingDraft->trip_end_date : null),
                     'user_id' => $user->id,
+                    'payee_id' => $payeeId,
                     'company_confirmed' => isset($item['confirm_company']),
                     'validation_data' => $validationData,
                 ], $approvalData);
@@ -901,6 +910,14 @@ class ReimbursementController extends Controller
             $validationData = $this->getValidationData($xmlDataForVal, $pdfToValidate);
         }
 
+        // Payee Logic for single store
+        $payeeId = $user->id;
+        if (in_array($request->type, ['fondo_fijo', 'comida'])) {
+            $payeeId = $costCenter ? ($costCenter->beneficiary_id ?? $user->id) : $user->id;
+        } else {
+            $payeeId = $request->input('payee_id', $user->id);
+        }
+
         $reimbursementData = array_merge([
             'type' => $request->type,
             'cost_center_id' => $effectiveCostCenterId,
@@ -943,6 +960,7 @@ class ReimbursementController extends Controller
             'company_confirmed' => $request->has('confirm_company') ? true : false,
             'validation_data' => $validationData,
             'user_id' => Auth::id(),
+            'payee_id' => $payeeId,
         ], $approvalData);
 
         if ($existingDraft) {
@@ -1031,7 +1049,7 @@ class ReimbursementController extends Controller
         $hasInvoice = !empty($reimbursement->uuid);
         
         // Standard list of cost centers (reuse logic from create if possible)
-        $costCenters = CostCenter::orderBy('name')->get();
+        $costCenters = CostCenter::with('beneficiary')->orderBy('name')->get();
         // Display CURRENT processing week, not the draft's original week
         $currentWeek = now()->addDays(2)->format('W-Y');
         $categories = $this->getCategories();
@@ -1952,6 +1970,8 @@ class ReimbursementController extends Controller
                 try {
                     $id = $itemData['draft_id'] ?? null;
                     
+                    $payeeId = $request->input('payee_id');
+
                     $data = [
                         'type' => $request->input('type'),
                         'cost_center_id' => $requestCostCenterId,
@@ -1959,6 +1979,7 @@ class ReimbursementController extends Controller
                         'week' => $request->input('week'),
                         'title' => $request->input('title') ?: ($travelEvent ? $travelEvent->name : ($itemData['nombre_emisor'] ?? 'Sin Título')),
                         'user_id' => $user->id,
+                        'payee_id' => $payeeId,
                         'status' => 'borrador',
                     ];
 

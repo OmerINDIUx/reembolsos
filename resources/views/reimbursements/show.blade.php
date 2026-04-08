@@ -190,6 +190,19 @@
                                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Centro de Costos</dt>
                                     <dd class="mt-1 text-sm font-semibold text-gray-900 sm:col-span-2 sm:mt-0 dark:text-gray-200">{{ $reimbursement->costCenter->name ?? 'N/A' }}</dd>
                                 </div>
+                                <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 bg-indigo-50/30 dark:bg-indigo-900/10">
+                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Destinatario del Pago</dt>
+                                    <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0 dark:text-gray-200">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-bold border-b-2 border-indigo-200 dark:border-indigo-800">{{ $reimbursement->payee->name ?? ($reimbursement->user->name ?? 'N/A') }}</span>
+                                            @if($reimbursement->payee_id && $reimbursement->payee_id !== $reimbursement->user_id)
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black bg-indigo-600 text-white uppercase tracking-widest">BENEFICIARIO CC</span>
+                                            @else
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 uppercase tracking-widest">SOLICITANTE</span>
+                                            @endif
+                                        </div>
+                                    </dd>
+                                </div>
                                 <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Categoría</dt>
                                     <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0 dark:text-gray-200 capitalize">{{ $reimbursement->category ?? 'N/A' }}</dd>
