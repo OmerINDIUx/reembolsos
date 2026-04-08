@@ -456,17 +456,21 @@
                                                     {{ $r->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
                                                     {{ $r->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
                                                     {{ $r->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
+                                                    {{ $r->status === 'pendiente_pago' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
                                                     {{ $r->status === 'borrador' ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' : '' }}
-                                                    {{ !in_array($r->status, ['aprobado', 'rechazado', 'requiere_correccion', 'pendiente', 'borrador']) ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
+                                                    {{ !in_array($r->status, ['aprobado', 'rechazado', 'requiere_correccion', 'pendiente', 'pendiente_pago', 'borrador']) ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
                                                 ">
                                                     @if($r->status === 'aprobado') Pagado 
                                                     @elseif($r->status === 'pendiente') {{ $r->currentStep->name ?? 'En Proceso' }}
+                                                    @elseif($r->status === 'pendiente_pago') Cuentas por Pagar
                                                     @elseif($r->status === 'requiere_correccion') Corregir
                                                     @else {{ ucfirst(str_replace('_', ' ', $r->status)) }} @endif
                                                 </span>
                                                 <span class="text-[10px] text-gray-400 font-medium italic">
                                                     @if($r->status === 'pendiente' && $r->currentStep) 
                                                         En: {{ $r->currentStep->user->name ?? 'Por asignar' }}
+                                                    @elseif($r->status === 'pendiente_pago')
+                                                        Listo para liquidación final
                                                     @elseif($r->status === 'aprobado') 
                                                         Finalizado
                                                     @elseif($r->status === 'requiere_correccion')

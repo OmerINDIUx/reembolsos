@@ -2116,13 +2116,21 @@ class ReimbursementController extends Controller
         
         $reimbursement->approvals()->create([
             'user_id' => $user->id,
-            'step_name' => $stepAtActionTime->name ?? 'Proceso',
+            'step_name' => $stepAtActionTime->name ?? ($reimbursement->status === 'pendiente_pago' ? 'Cuentas por Pagar' : 'Proceso'),
             'action' => 'aprobado',
             'comment' => $isBulk ? 'Aprobación Masiva' : 'Aprobación Manual',
             'is_bulk' => $isBulk
         ]);
 
-        // 2. Loop forward to see if the next steps should be auto-approved
+        // 2. If it was in the CXP final funnel, this approval FINISHES the entire document
+        if ($reimbursement->status === 'pendiente_pago') {
+            $reimbursement->update([
+                'status' => 'aprobado'
+            ]);
+            return;
+        }
+
+        // 3. Loop forward to see if the next steps should be auto-approved
         // Rule: Auto-approve if the assigned user for NEXT step has ALREADY approved this document in any previous level
         while(true) {
             // Refresh model to get latest current_step state
@@ -2135,10 +2143,10 @@ class ReimbursementController extends Controller
                 ->first();
 
             if (!$nextStep) {
-                // Flow finished
+                // Flow finished custom levels -> Move to CXP Pooling Funnel
                 $reimbursement->update([
                     'current_step_id' => null,
-                    'status' => 'aprobado'
+                    'status' => 'pendiente_pago'
                 ]);
                 break;
             }
@@ -2375,9 +2383,15 @@ class ReimbursementController extends Controller
             if ($user->isAdmin() || $user->isAdminView()) {
                 $query->whereNotIn('status', ['aprobado', 'rechazado', 'en_evento']);
             } else {
-                // DYNAMIC VISIBILITY: User sees it if they are the assigned approver
-                $query->whereHas('currentStep', function($q) use ($user) {
-                    $q->where('user_id', $user->id);
+                // DYNAMIC VISIBILITY: User sees it if they are the assigned approver OR if they are CXP and status is pending payment
+                $query->where(function($q) use ($user) {
+                    $q->whereHas('currentStep', function($sq) use ($user) {
+                        $sq->where('user_id', $user->id);
+                    });
+                    
+                    if ($user->isCxp()) {
+                        $q->orWhere('status', 'pendiente_pago');
+                    }
                 });
             }
 

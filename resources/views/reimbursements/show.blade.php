@@ -494,9 +494,9 @@
                                 @php
                                     $isCompleted = $reimbursement->approvals->where('step_name', $step->name)->count() > 0 || 
                                                    ($reimbursement->currentStep && $reimbursement->currentStep->order > $step->order) ||
-                                                   ($reimbursement->status === 'aprobado');
+                                                   in_array($reimbursement->status, ['aprobado', 'pendiente_pago']);
                                     
-                                    $isCurrent = ($reimbursement->current_step_id === $step->id) && !in_array($reimbursement->status, ['aprobado', 'rechazado']);
+                                    $isCurrent = ($reimbursement->current_step_id === $step->id) && !in_array($reimbursement->status, ['aprobado', 'rechazado', 'pendiente_pago']);
                                     
                                     $approvalLog = $reimbursement->approvals->where('step_name', $step->name)->last();
                                 @endphp
@@ -522,6 +522,35 @@
                                     </div>
                                 </div>
                             @endforeach
+
+                            <!-- PASO FINAL: CUENTAS POR PAGAR (EMBUDO) -->
+                            @php
+                                $cxpCompleted = ($reimbursement->status === 'aprobado');
+                                $cxpCurrent = ($reimbursement->status === 'pendiente_pago');
+                            @endphp
+                            <div class="relative pb-2">
+                                <div class="relative flex items-center group">
+                                    <div class="flex h-9 items-center">
+                                        @if($cxpCompleted)
+                                            <span class="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600">
+                                                <svg class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                            </span>
+                                        @elseif($cxpCurrent)
+                                            <span class="relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-indigo-600 bg-white">
+                                                <span class="h-2 w-2 rounded-full bg-indigo-600 animate-pulse"></span>
+                                            </span>
+                                        @else
+                                            <span class="relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-gray-300 bg-white">
+                                                <span class="h-2 w-2 rounded-full bg-transparent"></span>
+                                            </span>
+                                        @endif
+                                    </div>
+                                    <div class="ml-4 flex min-w-0 flex-col">
+                                        <span class="text-[10px] font-black uppercase tracking-widest {{ $cxpCurrent ? 'text-indigo-600' : ($cxpCompleted ? 'text-gray-900 border-b border-indigo-100' : 'text-gray-400') }}">Cuentas por Pagar</span>
+                                        <span class="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Liquidación Final</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

@@ -162,6 +162,11 @@ class Reimbursement extends Model
     public function canBeApprovedBy(User $user)
     {
         if ($user->isAdmin()) return true;
+
+        // NEW: Shared Funnel for Accounts Payable (CXP)
+        if ($this->status === 'pendiente_pago') {
+            return $user->isCxp();
+        }
         
         // Re-calculate currentStep if not loaded
         $currentStep = $this->currentStep;
