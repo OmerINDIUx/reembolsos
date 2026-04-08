@@ -64,20 +64,22 @@
                         </div>
 
                         <!-- Charge Type Toggle -->
-                        <div x-show="type === 'viaje'" class="flex p-1 bg-gray-100 dark:bg-gray-900 rounded-2xl mb-8 max-w-md">
-                            <button type="button" 
-                                @click="chargeType = 'cost_center'" 
-                                :class="chargeType === 'cost_center' ? 'bg-white dark:bg-gray-800 shadow-md text-indigo-600' : 'text-gray-500 hover:text-gray-700'"
-                                class="flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
-                                Centro de Costos
-                            </button>
-                            <button type="button" 
-                                @click="chargeType = 'travel_event'" 
-                                :class="chargeType === 'travel_event' ? 'bg-white dark:bg-gray-800 shadow-md text-indigo-600' : 'text-gray-500 hover:text-gray-700'"
-                                class="flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
-                                Viaje o Evento
-                            </button>
-                        </div>
+                        @if($costCenters->isNotEmpty())
+                            <div x-show="type === 'viaje' && chargeType !== 'auto'" class="flex p-1 bg-gray-100 dark:bg-gray-900 rounded-2xl mb-8 max-w-md">
+                                <button type="button" 
+                                    @click="chargeType = 'cost_center'" 
+                                    :class="chargeType === 'cost_center' ? 'bg-white dark:bg-gray-800 shadow-md text-indigo-600' : 'text-gray-500 hover:text-gray-700'"
+                                    class="flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
+                                    Centro de Costos
+                                </button>
+                                <button type="button" 
+                                    @click="chargeType = 'travel_event'" 
+                                    :class="chargeType === 'travel_event' ? 'bg-white dark:bg-gray-800 shadow-md text-indigo-600' : 'text-gray-500 hover:text-gray-700'"
+                                    class="flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
+                                    Viaje o Evento
+                                </button>
+                            </div>
+                        @endif
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <!-- Cost Center Select -->
@@ -690,7 +692,7 @@
         function reimbursementForm() {
             return {
                 type: '{{ $type }}',
-                chargeType: 'cost_center',
+                chargeType: '{{ $type === 'viaje' && $costCenters->isEmpty() ? 'travel_event' : 'cost_center' }}',
                 tripType: 'nacional',
                 title: '',
                 tripDestination: '',

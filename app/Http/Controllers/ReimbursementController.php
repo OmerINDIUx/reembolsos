@@ -219,12 +219,16 @@ class ReimbursementController extends Controller
 
         if (!$type || !in_array($type, $allowedTypes)) {
             $hasActiveTrip = \App\Models\TravelEvent::where('status', 'active')
-                ->whereHas('participants', function($q) use ($user) {
-                    $q->where('users.id', $user->id);
+                ->where(function($q) use ($user) {
+                    $q->whereHas('participants', function($sq) use ($user) {
+                        $sq->where('users.id', $user->id);
+                    })->orWhere('user_id', $user->id);
                 })->exists();
 
-            $isMarkedInAnyCC = $user->isAdmin() || $hasActiveTrip || $user->authorizedCostCenters()->wherePivot('can_do_special', true)->exists();
-            return view('reimbursements.select_type', compact('drafts', 'isMarkedInAnyCC'));
+            $isPrivilegedInCC = $user->isAdmin() || $user->authorizedCostCenters()->wherePivot('can_do_special', true)->exists();
+            $isMarkedInAnyCC = $isPrivilegedInCC || $hasActiveTrip;
+            
+            return view('reimbursements.select_type', compact('drafts', 'isMarkedInAnyCC', 'hasActiveTrip', 'isPrivilegedInCC'));
         }
 
         $user = Auth::user();
@@ -237,27 +241,25 @@ class ReimbursementController extends Controller
             $costCenters = $user->authorizedCostCenters()->with('beneficiary')->withPivot('can_do_special')->orderBy('name')->get();
 
             // 2. Inherited Cost Centers from Travel Events (Participants)
-            $eventCCIds = \App\Models\TravelEvent::where('status', 'active')
-                ->whereHas('participants', function($q) use ($user) {
-                    $q->where('users.id', $user->id);
-                })->pluck('cost_center_id')->unique();
+            // Note: For 'viaje', we now rely on the Travel Event selector for participants
+            // to avoid showing Cost Centers they don't have explicit privileges for.
+            if ($type !== 'viaje') {
+                $eventCCIds = \App\Models\TravelEvent::where('status', 'active')
+                    ->whereHas('participants', function($q) use ($user) {
+                        $q->where('users.id', $user->id);
+                    })->pluck('cost_center_id')->unique();
 
-            if ($eventCCIds->isNotEmpty()) {
-                $inheritedCCs = CostCenter::whereIn('id', $eventCCIds)->with('beneficiary')->get();
-                foreach($inheritedCCs as $icc) {
-                    if (!$costCenters->contains('id', $icc->id)) {
-                        // Attach a virtual pivot so they are treated as authorized/marked if it's a travel type
-                        $icc->setRelation('pivot', new \Illuminate\Database\Eloquent\Relations\Pivot([
-                            'can_do_special' => ($type === 'viaje'),
-                            'cost_center_id' => $icc->id,
-                            'user_id' => $user->id
-                        ]));
-                        $costCenters->push($icc);
-                    } else {
-                        // If already present but not marked, promote them ONLY if they are in an event AND type is viaje
-                        $existing = $costCenters->firstWhere('id', $icc->id);
-                        if ($type === 'viaje' && !$existing->pivot->can_do_special) {
-                            $existing->pivot->can_do_special = true;
+                if ($eventCCIds->isNotEmpty()) {
+                    $inheritedCCs = CostCenter::whereIn('id', $eventCCIds)->with('beneficiary')->get();
+                    foreach($inheritedCCs as $icc) {
+                        if (!$costCenters->contains('id', $icc->id)) {
+                            // Attach a virtual pivot
+                            $icc->setRelation('pivot', new \Illuminate\Database\Eloquent\Relations\Pivot([
+                                'can_do_special' => false, // Standard access
+                                'cost_center_id' => $icc->id,
+                                'user_id' => $user->id
+                            ]));
+                            $costCenters->push($icc);
                         }
                     }
                 }
