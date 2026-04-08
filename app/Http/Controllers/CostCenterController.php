@@ -276,35 +276,74 @@ class CostCenterController extends Controller
             'allowed_users.*.can_do_special' => ['nullable'],
         ]);
 
-        $costCenter->update([
-            'name' => $request->name,
-            'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
-            'description' => $request->description,
-            'budget' => $request->budget,
-            'beneficiary_id' => $request->beneficiary_id,
-        ]);
+        DB::transaction(function() use ($request, $costCenter) {
+            // 1. Capture pending reimbursements and their current relative progress
+            $pendingReimbursements = $costCenter->reimbursements()
+                ->whereNotIn('status', ['aprobado', 'rechazado'])
+                ->with('currentStep')
+                ->get();
 
-        // Rebuild steps
-        $costCenter->approvalSteps()->delete();
-        foreach ($request->steps as $index => $step) {
-            $costCenter->approvalSteps()->create([
-                'user_id' => $step['user_id'],
-                'name' => $step['name'],
-                'order' => $index + 1,
+            $oldProgressMap = $pendingReimbursements->mapWithKeys(function($r) {
+                return [$r->id => $r->currentStep->order ?? 1];
+            });
+
+            // 2. Update CC Basic Info
+            $costCenter->update([
+                'name' => $request->name,
+                'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
+                'description' => $request->description,
+                'budget' => $request->budget,
+                'beneficiary_id' => $request->beneficiary_id,
             ]);
-        }
 
-        if ($request->has('allowed_users')) {
-            $syncData = [];
-            foreach ($request->allowed_users as $user) {
-                $syncData[$user['user_id']] = [
-                    'can_do_special' => isset($user['can_do_special']) && $user['can_do_special'] ? true : false
-                ];
+            // 3. Rebuild steps (Delete and Recreate)
+            $costCenter->approvalSteps()->delete();
+            foreach ($request->steps as $index => $step) {
+                $costCenter->approvalSteps()->create([
+                    'user_id' => $step['user_id'],
+                    'name' => $step['name'],
+                    'order' => $index + 1,
+                ]);
             }
-            $costCenter->authorizedUsers()->sync($syncData);
-        } else {
-            $costCenter->authorizedUsers()->sync([]);
-        }
+
+            // 4. Rescue pending reimbursements
+            // We refresh the CC steps to ensure we match against the new DB records
+            $costCenter->load('approvalSteps');
+            
+            foreach ($pendingReimbursements as $r) {
+                $oldOrder = $oldProgressMap[$r->id];
+                
+                // Find the closest equivalent step (same order or next available)
+                $newStep = $costCenter->approvalSteps
+                    ->where('order', '>=', $oldOrder)
+                    ->sortBy('order')
+                    ->first();
+
+                if ($newStep) {
+                    $r->update(['current_step_id' => $newStep->id]);
+                } else {
+                    // If no subsequent step exists, it means the entire remaining chain was deleted
+                    // In this case, we consider it approved as there are no more hurdles
+                    $r->update([
+                        'current_step_id' => null, 
+                        'status' => 'aprobado'
+                    ]);
+                }
+            }
+
+            // 5. Sync authorized users
+            if ($request->has('allowed_users')) {
+                $syncData = [];
+                foreach ($request->allowed_users as $user) {
+                    $syncData[$user['user_id']] = [
+                        'can_do_special' => isset($user['can_do_special']) && $user['can_do_special'] ? true : false
+                    ];
+                }
+                $costCenter->authorizedUsers()->sync($syncData);
+            } else {
+                $costCenter->authorizedUsers()->sync([]);
+            }
+        });
 
         return redirect()->route('cost_centers.index')->with('success', 'Centro de Costos actualizado con ' . count($request->steps) . ' niveles de aprobación.');
     }

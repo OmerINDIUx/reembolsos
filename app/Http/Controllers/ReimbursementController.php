@@ -1283,7 +1283,7 @@ class ReimbursementController extends Controller
 
         $reimbursement->update($data);
 
-        // RECORD AUDIT LOG
+        // RECORD INITIAL AUDIT LOG (for the direct action taken by the user)
         if ($isOwnerCorrecting && $request->has('is_resubmission')) {
             $reimbursement->approvals()->create([
                 'user_id' => $user->id,
@@ -1291,13 +1291,16 @@ class ReimbursementController extends Controller
                 'action' => 'resubmitted',
                 'comment' => $request->user_correction_comment
             ]);
-        } elseif (isset($data['status'])) {
+        } elseif (isset($data['status']) && ($data['status'] === 'rechazado' || $data['status'] === 'requiere_correccion')) {
             $reimbursement->approvals()->create([
                 'user_id' => $user->id,
-                'step_name' => $reimbursement->currentStep->name ?? 'Finalizado',
+                'step_name' => $reimbursement->currentStep->name ?? 'Revision',
                 'action' => $data['status'],
                 'comment' => ($request->rejection_reason ?? '') . ($request->rejection_comment ? " - " . $request->rejection_comment : "")
             ]);
+        } elseif ($request->status === 'aprobado' && !isset($data['error'])) {
+            // Check for Auto-Approvals for non-consecutive or consecutive levels
+            $this->handleDynamicApprovals($reimbursement, $user);
         }
 
         // DYNAMIC NOTIFICATIONS
@@ -1678,13 +1681,19 @@ class ReimbursementController extends Controller
             $reimbursement->update($data);
             
             // RECORD AUDIT LOG (BULK)
-            $reimbursement->approvals()->create([
-                'user_id' => $user->id,
-                'step_name' => $reimbursement->currentStep->name ?? 'Finalizado',
-                'action' => $data['status'] ?? 'procesado',
-                'comment' => $request->action === 'rechazado' ? $request->rejection_reason : 'Aprobación masiva.',
-                'is_bulk' => true
-            ]);
+            if ($request->action === 'rechazado') {
+                $reimbursement->approvals()->create([
+                    'user_id' => $user->id,
+                    'step_name' => $reimbursement->currentStep->name ?? 'Auditoria',
+                    'action' => 'rechazado',
+                    'comment' => $request->rejection_reason,
+                    'is_bulk' => true
+                ]);
+            } else {
+                // Check for Auto-Approvals (Bulk included)
+                // Note: handleDynamicApprovals handles the primary audit log for the current step too
+                $this->handleDynamicApprovals($reimbursement, $user, true);
+            }
 
             $processed++;
 
@@ -2093,6 +2102,77 @@ class ReimbursementController extends Controller
         if (isset($map[$order])) {
             $data[$map[$order][0]] = $userId;
             $data[$map[$order][1]] = now();
+        }
+    }
+
+    /**
+     * Recursive/Iterative logic to handle auto-approvals based on historical or current user identity.
+     */
+    private function handleDynamicApprovals(\App\Models\Reimbursement $reimbursement, $user, $isBulk = false)
+    {
+        // 1. Record the approval for the STEP the user is technically in right now
+        // This is the "Manual" approval that triggered the chain
+        $stepAtActionTime = $reimbursement->currentStep;
+        
+        $reimbursement->approvals()->create([
+            'user_id' => $user->id,
+            'step_name' => $stepAtActionTime->name ?? 'Proceso',
+            'action' => 'aprobado',
+            'comment' => $isBulk ? 'Aprobación Masiva' : 'Aprobación Manual',
+            'is_bulk' => $isBulk
+        ]);
+
+        // 2. Loop forward to see if the next steps should be auto-approved
+        // Rule: Auto-approve if the assigned user for NEXT step has ALREADY approved this document in any previous level
+        while(true) {
+            // Refresh model to get latest current_step state
+            $reimbursement->refresh();
+
+            // Find next step
+            $nextStep = $reimbursement->costCenter->approvalSteps()
+                ->where('order', '>', $reimbursement->currentStep->order ?? 0)
+                ->orderBy('order', 'asc')
+                ->first();
+
+            if (!$nextStep) {
+                // Flow finished
+                $reimbursement->update([
+                    'current_step_id' => null,
+                    'status' => 'aprobado'
+                ]);
+                break;
+            }
+
+            // Check if this user has already approved in the past
+            // We search for ANY "aprobado" action by this user for THIS reimbursement
+            $hasAlreadyApproved = $reimbursement->approvals()
+                ->where('user_id', $nextStep->user_id)
+                ->where('action', 'aprobado')
+                ->exists();
+
+            if ($hasAlreadyApproved) {
+                // AUTO-APPROVE this step
+                $reimbursement->update(['current_step_id' => $nextStep->id]);
+                
+                // Record audit for auto-approval
+                $reimbursement->approvals()->create([
+                    'user_id' => $nextStep->user_id,
+                    'step_name' => $nextStep->name,
+                    'action' => 'aprobado',
+                    'comment' => 'Auto-aprobado por aprobación previa en otro nivel',
+                    'is_bulk' => $isBulk
+                ]);
+                
+                // Continue loop to check the next next step
+                continue;
+            } else {
+                // Different user and hasn't approved yet. Stop and wait.
+                $reimbursement->update([
+                    'current_step_id' => $nextStep->id,
+                    'status' => 'pendiente'
+                ]);
+                break;
+            }
         }
     }
 
