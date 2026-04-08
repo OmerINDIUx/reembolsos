@@ -86,7 +86,10 @@
                                     <select name="cost_center_id" x-on:change="updateBeneficiary" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" :required="type !== 'viaje' || chargeType === 'cost_center'">
                                         <option value="">Selecciona el Centro de Costos...</option>
                                         @foreach($costCenters as $center)
-                                            <option value="{{ $center->id }}" data-beneficiary="{{ $center->beneficiary->name ?? 'Sin Beneficiario' }}" data-beneficiary-id="{{ $center->beneficiary_id }}">
+                                            <option value="{{ $center->id }}" 
+                                                data-beneficiary="{{ $center->beneficiary->name ?? 'Sin Beneficiario' }}" 
+                                                data-beneficiary-id="{{ $center->beneficiary_id }}"
+                                                data-beneficiary-clabe="{{ $center->beneficiary->masked_clabe ?? '' }}">
                                                 {{ $center->name }}
                                             </option>
                                         @endforeach
@@ -123,13 +126,38 @@
                                     </div>
                                     <div>
                                         <p class="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">Pago directo al beneficiario</p>
-                                        <p class="text-lg font-bold text-gray-900 dark:text-white" x-text="selectedCcBeneficiary"></p>
+                                        <div class="flex items-center space-x-2">
+                                            <p class="text-lg font-bold text-gray-900 dark:text-white" x-text="selectedCcBeneficiary"></p>
+                                            <span x-show="selectedCcBeneficiaryClabe" class="text-sm font-medium text-gray-400 italic" x-text="' - ' + selectedCcBeneficiaryClabe"></span>
+                                        </div>
                                     </div>
                                     <input type="hidden" name="payee_id" :value="selectedCcBeneficiaryId">
                                 </div>
                             </template>
 
-                            <template x-if="type === 'reembolso' || type === 'viaje'">
+                            <template x-if="type === 'viaje'">
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-2xl border border-blue-100 dark:border-blue-800/50 flex items-center space-x-4">
+                                    <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] font-black text-blue-400 uppercase tracking-widest leading-none mb-1">Pago directo al solicitante</p>
+                                        <p class="text-lg font-bold text-gray-900 dark:text-white">
+                                            {{ Auth::user()->name }}
+                                            <span class="text-sm font-medium text-gray-400 ml-2 italic">
+                                                @if(Auth::user()->clabe)
+                                                    - **** {{ substr(Auth::user()->clabe, -4) }}
+                                                @else
+                                                    - (Sin CLABE registrada)
+                                                @endif
+                                            </span>
+                                        </p>
+                                    </div>
+                                    <input type="hidden" name="payee_id" value="{{ Auth::id() }}">
+                                </div>
+                            </template>
+
+                            <template x-if="type === 'reembolso'">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <label class="relative flex p-4 bg-white dark:bg-gray-900 border-2 rounded-2xl cursor-pointer transition-all hover:border-indigo-200" :class="payeeOption === 'creator' ? 'border-indigo-600 ring-4 ring-indigo-500/10' : 'border-gray-100 dark:border-gray-700'">
                                         <input type="radio" name="payee_option" value="creator" x-model="payeeOption" class="sr-only">
@@ -139,7 +167,12 @@
                                             </div>
                                             <div>
                                                 <p class="text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight">Recibir yo el pago</p>
-                                                <p class="text-[10px] text-gray-500 font-bold uppercase italic">Solicitante (Tú)</p>
+                                                <p class="text-[10px] text-gray-500 font-bold uppercase italic">
+                                                    Solicitante (Tú)
+                                                    @if(Auth::user()->clabe)
+                                                        - **** {{ substr(Auth::user()->clabe, -4) }}
+                                                    @endif
+                                                </p>
                                             </div>
                                         </div>
                                     </label>
@@ -152,12 +185,15 @@
                                             </div>
                                             <div>
                                                 <p class="text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight">Pago al Beneficiario del CC</p>
-                                                <p class="text-[10px] text-gray-500 font-bold uppercase italic" x-text="selectedCcBeneficiary"></p>
+                                                <p class="text-[10px] text-gray-500 font-bold uppercase italic">
+                                                    <span x-text="selectedCcBeneficiary"></span>
+                                                    <span x-show="selectedCcBeneficiaryClabe" x-text="' - ' + selectedCcBeneficiaryClabe"></span>
+                                                </p>
                                             </div>
                                         </div>
                                     </label>
 
-                                    <!-- Final Payee ID Hidden Input for the whole session -->
+                                    <!-- Final Payee ID Hidden Input for Reembolso choice -->
                                     <input type="hidden" name="payee_id" :value="payeeOption === 'beneficiary' ? selectedCcBeneficiaryId : '{{ Auth::id() }}'">
                                 </div>
                             </template>
@@ -664,6 +700,7 @@
                 observacionesGeneral: '',
                 selectedCcBeneficiary: '',
                 selectedCcBeneficiaryId: null,
+                selectedCcBeneficiaryClabe: '',
                 payeeOption: 'creator',
                 items: [],
                 maxItems: 20,
@@ -702,13 +739,14 @@
                         
                         // Handle Payee Initialization
                         @if($reimbursement->payee_id)
-                            @if($reimbursement->payee_id === Auth::id())
-                                this.payeeOption = 'creator';
-                            @else
-                                this.payeeOption = 'beneficiary';
-                                this.selectedCcBeneficiaryId = @json($reimbursement->payee_id);
-                                this.selectedCcBeneficiary = @json($reimbursement->payee->name ?? 'Beneficiario');
-                            @endif
+                                @if($reimbursement->payee_id === Auth::id())
+                                    this.payeeOption = 'creator';
+                                @else
+                                    this.payeeOption = 'beneficiary';
+                                    this.selectedCcBeneficiaryId = @json($reimbursement->payee_id);
+                                    this.selectedCcBeneficiary = @json($reimbursement->payee->name ?? 'Beneficiario');
+                                    this.selectedCcBeneficiaryClabe = @json(($reimbursement->payee_id === Auth::id() && Auth::user()->clabe) ? '**** ' . substr(Auth::user()->clabe, -4) : '');
+                                @endif
                         @endif
                         
                         @if($reimbursement->type === 'viaje')
@@ -792,9 +830,11 @@
                     if (selectedOption && selectedOption.dataset) {
                         this.selectedCcBeneficiary = selectedOption.dataset.beneficiary || '';
                         this.selectedCcBeneficiaryId = selectedOption.dataset.beneficiaryId || null;
+                        this.selectedCcBeneficiaryClabe = selectedOption.dataset.beneficiaryClabe || '';
                     } else {
                         this.selectedCcBeneficiary = '';
                         this.selectedCcBeneficiaryId = null;
+                        this.selectedCcBeneficiaryClabe = '';
                     }
                 },
                 addItem(initialData = null) {

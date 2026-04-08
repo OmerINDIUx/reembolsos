@@ -224,8 +224,46 @@ class ReimbursementController extends Controller
         if ($user->isAdmin()) {
             $costCenters = CostCenter::with('beneficiary')->orderBy('name')->get();
         } else {
-            // Only show cost centers where the user is authorized
+            // 1. Explicitly authorized Cost Centers
             $costCenters = $user->authorizedCostCenters()->with('beneficiary')->withPivot('can_do_special')->orderBy('name')->get();
+
+            // 2. Inherited Cost Centers from Travel Events (Participants)
+            $eventCCIds = \App\Models\TravelEvent::where('status', 'active')
+                ->whereHas('participants', function($q) use ($user) {
+                    $q->where('users.id', $user->id);
+                })->pluck('cost_center_id')->unique();
+
+            if ($eventCCIds->isNotEmpty()) {
+                $inheritedCCs = CostCenter::whereIn('id', $eventCCIds)->with('beneficiary')->get();
+                foreach($inheritedCCs as $icc) {
+                    if (!$costCenters->contains('id', $icc->id)) {
+                        // Attach a virtual pivot so they are treated as authorized/marked for the purposes of view logic
+                        $icc->setRelation('pivot', new \Illuminate\Database\Eloquent\Relations\Pivot([
+                            'can_do_special' => true,
+                            'cost_center_id' => $icc->id,
+                            'user_id' => $user->id
+                        ]));
+                        $costCenters->push($icc);
+                    } else {
+                        // If already present but not marked, promote them to marked if they are in an event
+                        $existing = $costCenters->firstWhere('id', $icc->id);
+                        if (!$existing->pivot->can_do_special) {
+                            $existing->pivot->can_do_special = true;
+                        }
+                    }
+                }
+            }
+
+            // Map masked CLABE for beneficiaries if they are the current user
+            $costCenters->each(function($cc) use ($user) {
+                if ($cc->beneficiary && $cc->beneficiary_id === $user->id) {
+                    $cc->beneficiary->masked_clabe = $user->clabe ? '**** ' . substr($user->clabe, -4) : null;
+                } else {
+                    if ($cc->beneficiary) {
+                        $cc->beneficiary->masked_clabe = null;
+                    }
+                }
+            });
 
             // Filter based on type and "one reimbursement" rule
             $costCenters = $costCenters->filter(function($cc) use ($user, $type) {
@@ -399,11 +437,12 @@ class ReimbursementController extends Controller
 
         foreach ($request->items as $index => $item) {
             try {
-                $costCenterId = $item['cost_center_id'] ?? $request->cost_center_id;
                 $travelEventId = $item['travel_event_id'] ?? $request->travel_event_id;
+                // Fallback to the resolved cost center from the global request if not specific in item
+                $costCenterId = $item['cost_center_id'] ?? ($request->cost_center_id ?: ($travelEventId ? \App\Models\TravelEvent::where('id', $travelEventId)->value('cost_center_id') : null));
 
                 // Permissions and Limits Check
-                if (!$this->canCreateReimbursement($user, $type, $costCenterId)) {
+                if (!$this->canCreateReimbursement($user, $type, $costCenterId, $travelEventId)) {
                     throw new \Exception("No tienes permiso para registrar este tipo de reembolso en este Centro de Costos o ya has alcanzado tu límite de 1 reembolso activo.");
                 }
 
@@ -859,7 +898,7 @@ class ReimbursementController extends Controller
         $costCenter = $effectiveCostCenterId ? CostCenter::findOrFail($effectiveCostCenterId) : null;
 
         // Permissions and Limits Check
-        if (!$this->canCreateReimbursement($user, $request->type, $effectiveCostCenterId)) {
+        if (!$this->canCreateReimbursement($user, $request->type, $effectiveCostCenterId, $request->travel_event_id)) {
             return back()->withInput()->with('error', 'No tienes permiso para registrar este tipo de reembolso en este Centro de Costos o ya has alcanzado tu límite de 1 reembolso activo.');
         }
 
@@ -2355,19 +2394,40 @@ class ReimbursementController extends Controller
         }
     }
 
-    private function canCreateReimbursement(\App\Models\User $user, $type, $costCenterId)
+    private function canCreateReimbursement(\App\Models\User $user, $type, $costCenterId, $travelEventId = null)
     {
         if ($user->isAdmin()) {
             return true;
         }
 
+        // Auto-resolve CC if missing but event is provided
+        if (!$costCenterId && $travelEventId) {
+            $costCenterId = \App\Models\TravelEvent::where('id', $travelEventId)->value('cost_center_id');
+        }
+
         $cc = \App\Models\CostCenter::find($costCenterId);
         if (!$cc) return false;
 
-        $authorizedUser = $cc->authorizedUsers()->where('users.id', $user->id)->first();
-        if (!$authorizedUser) return false;
+        $isAuthorized = false;
+        $isMarked = false;
 
-        $isMarked = $authorizedUser->pivot->can_do_special;
+        // 1. Explicit Authorization via CC
+        $authorizedUser = $cc->authorizedUsers()->where('users.id', $user->id)->first();
+        if ($authorizedUser) {
+            $isAuthorized = true;
+            $isMarked = $authorizedUser->pivot->can_do_special;
+        }
+
+        // 2. Inherited Authorization via active Travel Event
+        if ($travelEventId) {
+            $event = \App\Models\TravelEvent::find($travelEventId);
+            if ($event && $event->status === 'active' && $event->participants()->where('users.id', $user->id)->exists()) {
+                $isAuthorized = true;
+                $isMarked = true; // Event participants behave as "marked" users for event expenses
+            }
+        }
+
+        if (!$isAuthorized) return false;
 
         // Special types (Fondo Fijo, Comida, Viaje) are restricted to marked users
         if (in_array($type, ['fondo_fijo', 'comida', 'viaje'])) {
