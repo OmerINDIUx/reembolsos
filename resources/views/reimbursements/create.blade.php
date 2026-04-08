@@ -118,7 +118,7 @@
                         </div>
 
                         <!-- Destinatario del Pago -->
-                        <div class="mt-8 pt-8 border-t border-gray-100 dark:border-gray-700 animate-fadeIn" x-show="selectedCcBeneficiary">
+                        <div class="mt-8 pt-8 border-t border-gray-100 dark:border-gray-700 animate-fadeIn" x-show="selectedCcBeneficiary || type === 'viaje'">
                             <h4 class="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Destinatario del Pago</h4>
                             
                             <template x-if="type === 'fondo_fijo' || type === 'comida'">
