@@ -32,12 +32,30 @@ class CostCenterController extends Controller
             ])
             ->withSum([
                 'reimbursements as pending_total' => function($q) {
-                    $q->whereNotIn('status', ['aprobado', 'rechazado']);
+                    $q->whereNotIn('status', ['aprobado', 'rechazado'])
+                      ->whereIn('type', ['fondo_fijo', 'comida', 'viaje'])
+                      ->whereNull('travel_event_id')
+                      ->whereExists(function($sq) {
+                          $sq->select(DB::raw(1))
+                             ->from('cost_center_user')
+                             ->whereColumn('cost_center_user.cost_center_id', 'reimbursements.cost_center_id')
+                             ->whereColumn('cost_center_user.user_id', 'reimbursements.user_id')
+                             ->where('can_do_special', true);
+                      });
                 }
             ], 'total')
             ->withSum([
                 'reimbursements as approved_total' => function($q) {
-                    $q->where('status', 'aprobado');
+                    $q->where('status', 'aprobado')
+                      ->whereIn('type', ['fondo_fijo', 'comida', 'viaje'])
+                      ->whereNull('travel_event_id')
+                      ->whereExists(function($sq) {
+                          $sq->select(DB::raw(1))
+                             ->from('cost_center_user')
+                             ->whereColumn('cost_center_user.cost_center_id', 'reimbursements.cost_center_id')
+                             ->whereColumn('cost_center_user.user_id', 'reimbursements.user_id')
+                             ->where('can_do_special', true);
+                      });
                 }
             ], 'total')
             ->withMin([
@@ -100,9 +118,15 @@ class CostCenterController extends Controller
         $pendingQuery = $costCenter->reimbursements()->whereNotIn('status', ['aprobado', 'rechazado']);
         $approvedQuery = $costCenter->reimbursements()->where('status', 'aprobado');
 
-        // Budget affecting queries
-        $pendingBudgetQuery = (clone $pendingQuery)->whereIn('user_id', $markedUserIds);
-        $approvedBudgetQuery = (clone $approvedQuery)->whereIn('user_id', $markedUserIds);
+        // Budget affecting queries: filtered by type and source (standalone vs travel event)
+        $budgetFilter = function($q) use ($markedUserIds) {
+            $q->whereIn('user_id', $markedUserIds)
+              ->whereIn('type', ['fondo_fijo', 'comida', 'viaje'])
+              ->whereNull('travel_event_id');
+        };
+
+        $pendingBudgetQuery = (clone $pendingQuery)->where($budgetFilter);
+        $approvedBudgetQuery = (clone $approvedQuery)->where($budgetFilter);
 
         $stats = [
             'pending_count' => (clone $pendingQuery)->count(),
