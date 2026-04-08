@@ -30,7 +30,9 @@ class ReimbursementController extends Controller
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
         $globalSearch = $request->input('global_search');
         
-        $query = Reimbursement::with(['user', 'costCenter'])->orderBy('created_at', 'desc');
+        $query = Reimbursement::with(['user', 'costCenter'])
+            ->where('status', '!=', 'borrador')
+            ->orderBy('created_at', 'desc');
 
         // TRACKER LOGIC: Global search bypasses tab scoping for management roles
         if ($globalSearch && $canManage) {
@@ -128,7 +130,9 @@ class ReimbursementController extends Controller
 
         // Load reimbursements based on tab scope
         $tab = $request->input('tab', 'management');
-        $query = Reimbursement::with(['user', 'costCenter'])->orderBy('created_at', 'desc');
+        $query = Reimbursement::with(['user', 'costCenter'])
+            ->where('status', '!=', 'borrador')
+            ->orderBy('created_at', 'desc');
         $this->applyTabScope($query, $tab, $user);
 
         $allReimbursements = $query->get();
@@ -2454,7 +2458,7 @@ class ReimbursementController extends Controller
         if ($tab === 'active') {
             // Strictly Personal: Pending
             $query->where('user_id', $user->id)
-                  ->whereNotIn('status', ['aprobado', 'rechazado']);
+                  ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
 
         } elseif ($tab === 'history') {
             // Strictly Personal: Finished
@@ -2464,7 +2468,7 @@ class ReimbursementController extends Controller
         } elseif ($tab === 'management') {
             // Approvals & Oversight for designated roles
             if ($user->isAdmin() || $user->isAdminView()) {
-                $query->whereNotIn('status', ['aprobado', 'rechazado', 'en_evento']);
+                $query->whereNotIn('status', ['aprobado', 'rechazado', 'en_evento', 'borrador']);
             } else {
                 // DYNAMIC VISIBILITY: User sees it if they are the assigned approver OR if they are CXP and status is pending payment
                 $query->where(function($q) use ($user) {

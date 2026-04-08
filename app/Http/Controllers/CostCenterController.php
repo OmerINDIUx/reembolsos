@@ -23,7 +23,7 @@ class CostCenterController extends Controller
         $query = CostCenter::with(['director', 'controlObra', 'directorEjecutivo', 'accountant', 'direccion', 'tesoreria', 'beneficiary'])
             ->withCount([
                 'reimbursements as pending_count' => function($q) {
-                    $q->whereNotIn('status', ['aprobado', 'rechazado']);
+                    $q->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
                 },
                 'reimbursements as approved_count' => function($q) {
                     $q->where('status', 'aprobado');
@@ -32,7 +32,7 @@ class CostCenterController extends Controller
             ])
             ->withSum([
                 'reimbursements as pending_total' => function($q) {
-                    $q->whereNotIn('status', ['aprobado', 'rechazado'])
+                    $q->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])
                       ->whereIn('type', ['fondo_fijo', 'comida', 'viaje'])
                       ->whereNull('travel_event_id')
                       ->whereExists(function($sq) {
@@ -60,7 +60,7 @@ class CostCenterController extends Controller
             ], 'total')
             ->withMin([
                 'reimbursements as oldest_pending' => function($q) {
-                    $q->whereNotIn('status', ['aprobado', 'rechazado']);
+                    $q->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
                 }
             ], 'created_at')
             ->withAvg([
@@ -93,7 +93,7 @@ class CostCenterController extends Controller
         // Detailed progress stats: where are the pending reimbursements?
         $stepBreakdown = \App\Models\Reimbursement::with('currentStep')
             ->whereIn('cost_center_id', $costCenters->pluck('id'))
-            ->whereNotIn('status', ['aprobado', 'rechazado'])
+            ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])
             ->select('cost_center_id', 'current_step_id', DB::raw('count(*) as count'))
             ->groupBy('cost_center_id', 'current_step_id')
             ->get()
@@ -115,7 +115,7 @@ class CostCenterController extends Controller
         // ONLY marked users affect the budget
         $markedUserIds = $costCenter->authorizedUsers()->wherePivot('can_do_special', true)->pluck('users.id');
 
-        $pendingQuery = $costCenter->reimbursements()->whereNotIn('status', ['aprobado', 'rechazado']);
+        $pendingQuery = $costCenter->reimbursements()->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
         $approvedQuery = $costCenter->reimbursements()->where('status', 'aprobado');
 
         // Budget affecting queries: filtered by type and source (standalone vs travel event)
@@ -141,13 +141,14 @@ class CostCenterController extends Controller
 
         // 2. Status Breakdown (for chart/overview)
         $statusBreakdown = $costCenter->reimbursements()
+            ->where('status', '!=', 'borrador')
             ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total) as amount'))
             ->groupBy('status')
             ->get();
 
         // 3. Step Breakdown (Bottlenecks)
         $stepBreakdown = $costCenter->reimbursements()
-            ->whereNotIn('status', ['aprobado', 'rechazado'])
+            ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])
             ->with('currentStep')
             ->select('current_step_id', DB::raw('count(*) as count'), DB::raw('sum(total) as amount'))
             ->groupBy('current_step_id')
@@ -155,6 +156,7 @@ class CostCenterController extends Controller
 
         // 4. Category Breakdown
         $categoryBreakdown = $costCenter->reimbursements()
+            ->where('status', '!=', 'borrador')
             ->select('category', DB::raw('sum(total) as amount'), DB::raw('count(*) as count'))
             ->groupBy('category')
             ->orderBy('amount', 'desc')
@@ -174,6 +176,7 @@ class CostCenterController extends Controller
 
         // 6. Top Spenders in this CC
         $topSpenders = $costCenter->reimbursements()
+            ->where('status', '!=', 'borrador')
             ->select('user_id', DB::raw('sum(total) as amount'), DB::raw('count(*) as count'))
             ->with('user')
             ->groupBy('user_id')
@@ -183,6 +186,7 @@ class CostCenterController extends Controller
 
         // 7. Recent Activity
         $recentReimbursements = $costCenter->reimbursements()
+            ->where('status', '!=', 'borrador')
             ->with('user')
             ->orderBy('created_at', 'desc')
             ->limit(10)
@@ -303,7 +307,7 @@ class CostCenterController extends Controller
         DB::transaction(function() use ($request, $costCenter) {
             // 1. Capture pending reimbursements and their current relative progress
             $pendingReimbursements = $costCenter->reimbursements()
-                ->whereNotIn('status', ['aprobado', 'rechazado'])
+                ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])
                 ->with('currentStep')
                 ->get();
 

@@ -23,21 +23,21 @@ class DashboardController extends Controller
         // 1. PERSONAL STATS (For everyone)
         $myRequestsQuery = Reimbursement::where('user_id', $user->id);
         $stats['personal'] = [
-            'pending_count' => (clone $myRequestsQuery)->whereNotIn('status', ['aprobado', 'rechazado'])->count(),
+            'pending_count' => (clone $myRequestsQuery)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->count(),
             'approved_count' => (clone $myRequestsQuery)->where('status', 'aprobado')->count(),
             'rejected_count' => (clone $myRequestsQuery)->where('status', 'rechazado')->count(),
             'correction_count' => (clone $myRequestsQuery)->where('status', 'requiere_correccion')->count(),
-            'pending_amount' => (clone $myRequestsQuery)->whereNotIn('status', ['aprobado', 'rechazado'])->sum('total'),
+            'pending_amount' => (clone $myRequestsQuery)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->sum('total'),
             'approved_amount' => (clone $myRequestsQuery)->where('status', 'aprobado')->sum('total'),
         ];
 
         // 2. MANAGEMENT STATS (For Approvers/Admins)
         if ($user->isAdmin() || $user->isAdminView()) {
             $stats['management'] = [
-                'pending_count' => Reimbursement::whereNotIn('status', ['aprobado', 'rechazado'])->count(),
+                'pending_count' => Reimbursement::whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->count(),
                 'approved_count' => Reimbursement::where('status', 'aprobado')->count(),
                 'rejected_count' => Reimbursement::where('status', 'rechazado')->count(),
-                'pending_amount' => Reimbursement::whereNotIn('status', ['aprobado', 'rechazado'])->sum('total'),
+                'pending_amount' => Reimbursement::whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->sum('total'),
                 'approved_amount' => Reimbursement::where('status', 'aprobado')->sum('total'),
             ];
             $recentReimbursements = (clone $myRequestsQuery)->with('costCenter')->latest()->limit(10)->get();
@@ -50,7 +50,7 @@ class DashboardController extends Controller
 
             if ($scopedCcIds->isNotEmpty()) {
                 $pendingFlowQuery = Reimbursement::whereIn('cost_center_id', $scopedCcIds)
-                    ->whereNotIn('status', ['aprobado', 'rechazado']);
+                    ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
 
                 $approvedFlowQuery = Reimbursement::whereIn('cost_center_id', $scopedCcIds)
                     ->where('status', 'aprobado');
@@ -76,7 +76,7 @@ class DashboardController extends Controller
 
     private function getAnalyticsData($user)
     {
-        $queryBuilder = Reimbursement::query()->where('status', '!=', 'rechazado');
+        $queryBuilder = Reimbursement::query()->whereNotIn('status', ['rechazado', 'borrador']);
 
         // Limit scope if not admin
         if (!$user->isAdmin() && !$user->isAdminView()) {
@@ -89,7 +89,7 @@ class DashboardController extends Controller
         }
 
         // 1. Status Breakdown (Including all statuses for the doughnut chart)
-        $statusQuery = Reimbursement::query();
+        $statusQuery = Reimbursement::query()->where('status', '!=', 'borrador');
         if (!$user->isAdmin() && !$user->isAdminView()) {
             $statusQuery->where(function($q) use ($user) {
                 $q->where('user_id', $user->id)

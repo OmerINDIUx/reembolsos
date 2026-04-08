@@ -86,7 +86,7 @@ class UserController extends Controller
         $user->load(['director', 'subordinates', 'costCenters']);
 
         // 1. Personal Spending Stats
-        $pendingQuery = $user->reimbursements()->whereNotIn('status', ['aprobado', 'rechazado']);
+        $pendingQuery = $user->reimbursements()->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
         $approvedQuery = $user->reimbursements()->where('status', 'aprobado');
 
         $stats = [
@@ -99,6 +99,7 @@ class UserController extends Controller
 
         // 2. Category Breakdown (Personal)
         $categoryBreakdown = $user->reimbursements()
+            ->where('status', '!=', 'borrador')
             ->select('category', DB::raw('sum(total) as amount'), DB::raw('count(*) as count'))
             ->groupBy('category')
             ->orderBy('amount', 'desc')
@@ -106,6 +107,7 @@ class UserController extends Controller
 
         // 3. Status Breakdown
         $statusBreakdown = $user->reimbursements()
+            ->where('status', '!=', 'borrador')
             ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total) as amount'))
             ->groupBy('status')
             ->get();
@@ -124,6 +126,7 @@ class UserController extends Controller
 
         // 5. Recent Activity
         $recentReimbursements = $user->reimbursements()
+            ->where('status', '!=', 'borrador')
             ->with(['costCenter', 'currentStep'])
             ->orderBy('created_at', 'desc')
             ->limit(10)
@@ -133,7 +136,7 @@ class UserController extends Controller
         // This is complex as it depends on current_step_id pointing to a step they are assigned to
         $pendingApprovalsCount = \App\Models\Reimbursement::whereHas('currentStep', function($q) use ($user) {
             $q->where('user_id', $user->id);
-        })->whereNotIn('status', ['aprobado', 'rechazado'])->count();
+        })->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->count();
 
         return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount'));
     }
