@@ -1263,7 +1263,7 @@ class ReimbursementController extends Controller
                  }
                  $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
                  $data['status'] = $request->status;
-                 
+            } elseif ($request->status === 'aprobado') {
                 // DYNAMIC APPROVAL LOGIC
                 $currentStep = $reimbursement->currentStep;
                 if (($currentStep && $user->id === $currentStep->user_id) || $user->isAdmin()) {
@@ -1562,6 +1562,152 @@ class ReimbursementController extends Controller
 
             fclose($file);
         }, $fileName, $headers);
+    }
+
+    /**
+     * Massive approval action from the audit selected view.
+     */
+    public function bulkAuditAction(Request $request)
+    {
+        Log::info("BULK_AUDIT_ACTION_START: User=" . Auth::id() . " Action=" . $request->action . " IDs=" . json_encode($request->ids));
+
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:reimbursements,id',
+            'action' => 'required|in:aprobado,rechazado',
+            'password' => 'required|string',
+            'rejection_reason' => 'nullable|string|required_if:action,rechazado',
+        ]);
+
+        $user = Auth::user();
+
+        // Check password
+        if (!\Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
+            return back()->with('error', 'Contraseña incorrecta.');
+        }
+
+        $processed = 0;
+        $failed = 0;
+
+        foreach ($request->ids as $id) {
+            $reimbursement = Reimbursement::find($id);
+            if (!$reimbursement) continue;
+
+            // Authorization check (same logic as single update)
+            $canApprove = $user->isAdmin() || 
+                          $user->isTreasury() || 
+                          $user->isCxp() || 
+                          $user->isDireccion() ||
+                          ($user->isDirector() && $reimbursement->costCenter->director_id === $user->id) ||
+                          ($user->isControlObra() && $reimbursement->costCenter->control_obra_id === $user->id) ||
+                          ($user->isExecutiveDirector() && $reimbursement->costCenter->director_ejecutivo_id === $user->id);
+
+            if (!$canApprove) {
+                $failed++;
+                continue;
+            }
+
+            $data = [];
+
+            if ($request->action === 'rechazado') {
+                 $currentObs = $reimbursement->observaciones;
+                 $newObs = "[MASIVO] RECHAZADO por " . $user->name . " (Rechazo Masivo) el " . now()->format('d/m/Y H:i') . ": " . $request->rejection_reason;
+                 $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
+                 $data['status'] = 'rechazado';
+            } else {
+                 $currentObs = $reimbursement->observaciones;
+                 $newObs = "[MASIVO] APROBADO masivamente por " . $user->name . " el " . now()->format('d/m/Y H:i');
+                 $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
+                 // Action === 'aprobado'
+                 // Legacy state mapping
+                if ($user->isDirector() && $reimbursement->costCenter->director_id === $user->id) {
+                     $data['approved_by_director_id'] = $user->id;
+                     $data['approved_by_director_at'] = now();
+                     $data['status'] = 'aprobado_director';
+                } elseif ($user->isControlObra() && $reimbursement->costCenter->control_obra_id === $user->id) {
+                     $data['approved_by_control_id'] = $user->id;
+                     $data['approved_by_control_at'] = now();
+                     $data['status'] = 'aprobado_control';
+                } elseif ($user->isExecutiveDirector() && $reimbursement->costCenter->director_ejecutivo_id === $user->id) {
+                     $data['approved_by_executive_id'] = $user->id;
+                     $data['approved_by_executive_at'] = now();
+                     $data['status'] = 'aprobado_ejecutivo';
+                } elseif ($user->isCxp()) {
+                     $data['approved_by_cxp_id'] = $user->id;
+                     $data['approved_by_cxp_at'] = now();
+                     $data['status'] = 'aprobado_cxp';
+                } elseif ($user->isDireccion()) {
+                     $data['approved_by_direccion_id'] = $user->id;
+                     $data['approved_by_direccion_at'] = now();
+                     $data['status'] = 'aprobado_direccion';
+                } elseif ($user->isTreasury() || $user->isAdmin()) {
+                     $data['approved_by_treasury_id'] = $user->id;
+                     $data['approved_by_treasury_at'] = now();
+                     $data['status'] = 'aprobado';
+                }
+
+                // New logic (Dynamic Steps) if it exists
+                $currentStep = $reimbursement->currentStep;
+                if (($currentStep && $user->id === $currentStep->user_id) || $user->isAdmin()) {
+                    $this->mapApprovalData($currentStep->order ?? 1, $user->id, $data);
+                    
+                    $nextStep = $reimbursement->costCenter->approvalSteps()
+                        ->where('order', '>', $currentStep->order ?? 0)
+                        ->orderBy('order', 'asc')
+                        ->first();
+                        
+                    if ($nextStep) {
+                        $data['current_step_id'] = $nextStep->id;
+                        $data['status'] = 'pendiente';
+                    } else {
+                        $data['current_step_id'] = null;
+                        $data['status'] = 'aprobado';
+                    }
+                }
+            }
+
+            $reimbursement->update($data);
+            $processed++;
+
+            // Notifications
+            if (isset($data['status'])) {
+                $owner = $reimbursement->user;
+                if ($data['status'] === 'aprobado_director') {
+                    $target = $reimbursement->costCenter->controlObra;
+                    if ($target) $target->notify(new \App\Notifications\ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: pendiente de revisión de Control de Obra.", "warning"));
+                    if ($owner) $owner->notify(new \App\Notifications\ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado por Director, pasa a Control de Obra.", "info"));
+                } elseif ($data['status'] === 'aprobado_control') {
+                    $target = $reimbursement->costCenter->directorEjecutivo;
+                    if ($target) $target->notify(new \App\Notifications\ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: pendiente de revisión de Director Ejecutivo.", "warning"));
+                    if ($owner) $owner->notify(new \App\Notifications\ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado por Control de Obra, pasa a Dir. Ejecutivo.", "info"));
+                } elseif ($data['status'] === 'aprobado_ejecutivo') {
+                    $cxpUsers = \App\Models\User::where('role', 'accountant')->get();
+                    foreach($cxpUsers as $cxp) $cxp->notify(new \App\Notifications\ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: pendiente de revisión de Subdirección.", "warning"));
+                    if ($owner) $owner->notify(new \App\Notifications\ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado por Dir. Ejecutivo, pasa a Subdirección.", "info"));
+                } elseif ($data['status'] === 'aprobado_cxp') {
+                    $direccionUsers = \App\Models\User::where('role', 'direccion')->get();
+                    foreach($direccionUsers as $direccion) $direccion->notify(new \App\Notifications\ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: revisado por Subdirección, pendiente de aprobación de Dirección.", "warning"));
+                    if ($owner) $owner->notify(new \App\Notifications\ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} revisado por Subdirección, pasa a Dirección.", "info"));
+                } elseif ($data['status'] === 'aprobado_direccion') {
+                    $treasuryUsers = \App\Models\User::where('role', 'tesoreria')->get();
+                    foreach($treasuryUsers as $treasury) $treasury->notify(new \App\Notifications\ReimbursementNotification($reimbursement, "Reembolso {$reimbursement->folio}: aprobado por Dirección, pendiente de pago.", "warning"));
+                    if ($owner) $owner->notify(new \App\Notifications\ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado por Dirección, pasa a Cuentas por Pagar.", "info"));
+                } elseif ($data['status'] === 'aprobado') {
+                    if ($owner) $owner->notify(new \App\Notifications\ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} aprobado finalmente.", "success"));
+                } elseif ($data['status'] === 'rechazado') {
+                    if ($owner) $owner->notify(new \App\Notifications\ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} RECHAZADO.", "danger"));
+                }
+            }
+        }
+
+        Log::info("BULK_AUDIT_ACTION_END: Processed={$processed} Failed={$failed}");
+        
+        $msg = "Se procesaron $processed trámites con éxito.";
+        if ($failed > 0) {
+            $msg .= " No se pudieron procesar $failed trámites por falta de permisos o estado inválido.";
+        }
+        
+        return back()->with('success', $msg);
     }
 
     /**

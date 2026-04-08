@@ -210,6 +210,10 @@
                         $tab = request('tab', $defaultTab);
                         $isGroupedView = ($tab === 'management' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history' || $tab === 'audit');
                     @endphp
+                    <div x-data="bulkAuditIndex()" class="relative border-transparent">
+                        {{-- Modal included here to ensure it is always in the same scope --}}
+                        @include('reimbursements.partials.bulk-index-modal')
+
 
                     <div id="results-container">
                         @if($isGroupedView)
@@ -217,8 +221,24 @@
                                 $groupedByWeek = $reimbursements->groupBy('week');
                             @endphp
 
-                            <div>
                             <div class="space-y-6">
+                                @if($tab !== 'management')
+                                <!-- Action Bar for Group (Inline) -->
+                                <div class="flex justify-between items-center px-4 mb-4 bg-gray-50/80 dark:bg-gray-800/50 p-2 rounded-xl border border-gray-200 dark:border-gray-700">
+                                    <label class="flex items-center space-x-3 cursor-pointer select-none">
+                                        <input type="checkbox" x-model="selectAll" @change="toggleAll" class="w-5 h-5 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200" />
+                                        <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Seleccionar Todos</span>
+                                    </label>
+                                    
+                                    <div x-show="selectedGroupCount > 0" x-transition.opacity class="flex items-center space-x-4">
+                                        <span class="text-xs font-black text-indigo-600 uppercase tracking-widest" x-text="selectedGroupCount + ' Seleccionados'"></span>
+                                        <button type="button" @click="openModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                                            <span>Acción Masiva</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                @endif
                                 @forelse($groupedByWeek as $week => $weekItems)
                                     <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
                                         {{-- Header Semana --}}
@@ -252,10 +272,31 @@
                                                     $invoiceCount = $ccItems->whereNotNull('uuid')->count();
                                                     $ticketCount = $ccItems->whereNull('uuid')->count();
                                                     $userCount = $ccItems->pluck('user_id')->unique()->count();
+                                                    
+                                                    $mismatchCount = 0;
+                                                    foreach($ccItems as $rcr) {
+                                                        $val = $rcr->validation_data ?? [];
+                                                        if (!($val['uuid_match'] ?? true) || !($val['total_match'] ?? true)) {
+                                                            $mismatchCount++;
+                                                        }
+                                                    }
+                                                    $idsJson = json_encode($ccItems->pluck('id'));
+                                                    $totalAmount = $ccItems->sum('total');
                                                 @endphp
                                                 <a href="{{ route('reimbursements.audit', ['week' => $week, 'cc' => $ccName, 'tab' => $tab]) }}" 
                                                    class="flex flex-col md:flex-row items-start md:items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/30 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-md transition-all group no-underline space-y-3 md:space-y-0">
                                                     <div class="flex items-center space-x-4">
+                                                        @if($tab !== 'management')
+                                                        <div class="flex items-center justify-center border-r border-gray-200 dark:border-gray-700 pr-4" @click.stop>
+                                                            <input type="checkbox"
+                                                                   data-ids="{{ $idsJson }}"
+                                                                   data-amount="{{ $totalAmount }}"
+                                                                   data-has-uuid="{{ $ticketCount }}"
+                                                                   data-mismatch="{{ $mismatchCount }}"
+                                                                   class="cc-group-checkbox w-6 h-6 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200 cursor-pointer" 
+                                                                   @change="toggleGroupData($event.target)" />
+                                                        </div>
+                                                        @endif
                                                         <div class="flex flex-col">
                                                             <span class="text-[10px] font-black text-indigo-500 uppercase tracking-widest italic opacity-70">{{ $internalId }}</span>
                                                             <span class="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{{ $ccName }}</span>
@@ -771,6 +812,83 @@
             // Initial attach
             attachPaginationListeners();
             attachSortListeners();
+        });
+    </script>
+    <!-- Bulk Main Action Modal logic moved into the component above -->
+
+    
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('bulkAuditIndex', () => ({
+                selectedIds: [],
+                openModal: false,
+                confirmed: false,
+                selectedAction: '',
+                selectAll: false,
+                
+                // Track metadata manually because DOM inputs can be detached during re-render
+                metadata: [],
+                
+                toggleAll() {
+                    if (this.selectAll) {
+                        this.selectedIds = [];
+                        this.metadata = [];
+                        document.querySelectorAll('.cc-group-checkbox').forEach(cb => {
+                            cb.checked = true;
+                            this.toggleGroupData(cb);
+                        });
+                    } else {
+                        document.querySelectorAll('.cc-group-checkbox').forEach(cb => cb.checked = false);
+                        this.selectedIds = [];
+                        this.metadata = [];
+                    }
+                },
+                
+                get selectedGroupCount() {
+                    return this.selectedIds.length;
+                },
+                
+                get totalAmount() {
+                    return this.metadata.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+                },
+                
+                get missingUuidCount() {
+                    return this.metadata.reduce((sum, item) => sum + parseInt(item.hasUuid || 0), 0);
+                },
+                
+                get mismatchCount() {
+                    return this.metadata.reduce((sum, item) => sum + parseInt(item.mismatch || 0), 0);
+                },
+                
+                get totalAlerts() {
+                    return this.missingUuidCount + this.mismatchCount;
+                },
+                
+                toggleGroupData(target) {
+                    const idsArr = JSON.parse(target.dataset.ids || "[]");
+                    const amount = parseFloat(target.dataset.amount || 0);
+                    const hasUuid = parseInt(target.dataset.hasUuid || 0);
+                    const mismatch = parseInt(target.dataset.mismatch || 0);
+                    
+                    if (target.checked) {
+                        idsArr.forEach(id => {
+                            if (!this.selectedIds.includes(String(id))) this.selectedIds.push(String(id));
+                        });
+                        this.metadata.push({ idsArr, amount, hasUuid, mismatch });
+                    } else {
+                        this.selectedIds = this.selectedIds.filter(id => !idsArr.map(String).includes(String(id)));
+                        this.metadata = this.metadata.filter(m => JSON.stringify(m.idsArr) !== JSON.stringify(idsArr));
+                    }
+                },
+                
+                formatMoney(amount) {
+                    return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                },
+                
+                init() {
+                    // Modal now handled inline with the partial.
+                }
+            }));
         });
     </script>
 </x-app-layout>

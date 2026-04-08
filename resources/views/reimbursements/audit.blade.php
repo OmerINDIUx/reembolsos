@@ -35,7 +35,10 @@
 
             @if($auditItems && $auditMeta)
                 {{-- ===== VISTA DETALLE: tabla de auditoría ===== --}}
-                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-3xl border border-gray-100 dark:border-gray-700">
+                <div x-data="bulkAudit()" class="bg-white dark:bg-gray-800 shadow-sm sm:rounded-3xl border border-gray-100 dark:border-gray-700 relative">
+                    {{-- Modal moved here to ensure it is always in the same scope --}}
+                    @include('reimbursements.partials.bulk-audit-modal')
+
 
                     {{-- Header de Auditoría --}}
                     <div class="p-8 pb-4 border-b border-gray-100 dark:border-gray-700 bg-indigo-50/50 dark:bg-indigo-900/10">
@@ -170,7 +173,21 @@
 
 
                     {{-- Detalle de Items (Card-Style strictly aligned with summary) --}}
-                    <div class="p-4 md:p-8 space-y-3">
+                    <div class="p-4 md:p-8 space-y-3 relative">
+                        <div class="flex justify-between items-center px-2 mb-4 bg-gray-50/80 dark:bg-gray-800/50 p-2 rounded-xl border border-gray-200 dark:border-gray-700">
+                            <label class="flex items-center space-x-3 cursor-pointer select-none">
+                                <input type="checkbox" x-model="selectAll" @change="toggleAll" class="w-5 h-5 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200" />
+                                <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Seleccionar Todos</span>
+                            </label>
+                            
+                            <div x-show="selectedCount > 0" x-transition.opacity class="flex items-center space-x-4">
+                                <span class="text-xs font-black text-indigo-600 uppercase tracking-widest" x-text="selectedCount + ' Seleccionados'"></span>
+                                <button type="button" @click="openModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                                    <span>Acción Masiva</span>
+                                </button>
+                            </div>
+                        </div>
                         @forelse($auditItems as $r)
                             @php
                                 $typeAbbr = strtoupper(substr($r->type, 0, 3));
@@ -198,12 +215,8 @@
                                class="flex flex-col md:flex-row items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-lg transition-all group/item no-underline space-y-4 md:space-y-0">
                                 
                                 <div class="flex items-center space-x-5">
-                                    <div class="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center shadow-sm border border-gray-100 dark:border-gray-700 group-hover/item:bg-indigo-600 transition-colors">
-                                        @if($r->uuid)
-                                            <svg class="w-5 h-5 text-indigo-500 group-hover/item:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                        @else
-                                            <svg class="w-5 h-5 text-indigo-500 group-hover/item:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 11h.01M7 15h.01M13 7h.01M13 11h.01M13 15h.01M17 7h.01M17 11h.01M17 15h.01M4 5h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1z"/></svg>
-                                        @endif
+                                    <div class="flex items-center justify-center w-10 h-10 border border-transparent">
+                                        <input type="checkbox" value="{{ $r->id }}" x-model="selectedIds" data-amount="{{ $r->total }}" data-has-uuid="{{ $r->uuid ? '1' : '0' }}" data-mismatch="{{ (!$uuidMatch || !$totalMatch) ? '1' : '0' }}" @click.stop class="w-6 h-6 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200 cursor-pointer" />
                                     </div>
                                     <div class="flex flex-col">
                                         <span class="text-[9px] font-black uppercase tracking-widest text-indigo-500 mb-0.5 block italic">{{ $compositeId }}</span>
@@ -250,10 +263,6 @@
                                         </div>
                                     </div>
 
-                                    {{-- Arrow Button --}}
-                                    <div class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 group-hover/item:bg-indigo-100 dark:group-hover/item:bg-indigo-900 transition-colors">
-                                        <svg class="w-4 h-4 text-gray-400 group-hover/item:text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                                    </div>
                                 </div>
                             </a>
                         @empty
@@ -266,7 +275,12 @@
 
             @else
                 {{-- ===== PANTALLA 2: Desglose de Centros de Costo por Semana ===== --}}
-                <div class="bg-gray-50 dark:bg-gray-900/40 rounded-[2.5rem] p-4 md:p-8 border border-gray-100 dark:border-gray-800">
+                <div x-data="bulkAuditIndex()" class="relative border-transparent">
+                    {{-- Modal moved here to ensure it is always in the same scope --}}
+                    @include('reimbursements.partials.bulk-index-modal')
+
+
+                    <div class="bg-gray-50 dark:bg-gray-900/40 rounded-[2.5rem] p-4 md:p-8 border border-gray-100 dark:border-gray-800">
                     
                     @if($selectedWeek)
                         @php 
@@ -347,6 +361,22 @@
                                     </div>
                                 </div>
 
+                                <!-- Action Bar for Group in Pantalla 2 (Inline) -->
+                                <div class="flex justify-between items-center px-4 mb-4 bg-gray-50/80 dark:bg-gray-800/50 p-2 rounded-xl border border-gray-200 dark:border-gray-700">
+                                    <label class="flex items-center space-x-3 cursor-pointer select-none">
+                                        <input type="checkbox" x-model="selectAll" @change="toggleAll" class="w-5 h-5 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200" />
+                                        <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Seleccionar Todos</span>
+                                    </label>
+                                    
+                                    <div x-show="selectedGroupCount > 0" x-transition.opacity class="flex items-center space-x-4">
+                                        <span class="text-xs font-black text-indigo-600 uppercase tracking-widest" x-text="selectedGroupCount + ' Seleccionados'"></span>
+                                        <button type="button" @click="openModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                                            <span>Acción Masiva</span>
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div class="space-y-3">
                                     @php $groupedByType = $ccItems->groupBy('type'); @endphp
                                     @foreach($groupedByType as $type => $typeItems)
@@ -358,6 +388,16 @@
                                             $invoices = $typeItems->whereNotNull('uuid')->count();
                                             $tickets = $typeItems->whereNull('uuid')->count();
                                             
+                                            $mismatchCount = 0;
+                                            foreach($typeItems as $tItem) {
+                                                $val = $tItem->validation_data ?? [];
+                                                if (!($val['uuid_match'] ?? true) || !($val['total_match'] ?? true)) {
+                                                    $mismatchCount++;
+                                                }
+                                            }
+                                            $idsJson = json_encode($typeItems->pluck('id'));
+                                            $totalTypeAmount = $typeItems->sum('total');
+                                            
                                             $mainSolicitor = $typeItems->groupBy('user_id')
                                                 ->map(fn($group) => ['name' => $group->first()->user->name ?? 'N/A', 'total' => $group->sum('total')])
                                                 ->sortByDesc('total')
@@ -366,8 +406,14 @@
                                         <a href="{{ route('reimbursements.audit', ['week' => $selectedWeek, 'cc' => $ccName, 'type' => $type, 'tab' => request('tab')]) }}"
                                            class="flex flex-col md:flex-row items-center justify-between p-5 bg-gray-50 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-lg transition-all group/type no-underline space-y-4 md:space-y-0">
                                             <div class="flex items-center space-x-5">
-                                                <div class="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center shadow-sm border border-gray-100 dark:border-gray-700 group-hover/type:bg-indigo-600 transition-colors">
-                                                    <svg class="w-5 h-5 text-indigo-500 group-hover/type:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                                <div class="flex items-center justify-center border-r border-gray-200 dark:border-gray-700 pr-4" @click.stop>
+                                                    <input type="checkbox"
+                                                           data-ids="{{ $idsJson }}"
+                                                           data-amount="{{ $totalTypeAmount }}"
+                                                           data-has-uuid="{{ $tickets }}"
+                                                           data-mismatch="{{ $mismatchCount }}"
+                                                           class="cc-group-checkbox w-6 h-6 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200 cursor-pointer" 
+                                                           @change="toggleGroupData($event.target)" />
                                                 </div>
                                                 <div>
                                                     <span class="text-[9px] font-black uppercase tracking-widest text-indigo-500 group-hover/type:text-indigo-400 mb-0.5 block italic">{{ $batchId }}</span>
@@ -429,4 +475,168 @@
 
         </div>
     </div>
+
+    <!-- Bulk Audit Action Modal logic moved into the component above -->
+
+
+
+
 </x-app-layout>
+
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('bulkAudit', () => ({
+            selectedIds: [],
+            selectAll: false,
+            openModal: false,
+            confirmed: false,
+            selectedAction: '',
+            
+            get selectedCount() {
+                return this.selectedIds.length;
+            },
+            
+            get allCheckboxes() {
+                return Array.from(document.querySelectorAll('input[type="checkbox"][data-amount]'));
+            },
+            
+            get totalAmount() {
+                let total = 0;
+                this.selectedIds.forEach(id => {
+                    const el = document.querySelector(`input[type="checkbox"][value="${id}"]`);
+                    if (el) total += parseFloat(el.dataset.amount || 0);
+                });
+                return total;
+            },
+            
+            get missingUuidCount() {
+                let count = 0;
+                this.selectedIds.forEach(id => {
+                    const el = document.querySelector(`input[type="checkbox"][value="${id}"]`);
+                    if (el && el.dataset.hasUuid === '0') count++;
+                });
+                return count;
+            },
+            
+            get mismatchCount() {
+                let count = 0;
+                this.selectedIds.forEach(id => {
+                    const el = document.querySelector(`input[type="checkbox"][value="${id}"]`);
+                    if (el && el.dataset.mismatch === '1') count++;
+                });
+                return count;
+            },
+            
+            get totalAlerts() {
+                return this.missingUuidCount + this.mismatchCount;
+            },
+            
+            toggleAll() {
+                if (this.selectAll) {
+                    this.selectedIds = this.allCheckboxes.map(cb => cb.value);
+                } else {
+                    this.selectedIds = [];
+                }
+            },
+            
+            formatMoney(amount) {
+                return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            },
+            
+            init() {
+                // Ensure bulk modal markup is teleported or works fine inline.
+                // We placed it outside the main data loop, but we can access it using Alpine teleport if needed, or just let Alpine handle it.
+                // Since Alpine handles nested state resolution, if modal is inside x-data bounds it works.
+                // I've moved the modal into the main layout root or just bound to document body.
+                // Wait, if the modal is placed outside `x-data="bulkAudit()"`, the modal's internal x-model won't bind.
+                // To fix this, I made sure the `x-data="bulkAudit()"` wrapper actually wraps the END elements too? 
+                // Ah, I ended `</div>` on line 428 in the file content previously? 
+                // We will append the modal to the body by Alpine teleport, wait teleport is not standard in older alpine 3 without plugin.
+                // It's safest to just rely on the existing DOM. The modal is placed right below the main container. Let's make sure it's accessible.
+                
+                init() {
+                    // Modal is now inline.
+                }
+            }
+        }));
+    });
+</script>
+
+    <!-- Bulk Main Action Modal logic moved into the component above -->
+
+
+    
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('bulkAuditIndex', () => ({
+                selectedIds: [],
+                openModal: false,
+                confirmed: false,
+                selectedAction: '',
+                selectAll: false,
+                
+                // Track metadata manually because DOM inputs can be detached during re-render
+                metadata: [],
+                
+                toggleAll() {
+                    if (this.selectAll) {
+                        this.selectedIds = [];
+                        this.metadata = [];
+                        document.querySelectorAll('.cc-group-checkbox').forEach(cb => {
+                            cb.checked = true;
+                            this.toggleGroupData(cb);
+                        });
+                    } else {
+                        document.querySelectorAll('.cc-group-checkbox').forEach(cb => cb.checked = false);
+                        this.selectedIds = [];
+                        this.metadata = [];
+                    }
+                },
+                
+                get selectedGroupCount() {
+                    return this.selectedIds.length;
+                },
+                
+                get totalAmount() {
+                    return this.metadata.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+                },
+                
+                get missingUuidCount() {
+                    return this.metadata.reduce((sum, item) => sum + parseInt(item.hasUuid || 0), 0);
+                },
+                
+                get mismatchCount() {
+                    return this.metadata.reduce((sum, item) => sum + parseInt(item.mismatch || 0), 0);
+                },
+                
+                get totalAlerts() {
+                    return this.missingUuidCount + this.mismatchCount;
+                },
+                
+                toggleGroupData(target) {
+                    const idsArr = JSON.parse(target.dataset.ids || "[]");
+                    const amount = parseFloat(target.dataset.amount || 0);
+                    const hasUuid = parseInt(target.dataset.hasUuid || 0);
+                    const mismatch = parseInt(target.dataset.mismatch || 0);
+                    
+                    if (target.checked) {
+                        idsArr.forEach(id => {
+                            if (!this.selectedIds.includes(String(id))) this.selectedIds.push(String(id));
+                        });
+                        this.metadata.push({ idsArr, amount, hasUuid, mismatch });
+                    } else {
+                        this.selectedIds = this.selectedIds.filter(id => !idsArr.map(String).includes(String(id)));
+                        this.metadata = this.metadata.filter(m => JSON.stringify(m.idsArr) !== JSON.stringify(idsArr));
+                    }
+                },
+                
+                formatMoney(amount) {
+                    return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                },
+                
+                init() {
+                    // Modal is now inline, no need to move it.
+                }
+            }));
+        });
+    </script>

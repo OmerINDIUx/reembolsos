@@ -557,6 +557,9 @@
                             @foreach(array_reverse(explode("\n", $reimbursement->observaciones)) as $observation)
                                 @if(trim($observation))
                                     @php
+                                        if (str_contains($observation, '[MASIVO]') && !\Auth::user()->isAdmin()) {
+                                            continue;
+                                        }
                                         preg_match('/el \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/', $observation, $matches);
                                         $timestamp = $matches[0] ?? '';
                                         $content = trim(str_replace($timestamp, '', $observation));
