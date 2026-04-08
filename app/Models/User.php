@@ -147,4 +147,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(ReimbursementApproval::class);
     }
+
+    /**
+     * Check if the user has any reimbursement currently assigned to them for approval.
+     */
+    public function hasPendingApprovals()
+    {
+        return Reimbursement::whereHas('currentStep', function($q) {
+            $q->where('user_id', $this->id);
+        })->exists();
+    }
 }

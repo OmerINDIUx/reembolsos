@@ -407,11 +407,12 @@
                                                 </div>
                                             </template>
 
-                                            <div>
+                                             <div>
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2 text-indigo-600">Subtotal *</label>
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">$</span>
-                                                    <input type="number" step="0.01" :name="'items['+index+'][subtotal]'" x-model="item.data.subtotal" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-indigo-600 pl-8" :readonly="hasInvoice" :required="!hasInvoice">
+                                                    <input type="number" step="0.01" :name="'items['+index+'][subtotal]'" x-model="item.data.subtotal" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-indigo-600 pl-8" :readonly="hasInvoice" :required="!hasInvoice"
+                                                        @input="if(!hasInvoice) item.data.impuestos = (parseFloat(item.data.total || 0) - parseFloat(item.data.subtotal || 0)).toFixed(2)">
                                                 </div>
                                             </div>
 
@@ -419,7 +420,7 @@
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2 text-amber-600">Impuestos (IVA)</label>
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">$</span>
-                                                    <input type="number" step="0.01" :name="'items['+index+'][impuestos]'" x-model="item.data.impuestos" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-amber-600 pl-8" :readonly="hasInvoice">
+                                                    <input type="number" step="0.01" :name="'items['+index+'][impuestos]'" x-model="item.data.impuestos" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-amber-600 pl-8" readonly>
                                                 </div>
                                             </div>
                                             <div>

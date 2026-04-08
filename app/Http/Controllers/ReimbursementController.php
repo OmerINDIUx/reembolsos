@@ -26,7 +26,7 @@ class ReimbursementController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector();
+        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->hasPendingApprovals();
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
         $globalSearch = $request->input('global_search');
         
@@ -123,11 +123,8 @@ class ReimbursementController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector();
-
-        if (!$canManage) {
-            abort(403, 'No tienes permiso para ver la auditoría.');
-        }
+        // Rely on applyTabScope to filter visibility based on user role and tab.
+        // Standard users can access this page to see their own items or those they need to approve.
 
         // Load reimbursements based on tab scope
         $tab = $request->input('tab', 'management');
