@@ -12,12 +12,10 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
-use SimpleXMLElement;
-use Smalot\PdfParser\Parser;
 use Illuminate\Support\Facades\DB;
-
 use Illuminate\Support\Str;
-use App\Models\ReimbursementApproval;
+use Smalot\PdfParser\Parser;
+use App\Services\NotificationBatchService;
 
 class ReimbursementController extends Controller
 {
@@ -400,6 +398,7 @@ class ReimbursementController extends Controller
         $failedCount = 0;
         $errors = [];
         $processedUuids = [];
+        $createdReimbursements = [];
 
         foreach ($request->items as $index => $item) {
             try {
@@ -545,6 +544,7 @@ class ReimbursementController extends Controller
                     $reimbursement->save();
                 }
 
+                $createdReimbursements[] = $reimbursement;
                 $createdCount++;
             } catch (\Exception $e) {
                 $errors[] = "Ítem #" . ($index + 1) . ": Error al procesar - " . $e->getMessage();
@@ -564,6 +564,9 @@ class ReimbursementController extends Controller
                 $cxpUsers = User::where('role', 'accountant')->get();
                 foreach($cxpUsers as $cxp) {
                     $cxp->notify(new ReimbursementNotification(null, $notifMsg, "info"));
+                    foreach($createdReimbursements as $cr) {
+                        NotificationBatchService::add($cxp, $cr);
+                    }
                 }
             } elseif ($initialStatus === 'aprobado_control') {
                 // To N3
@@ -578,6 +581,9 @@ class ReimbursementController extends Controller
 
             if ($targetUser) {
                 $targetUser->notify(new ReimbursementNotification(null, $notifMsg, "info"));
+                foreach($createdReimbursements as $cr) {
+                    NotificationBatchService::add($targetUser, $cr);
+                }
             }
         }
 
@@ -680,7 +686,7 @@ class ReimbursementController extends Controller
         if (!$pdfFile) return null;
 
         try {
-            $parser = new \Smalot\PdfParser\Parser();
+            $parser = new Parser();
             
             // Handle both UploadedFile and existing storage paths
             $filePath = ($pdfFile instanceof \Illuminate\Http\UploadedFile) 
@@ -987,6 +993,7 @@ class ReimbursementController extends Controller
                     "Nueva solicitud ({$reimbursement->folio}) pendiente de tu aprobación en el paso: " . ($reimbursement->currentStep->name ?? 'Inicio'), 
                     "info"
                 ));
+                NotificationBatchService::add($nextApprover, $reimbursement);
             }
         }
 
@@ -1190,7 +1197,7 @@ class ReimbursementController extends Controller
                 // Re-validate PDF against XML Data
                 if (!empty($reimbursement->uuid)) {
                     try {
-                        $parser = new \Smalot\PdfParser\Parser();
+                        $parser = new Parser();
                         $pdf = $parser->parseFile($request->file('pdf_file')->getRealPath());
                         $text = $pdf->getText();
                         $cleanText = str_replace([' ', "\n", "\r", "\t"], '', $text);
@@ -1316,6 +1323,7 @@ class ReimbursementController extends Controller
                         "Acción Requerida: El reembolso {$reimbursement->folio} está listo para tu revisión en el paso: " . ($reimbursement->currentStep->name ?? 'Siguiente'),
                         "warning"
                     ));
+                    NotificationBatchService::add($nextApprover, $reimbursement);
                 }
                 if ($owner) {
                     $owner->notify(new ReimbursementNotification(
@@ -1323,13 +1331,23 @@ class ReimbursementController extends Controller
                         "Tu reembolso {$reimbursement->folio} avanzó al paso: " . ($reimbursement->currentStep->name ?? 'Siguiente'),
                         "info"
                     ));
+                    NotificationBatchService::add($owner, $reimbursement);
                 }
             } elseif ($data['status'] === 'aprobado') {
-                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido APROBADO FINALMENTE.", "success"));
+                if ($owner) {
+                    $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido APROBADO FINALMENTE.", "success"));
+                    NotificationBatchService::add($owner, $reimbursement);
+                }
             } elseif ($data['status'] === 'rechazado') {
-                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido RECHAZADO.", "danger"));
+                if ($owner) {
+                    $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido RECHAZADO.", "danger"));
+                     NotificationBatchService::add($owner, $reimbursement);
+                }
             } elseif ($data['status'] === 'requiere_correccion') {
-                if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} requiere corrección por: " . ($request->rejection_reason ?? 'No especificado'), "warning"));
+                if ($owner) {
+                    $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} requiere corrección por: " . ($request->rejection_reason ?? 'No especificado'), "warning"));
+                    NotificationBatchService::add($owner, $reimbursement);
+                }
             }
         }
 
@@ -1349,7 +1367,7 @@ class ReimbursementController extends Controller
         }
 
         try {
-            $parser = new \Smalot\PdfParser\Parser();
+            $parser = new Parser();
             $pdf = $parser->parseFile($request->file('pdf_file')->getRealPath());
             $text = $pdf->getText();
             $cleanText = str_replace([' ', "\n", "\r", "\t"], '', $text);
@@ -1708,11 +1726,18 @@ class ReimbursementController extends Controller
                             "Acción Requerida (Masivo): El reembolso {$reimbursement->folio} está listo para revisión.",
                             "warning"
                         ));
+                        NotificationBatchService::add($nextApprover, $reimbursement);
                     }
                 } elseif ($data['status'] === 'aprobado') {
-                    if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido APROBADO FINALMENTE (Masivo).", "success"));
+                    if ($owner) {
+                        $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido APROBADO FINALMENTE (Masivo).", "success"));
+                        NotificationBatchService::add($owner, $reimbursement);
+                    }
                 } elseif ($data['status'] === 'rechazado') {
-                    if ($owner) $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido RECHAZADO (Masivo).", "danger"));
+                    if ($owner) {
+                        $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} ha sido RECHAZADO (Masivo).", "danger"));
+                        NotificationBatchService::add($owner, $reimbursement);
+                    }
                 }
             }
         }
@@ -1825,6 +1850,7 @@ class ReimbursementController extends Controller
                 try {
                     if ($reimbursement->user) {
                         $reimbursement->user->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} fue aprobado masivamente.", "success"));
+                        NotificationBatchService::add($reimbursement->user, $reimbursement);
                     }
                 } catch (\Exception $e) {
                     \Illuminate\Support\Facades\Log::error("Error notifying user in bulk approval: " . $e->getMessage());
@@ -2049,7 +2075,7 @@ class ReimbursementController extends Controller
             // Parse PDF if exists
             if ($reimbursement->pdf_path && Storage::exists($reimbursement->pdf_path)) {
                 try {
-                    $parser = new \Smalot\PdfParser\Parser();
+                    $parser = new Parser();
                     $pdf = $parser->parseFile(Storage::path($reimbursement->pdf_path));
                     $text = $pdf->getText();
                     

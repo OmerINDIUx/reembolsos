@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use App\Services\NotificationBatchService;
 
 class TravelEventController extends Controller
 {
@@ -221,6 +222,10 @@ class TravelEventController extends Controller
         if ($count > 0 && $costCenter && $firstStep) {
             $notifMsg = "El Viaje '{$travelEvent->name}' ha sido CERRADO enviando {$count} facturas al ciclo N1 de aprobación.";
             $firstStep->user->notify(new \App\Notifications\ReimbursementNotification(null, $notifMsg, "info"));
+            
+            foreach ($reimbursements as $reimb) {
+                NotificationBatchService::add($firstStep->user, $reimb);
+            }
         }
 
         return redirect()->route('travel_events.show', $travelEvent)->with('success', "Evento cerrado exitosamente. Se liberaron {$count} facturas para su cobro.");

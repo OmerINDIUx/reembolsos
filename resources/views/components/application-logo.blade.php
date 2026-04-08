@@ -1,1 +1,1 @@
-<img src="{{ asset('images/GI-animado-completo.gif') }}" {{ $attributes }} alt="Logo" />
+<img src="{{ asset('images/indi.png') }}" {{ $attributes }} alt="Logo" />
