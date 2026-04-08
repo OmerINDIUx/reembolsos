@@ -187,10 +187,12 @@
                                     <span class="px-3 py-1 inline-flex text-[9px] leading-4 font-black rounded-full uppercase tracking-widest
                                         {{ $r->status === 'aprobado' ? 'bg-emerald-100 text-emerald-800' : '' }}
                                         {{ $r->status === 'requiere_correccion' ? 'bg-amber-100 text-amber-800' : '' }}
-                                        {{ in_array($r->status, ['pendiente', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp', 'aprobado_direccion']) ? 'bg-indigo-100 text-indigo-800' : '' }}
                                         {{ $r->status === 'rechazado' ? 'bg-rose-100 text-rose-800' : '' }}
+                                        {{ !in_array($r->status, ['aprobado', 'requiere_correccion', 'rechazado']) ? 'bg-indigo-100 text-indigo-800' : '' }}
                                     ">
-                                        {{ str_replace('_', ' ', $r->status) }}
+                                        @if($r->status === 'aprobado') Pagado 
+                                        @elseif($r->status === 'pendiente') En Proceso
+                                        @else {{ str_replace('_', ' ', $r->status) }} @endif
                                     </span>
                                 </td>
                             </tr>

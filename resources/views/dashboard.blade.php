@@ -204,30 +204,20 @@
                         <div class="mt-4 pt-4 border-t border-gray-50 dark:border-gray-700">
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
                                 @foreach($analytics['status_breakdown'] as $s)
-                                    <div class="flex items-center gap-1.5 {{ $s->amount == 0 ? 'opacity-30' : 'opacity-100' }}">
-                                        <span class="w-2 h-2 rounded-full shadow-sm" style="background-color: 
-                                            @if($s->status == 'aprobado') #64b032 
-                                            @elseif($s->status == 'rechazado') #ff3000 
-                                            @elseif($s->status == 'requiere_correccion') #ffa608
-                                            @elseif($s->status == 'aprobado_director') #3385fa
-                                            @elseif($s->status == 'aprobado_control') #66a3fb
-                                            @elseif($s->status == 'aprobado_ejecutivo') #004bb3
-                                            @elseif($s->status == 'aprobado_cxp') #003380
-                                            @elseif($s->status == 'aprobado_direccion') #ff8c00
-                                            @else #0066f9 @endif"></span>
-                                        <span class="text-[8px] font-black text-gray-500 dark:text-gray-400 uppercase truncate" title="{{ $s->label }}">
-                                            @if($s->status == 'aprobado') Pagado 
-                                            @elseif($s->status == 'aprobado_director') N2: Dir
-                                            @elseif($s->status == 'aprobado_control') N3: Ctrl
-                                            @elseif($s->status == 'aprobado_ejecutivo') N4: Ejec.
-                                            @elseif($s->status == 'aprobado_cxp') N5: Subdir.
-                                            @elseif($s->status == 'aprobado_direccion') N6: Direcc.
-                                            @elseif($s->status == 'pendiente') N1: Pend.
-                                            @elseif($s->status == 'rechazado') Recha.
-                                            @elseif($s->status == 'requiere_correccion') Correg.
-                                            @else {{ $s->label }} @endif
-                                        </span>
-                                    </div>
+                                    @if($s->count > 0)
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="w-2 h-2 rounded-full shadow-sm" style="background-color: 
+                                                @if($s->status == 'aprobado') #64b032 
+                                                @elseif($s->status == 'rechazado') #ff3000 
+                                                @elseif($s->status == 'requiere_correccion') #ffa608
+                                                @elseif(str_contains($s->status, 'aprobado_')) #3385fa
+                                                @elseif($s->status == 'borrador') #9ca3af
+                                                @else #0066f9 @endif"></span>
+                                            <span class="text-[8px] font-black text-gray-500 dark:text-gray-400 uppercase truncate" title="{{ $s->label }}">
+                                                {{ $s->label }}
+                                            </span>
+                                        </div>
+                                    @endif
                                 @endforeach
                             </div>
                         </div>
@@ -374,11 +364,10 @@
                                                         {{ $reimbursement->status === 'aprobado' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300' : '' }}
                                                         {{ $reimbursement->status === 'rechazado' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300' : '' }}
                                                         {{ $reimbursement->status === 'requiere_correccion' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300' : '' }}
-                                                        {{ in_array($reimbursement->status, ['pendiente', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp', 'aprobado_direccion']) ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300' : '' }}
+                                                        {{ !in_array($reimbursement->status, ['aprobado', 'rechazado', 'requiere_correccion']) ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300' : '' }}
                                                     ">
                                                         @if($reimbursement->status === 'aprobado') Pagado 
-                                                        @elseif($reimbursement->status === 'aprobado_cxp') Aprob. Subdir.
-                                                        @elseif($reimbursement->status === 'aprobado_direccion') Aprob. Direcc.
+                                                        @elseif($reimbursement->status === 'pendiente') En Proceso
                                                         @else {{ str_replace('_', ' ', $reimbursement->status) }} @endif
                                                     </span>
                                                 </td>

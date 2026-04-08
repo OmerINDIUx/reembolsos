@@ -155,15 +155,11 @@
                                 <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label>
                                 <select name="status" id="status" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                     <option value="">Todos</option>
-                                    <option value="pendiente" {{ request('status') == 'pendiente' ? 'selected' : '' }}>1. Pendiente Director</option>
-                                    <option value="aprobado_director" {{ request('status') == 'aprobado_director' ? 'selected' : '' }}>2. Aprobado Director</option>
-                                    <option value="aprobado_control" {{ request('status') == 'aprobado_control' ? 'selected' : '' }}>3. Aprobado Control de Obra</option>
-                                    <option value="aprobado_ejecutivo" {{ request('status') == 'aprobado_ejecutivo' ? 'selected' : '' }}>4. Aprobado Dir. Ejecutivo</option>
-                                    <option value="aprobado_cxp" {{ request('status') == 'aprobado_cxp' ? 'selected' : '' }}>5. Aprobado Subdirección</option>
-                                    <option value="aprobado_direccion" {{ request('status') == 'aprobado_direccion' ? 'selected' : '' }}>6. Aprobado Dirección</option>
-                                    <option value="aprobado" {{ request('status') == 'aprobado' ? 'selected' : '' }}>7. Pagado (Final)</option>
+                                    <option value="pendiente" {{ request('status') == 'pendiente' ? 'selected' : '' }}>En Proceso (Pendiente)</option>
+                                    <option value="aprobado" {{ request('status') == 'aprobado' ? 'selected' : '' }}>Pagado (Finalizado)</option>
                                     <option value="requiere_correccion" {{ request('status') == 'requiere_correccion' ? 'selected' : '' }}>Requiere Corrección</option>
                                     <option value="rechazado" {{ request('status') == 'rechazado' ? 'selected' : '' }}>Rechazado</option>
+                                    <option value="borrador" {{ request('status') == 'borrador' ? 'selected' : '' }}>Borrador</option>
                                 </select>
                             </div>
 
@@ -455,40 +451,30 @@
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             <div class="flex flex-col space-y-1">
-                                                <span class="px-2 w-fit inline-flex text-xs leading-5 font-semibold rounded-full 
+                                                <span class="px-2 w-fit inline-flex text-[10px] leading-5 font-black uppercase rounded-full 
                                                     {{ $r->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
                                                     {{ $r->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
                                                     {{ $r->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
-                                                    {{ $r->status === 'aprobado_director' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
-                                                    {{ $r->status === 'aprobado_control' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : '' }}
-                                                    {{ $r->status === 'aprobado_ejecutivo' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
-                                                    {{ $r->status === 'aprobado_cxp' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300' : '' }}
-                                                    {{ $r->status === 'aprobado_direccion' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
                                                     {{ $r->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
-                                                    {{ $r->status === 'en_evento' ? 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-300 border border-dashed border-slate-300' : '' }}
+                                                    {{ $r->status === 'borrador' ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' : '' }}
+                                                    {{ !in_array($r->status, ['aprobado', 'rechazado', 'requiere_correccion', 'pendiente', 'borrador']) ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
                                                 ">
                                                     @if($r->status === 'aprobado') Pagado 
-                                                    @elseif($r->status === 'aprobado_cxp') Aprobado Subdirección
-                                                    @elseif($r->status === 'aprobado_direccion') Aprobado Dirección
-                                                    @elseif($r->status === 'en_evento') En Cola (Evento)
+                                                    @elseif($r->status === 'pendiente') {{ $r->currentStep->name ?? 'En Proceso' }}
+                                                    @elseif($r->status === 'requiere_correccion') Corregir
                                                     @else {{ ucfirst(str_replace('_', ' ', $r->status)) }} @endif
                                                 </span>
                                                 <span class="text-[10px] text-gray-400 font-medium italic">
-                                                    @if($r->status === 'pendiente') 
-                                                        En: {{ $r->costCenter->director->name ?? 'Director' }} (N1)
-                                                    @elseif($r->status === 'aprobado_director') 
-                                                        En: {{ $r->costCenter->controlObra->name ?? 'Control de Obra' }} (N2)
-                                                    @elseif($r->status === 'aprobado_control') 
-                                                        En: {{ $r->costCenter->directorEjecutivo->name ?? 'Dir. Ejecutivo' }} (N3)
-                                                    @elseif($r->status === 'aprobado_ejecutivo') 
-                                                        En: Subdirección
-                                                    @elseif($r->status === 'aprobado_cxp') 
-                                                        En: Dirección
-                                                    @elseif($r->status === 'aprobado_direccion') 
-                                                        En: Cuentas por Pagar
-                                                    @elseif($r->status === 'aprobado') Finalizado
-                                                    @elseif($r->status === 'en_evento') Esperando cierre de viaje
-                                                    @else Rechazado/Corregir
+                                                    @if($r->status === 'pendiente' && $r->currentStep) 
+                                                        En: {{ $r->currentStep->user->name ?? 'Por asignar' }}
+                                                    @elseif($r->status === 'aprobado') 
+                                                        Finalizado
+                                                    @elseif($r->status === 'requiere_correccion')
+                                                        Esperando ajuste del solicitante
+                                                    @elseif($r->status === 'rechazado')
+                                                        Cancelado definitivamente
+                                                    @else
+                                                        {{ str_replace('_', ' ', $r->status) }}
                                                     @endif
                                                 </span>
                                             </div>
@@ -496,25 +482,12 @@
                                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                             @php
                                                 $user = Auth::user();
-                                                $isOwnerOrDesignatedApprover = $r->user_id === $user->id || 
-                                                    ($user->isAdmin() || $user->isCxp() || $user->isDireccion() || $user->isTreasury() || $user->isAdminView()) ||
-                                                    ($user->isDirector() && $r->costCenter->director_id === $user->id) ||
-                                                    ($user->isControlObra() && $r->costCenter->control_obra_id === $user->id) ||
-                                                    ($user->isExecutiveDirector() && $r->costCenter->director_ejecutivo_id === $user->id);
+                                                $canApproveCurr = $r->canBeApprovedBy($user) && !in_array($r->status, ['aprobado', 'rechazado', 'borrador']);
                                             @endphp
 
-                                            @if($isOwnerOrDesignatedApprover)
+                                            @if($user->id === $r->user_id || $user->isAdmin() || $user->isAdminView() || $canApproveCurr)
                                                 <a href="{{ route('reimbursements.show', $r->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Ver</a>
                                                 
-                                                @php
-                                                    $canApproveCurr = ($user->isDirector() && $r->status === 'pendiente' && $r->costCenter->director_id === $user->id) ||
-                                                                     ($user->isControlObra() && $r->status === 'aprobado_director' && $r->costCenter->control_obra_id === $user->id) ||
-                                                                     ($user->isExecutiveDirector() && $r->status === 'aprobado_control' && $r->costCenter->director_ejecutivo_id === $user->id) ||
-                                                                     ($user->isCxp() && $r->status === 'aprobado_ejecutivo') ||
-                                                                     ($user->isDireccion() && $r->status === 'aprobado_cxp') ||
-                                                                     (($user->isTreasury() || $user->isAdmin()) && $r->status === 'aprobado_direccion');
-                                                @endphp
-
                                                 @if($canApproveCurr)
                                                     <form action="{{ route('reimbursements.update', $r->id) }}" method="POST" class="inline">
                                                         @csrf

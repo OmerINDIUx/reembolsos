@@ -264,7 +264,9 @@
                                     </td>
                                     <td class="px-8 py-4 font-black text-gray-900 dark:text-white">${{ number_format($r->total, 2) }}</td>
                                     <td class="px-8 py-4 text-xs font-bold uppercase tracking-wider text-gray-500">
-                                        {{ $r->status }}
+                                        @if($r->status === 'aprobado') Pagado 
+                                        @elseif($r->status === 'pendiente') En Proceso
+                                        @else {{ str_replace('_', ' ', $r->status) }} @endif
                                     </td>
                                 </tr>
                                 @endforeach
@@ -404,11 +406,7 @@
                     'rechazado': { label: 'Rechazado', color: '#ef4444' },
                     'requiere_correccion': { label: 'Corregir', color: '#f59e0b' },
                     'pendiente': { label: 'Pendiente', color: '#6366f1' },
-                    'aprobado_director': { label: 'Aprob. Dir', color: '#818cf8' },
-                    'aprobado_control': { label: 'Aprob. Ctrl', color: '#a5b4fc' },
-                    'aprobado_ejecutivo': { label: 'Aprob. Ejecut.', color: '#4338ca' },
-                    'aprobado_cxp': { label: 'Aprob. Subdir.', color: '#3730a3' },
-                    'aprobado_direccion': { label: 'Aprob. Direcc.', color: '#fbbf24' }
+                    'borrador': { label: 'Borrador', color: '#9ca3af' }
                 };
 
                 const labels = [];

@@ -107,9 +107,16 @@ class DashboardController extends Controller
 
         $allStatuses = [
             'pendiente' => 'En Aprobación',
+            'aprobado_director' => 'Aprob. Director (Old)',
+            'aprobado_control' => 'Aprob. Control (Old)',
+            'aprobado_ejecutivo' => 'Aprob. Ejecut. (Old)',
+            'aprobado_cxp' => 'Aprob. Subdir. (Old)',
+            'aprobado_direccion' => 'Aprob. Direcc. (Old)',
             'aprobado' => 'Pagado',
             'rechazado' => 'Rechazado',
             'requiere_correccion' => 'Para Corregir',
+            'en_evento' => 'En Evento',
+            'borrador' => 'Borrador',
         ];
 
         $statusBreakdown = collect($allStatuses)->map(function ($label, $key) use ($rawBreakdown) {

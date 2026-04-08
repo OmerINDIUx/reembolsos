@@ -147,4 +147,27 @@ class Reimbursement extends Model
     {
         return $this->hasMany(Reimbursement::class, 'parent_id');
     }
+
+    /**
+     * Get all approval history logs.
+     */
+    public function approvals()
+    {
+        return $this->hasMany(ReimbursementApproval::class)->orderBy('created_at', 'asc');
+    }
+
+    /**
+     * Check if a specific user is authorized to approve the current step.
+     */
+    public function canBeApprovedBy(User $user)
+    {
+        if ($user->isAdmin()) return true;
+        
+        // Re-calculate currentStep if not loaded
+        $currentStep = $this->currentStep;
+        
+        if (!$currentStep) return false;
+        
+        return $currentStep->user_id === $user->id;
+    }
 }

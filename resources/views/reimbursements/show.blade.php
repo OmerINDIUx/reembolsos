@@ -114,15 +114,17 @@
                                 'aprobado' => 'text-green-700 bg-green-50 ring-green-600/20',
                                 'rechazado' => 'text-red-700 bg-red-50 ring-red-600/10',
                                 'requiere_correccion' => 'text-yellow-800 bg-yellow-50 ring-yellow-600/20',
-                                'pendiente' => 'text-gray-600 bg-gray-50 ring-gray-500/10',
+                                'pendiente' => 'text-indigo-700 bg-indigo-50 ring-indigo-600/20',
+                                'borrador' => 'text-gray-600 bg-gray-50 ring-gray-500/10',
                             ];
-                            $defaultColor = 'text-indigo-700 bg-indigo-50 ring-indigo-600/20';
-                            $statusClasses = $statusColors[$reimbursement->status] ?? $defaultColor;
+                            $statusClasses = $statusColors[$reimbursement->status] ?? 'text-gray-600 bg-gray-50 ring-gray-500/10';
                             
                             $statusLabel = match($reimbursement->status) {
-                                'aprobado' => 'PAGADO',
-                                'aprobado_cxp' => 'APROBADO SUBDIRECCIÓN',
-                                'aprobado_direccion' => 'APROBADO DIRECCIÓN',
+                                'aprobado' => 'PAGADO / FINALIZADO',
+                                'rechazado' => 'RECHAZADO',
+                                'requiere_correccion' => 'REQUIERE CORRECCIÓN',
+                                'borrador' => 'BORRADOR',
+                                'pendiente' => $reimbursement->currentStep->name ?? 'PENDIENTE',
                                 default => str_replace('_', ' ', strtoupper($reimbursement->status))
                             };
                         @endphp
@@ -457,16 +459,7 @@
                     <!-- Acción de Aprobación -->
                     @php
                         $user = auth()->user();
-                        $cc = $reimbursement->costCenter;
-                        
-                        $canApproveDirector = ($user->isAdmin() || ($user->isDirector() && $user->id === $cc->director_id)) && $reimbursement->status === 'pendiente';
-                        $canApproveControl = ($user->isAdmin() || ($user->isControlObra() && $user->id === $cc->control_obra_id)) && $reimbursement->status === 'aprobado_director';
-                        $canApproveExecutive = ($user->isAdmin() || ($user->isExecutiveDirector() && $user->id === $cc->director_ejecutivo_id)) && $reimbursement->status === 'aprobado_control';
-                        $canApproveCXP = ($user->isAdmin() || $user->isCxp()) && $reimbursement->status === 'aprobado_ejecutivo';
-                        $canApproveDireccion = ($user->isAdmin() || $user->isDireccion()) && $reimbursement->status === 'aprobado_cxp';
-                        $canApproveTreasury = ($user->isAdmin() || $user->isTreasury()) && $reimbursement->status === 'aprobado_direccion';
-                        
-                        $canApproveAny = !$user->isAdminView() && ($canApproveDirector || $canApproveControl || $canApproveExecutive || $canApproveCXP || $canApproveDireccion || $canApproveTreasury);
+                        $canApproveAny = $reimbursement->canBeApprovedBy($user) && !in_array($reimbursement->status, ['aprobado', 'rechazado', 'borrador']);
                     @endphp
 
                     @if($canApproveAny)
@@ -490,42 +483,27 @@
                     </div>
                     @endif
 
-                    <!-- Stepper Log -->
+                    <!-- Stepper Log (Dynamic) -->
                     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 p-6 dark:border-gray-700">
                         <h3 class="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3 mb-6 dark:text-white dark:border-gray-700">Flujo de Autorizaciones</h3>
                         
                         <div class="relative">
-                            <!-- Track -->
                             <div class="absolute left-4 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700"></div>
 
-                            @php
-                                $steps = [
-                                    ['label' => 'Revisión N1 (Director)', 'id' => $reimbursement->approved_by_director_id, 'name' => $reimbursement->directorApprover->name ?? 'Por asignar', 'at' => $reimbursement->approved_by_director_at],
-                                    ['label' => 'Control de Obra', 'id' => $reimbursement->approved_by_control_id, 'name' => $reimbursement->controlApprover->name ?? 'Por asignar', 'at' => $reimbursement->approved_by_control_at],
-                                    ['label' => 'Dirección Ejecutiva', 'id' => $reimbursement->approved_by_executive_id, 'name' => $reimbursement->executiveApprover->name ?? 'Por asignar', 'at' => $reimbursement->approved_by_executive_at],
-                                    ['label' => 'Subdirección CXP', 'id' => $reimbursement->approved_by_cxp_id, 'name' => $reimbursement->cxpApprover->name ?? 'Por asignar', 'at' => $reimbursement->approved_by_cxp_at],
-                                    ['label' => 'Dirección Gral.', 'id' => $reimbursement->approved_by_direccion_id, 'name' => $reimbursement->direccionApprover->name ?? 'Por asignar', 'at' => $reimbursement->approved_by_direccion_at],
-                                    ['label' => 'Tesorería y Pagos', 'id' => $reimbursement->approved_by_treasury_id, 'name' => $reimbursement->treasuryApprover->name ?? 'Por asignar', 'at' => $reimbursement->approved_by_treasury_at],
-                                ];
-                            @endphp
-
-                            @foreach($steps as $index => $step)
+                            @foreach($reimbursement->costCenter->approvalSteps as $step)
                                 @php
-                                    $isCompleted = (bool)$step['id'];
-                                    $isCurrent = false;
-                                    if (!$isCompleted) {
-                                        if ($index === 0 && $reimbursement->status === 'pendiente') $isCurrent = true;
-                                        elseif ($index === 1 && $reimbursement->status === 'aprobado_director') $isCurrent = true;
-                                        elseif ($index === 2 && $reimbursement->status === 'aprobado_control') $isCurrent = true;
-                                        elseif ($index === 3 && $reimbursement->status === 'aprobado_ejecutivo') $isCurrent = true;
-                                        elseif ($index === 4 && $reimbursement->status === 'aprobado_cxp') $isCurrent = true;
-                                        elseif ($index === 5 && $reimbursement->status === 'aprobado_direccion') $isCurrent = true;
-                                    }
+                                    $isCompleted = $reimbursement->approvals->where('step_name', $step->name)->count() > 0 || 
+                                                   ($reimbursement->currentStep && $reimbursement->currentStep->order > $step->order) ||
+                                                   ($reimbursement->status === 'aprobado');
+                                    
+                                    $isCurrent = ($reimbursement->current_step_id === $step->id) && !in_array($reimbursement->status, ['aprobado', 'rechazado']);
+                                    
+                                    $approvalLog = $reimbursement->approvals->where('step_name', $step->name)->last();
                                 @endphp
                                 <div class="relative flex gap-4 pb-6 last:pb-0">
                                     <div class="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white ring-2 ring-white dark:bg-gray-800 dark:ring-gray-800">
                                         @if($isCompleted)
-                                            <div class="h-6 w-6 rounded-full bg-indigo-600 flex items-center justify-center"><svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg></div>
+                                            <div class="h-6 w-6 rounded-full bg-emerald-600 flex items-center justify-center"><svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg></div>
                                         @elseif($isCurrent)
                                             <div class="h-6 w-6 rounded-full border-2 border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center"><span class="h-2 w-2 rounded-full bg-indigo-600 animate-pulse"></span></div>
                                         @else
@@ -533,26 +511,13 @@
                                         @endif
                                     </div>
                                     <div class="pt-1 w-full">
-                                        <p class="text-sm font-semibold {{ $isCompleted ? 'text-gray-900 dark:text-white' : ($isCurrent ? 'text-indigo-700 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400') }}">{{ $step['label'] }}</p>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ $step['name'] }}</p>
-                                        @if($isCompleted && $step['at'])
-                                            <p class="text-[10px] text-gray-400 mt-0.5">{{ $step['at']->timezone('America/Mexico_City')->format('d/m/Y H:i') }}</p>
-                                            
-                                            @php
-                                                $stepOrder = $index + 1;
-                                                $isBulk = isset($reimbursement->validation_data['bulk_approved_steps']) && 
-                                                          is_array($reimbursement->validation_data['bulk_approved_steps']) &&
-                                                          in_array($stepOrder, $reimbursement->validation_data['bulk_approved_steps']);
-                                            @endphp
-                                            
-                                            @if($isBulk)
-                                                <div class="mt-1 flex items-center space-x-1">
-                                                    <svg class="w-2 h-2 text-amber-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
-                                                    <span class="text-[8px] font-black text-amber-600 uppercase tracking-widest italic">Aprobado de manera masiva</span>
-                                                </div>
-                                            @endif
+                                        <p class="text-sm font-semibold {{ $isCompleted ? 'text-gray-900 dark:text-white' : ($isCurrent ? 'text-indigo-700 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500') }}">{{ $step->name }}</p>
+                                        <p class="text-[10px] text-gray-500 dark:text-gray-400">{{ $step->user->name ?? 'No asignado' }}</p>
+                                        
+                                        @if($approvalLog)
+                                            <p class="text-[9px] text-gray-400 mt-0.5">{{ $approvalLog->created_at->timezone('America/Mexico_City')->format('d/m/Y H:i') }}</p>
                                         @elseif($isCurrent)
-                                            <span class="inline-flex items-center px-2 py-0.5 mt-1 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">ACCIÓN REQUERIDA</span>
+                                            <span class="inline-flex items-center px-2 py-0.5 mt-1 rounded text-[9px] font-black bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">TURNO ACTUAL</span>
                                         @endif
                                     </div>
                                 </div>
@@ -560,34 +525,66 @@
                         </div>
                     </div>
 
-                    <!-- Bitácora Notes -->
-                    @if($reimbursement->observaciones)
+                    <!-- Bitácora de Auditoría Profesional -->
                     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 p-6 dark:border-gray-700">
                         <h3 class="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3 mb-4 flex items-center dark:text-white dark:border-gray-700">
-                            <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
-                            Historial de Comentarios
+                            <svg class="w-4 h-4 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                            Historial de Movimientos
                         </h3>
-                        <ul class="space-y-4">
-                            @foreach(array_reverse(explode("\n", $reimbursement->observaciones)) as $observation)
-                                @if(trim($observation))
-                                    @php
-                                        if (str_contains($observation, '[MASIVO]') && !\Auth::user()->isAdmin()) {
-                                            continue;
-                                        }
-                                        preg_match('/el \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/', $observation, $matches);
-                                        $timestamp = $matches[0] ?? '';
-                                        $content = trim(str_replace($timestamp, '', $observation));
-                                        $isErr = str_contains($content, 'RECHAZADO') || str_contains($content, 'REQUIERE CORRECCIÓN');
-                                    @endphp
-                                    <li class="bg-gray-50 rounded-lg p-3 text-sm dark:bg-gray-900/50">
-                                        <p class="text-gray-700 dark:text-gray-300 {{ $isErr ? 'text-red-700 dark:text-red-400 font-medium' : '' }}">{{ $content }}</p>
-                                        <p class="text-xs text-gray-400 mt-2">{{ str_replace('el ', '', $timestamp) }}</p>
+                        <div class="flow-root">
+                            <ul role="list" class="-mb-8">
+                                @forelse($reimbursement->approvals as $approval)
+                                    <li>
+                                        <div class="relative pb-8">
+                                            @if (!$loop->last)
+                                                <span class="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200 dark:bg-gray-700" aria-hidden="true"></span>
+                                            @endif
+                                            <div class="relative flex space-x-3">
+                                                <div>
+                                                    <span class="h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white dark:ring-gray-800 {{ 
+                                                        $approval->action === 'aprobado' ? 'bg-green-500' : 
+                                                        ($approval->action === 'rechazado' ? 'bg-red-500' : 
+                                                        ($approval->action === 'requiere_correccion' ? 'bg-amber-500' : 'bg-indigo-500'))
+                                                    }}">
+                                                        @if($approval->action === 'aprobado')
+                                                            <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                                        @elseif($approval->action === 'rechazado')
+                                                            <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                        @else
+                                                            <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                                        @endif
+                                                    </span>
+                                                </div>
+                                                <div class="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
+                                                    <div>
+                                                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                                                            <span class="font-bold text-gray-900 dark:text-white">{{ $approval->user->name ?? 'Sistema' }}</span>
+                                                            {{ str_replace('_', ' ', $approval->action) }} en el paso 
+                                                            <span class="font-medium text-indigo-600 dark:text-indigo-400">{{ $approval->step_name }}</span>
+                                                            @if($approval->is_bulk)
+                                                                <span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-[4px] text-[8px] font-black bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 uppercase tracking-tighter">
+                                                                    <svg class="w-2.5 h-2.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                                                                    Aprobación Masiva
+                                                                </span>
+                                                            @endif
+                                                        </p>
+                                                        @if($approval->comment)
+                                                            <p class="mt-1 text-xs text-gray-600 dark:text-gray-300 italic">"{{ $approval->comment }}"</p>
+                                                        @endif
+                                                    </div>
+                                                    <div class="whitespace-nowrap text-right text-xs text-gray-400">
+                                                        <time datetime="{{ $approval->created_at }}">{{ $approval->created_at->format('d M, H:i') }}</time>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </li>
-                                @endif
-                            @endforeach
-                        </ul>
+                                @empty
+                                    <p class="text-xs text-gray-500 text-center py-4 italic border-t border-gray-100 dark:border-gray-800">No hay movimientos registrados.</p>
+                                @endforelse
+                            </ul>
+                        </div>
                     </div>
-                    @endif
 
                 </div>
             </div>

@@ -142,4 +142,9 @@ class User extends Authenticatable
                     ->withPivot('can_do_special')
                     ->withTimestamps();
     }
+
+    public function reimbursementApprovals()
+    {
+        return $this->hasMany(ReimbursementApproval::class);
+    }
 }
