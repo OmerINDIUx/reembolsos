@@ -536,9 +536,23 @@
                                         <p class="text-sm font-semibold {{ $isCompleted ? 'text-gray-900 dark:text-white' : ($isCurrent ? 'text-indigo-700 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400') }}">{{ $step['label'] }}</p>
                                         <p class="text-xs text-gray-500 dark:text-gray-400">{{ $step['name'] }}</p>
                                         @if($isCompleted && $step['at'])
-                                            <p class="text-[10px] text-gray-400 mt-0.5">{{ $step['at']->format('d/m/Y H:i') }}</p>
+                                            <p class="text-[10px] text-gray-400 mt-0.5">{{ $step['at']->timezone('America/Mexico_City')->format('d/m/Y H:i') }}</p>
+                                            
+                                            @php
+                                                $stepOrder = $index + 1;
+                                                $isBulk = isset($reimbursement->validation_data['bulk_approved_steps']) && 
+                                                          is_array($reimbursement->validation_data['bulk_approved_steps']) &&
+                                                          in_array($stepOrder, $reimbursement->validation_data['bulk_approved_steps']);
+                                            @endphp
+                                            
+                                            @if($isBulk)
+                                                <div class="mt-1 flex items-center space-x-1">
+                                                    <svg class="w-2 h-2 text-amber-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+                                                    <span class="text-[8px] font-black text-amber-600 uppercase tracking-widest italic">Aprobado de manera masiva</span>
+                                                </div>
+                                            @endif
                                         @elseif($isCurrent)
-                                            <span class="inline-flex items-center px-2 py-0.5 mt-1 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">ACCION REQUERIDA</span>
+                                            <span class="inline-flex items-center px-2 py-0.5 mt-1 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">ACCIÓN REQUERIDA</span>
                                         @endif
                                     </div>
                                 </div>

@@ -1664,6 +1664,17 @@ class ReimbursementController extends Controller
                         $data['status'] = 'aprobado';
                     }
                 }
+                
+                // Track bulk approval step in validation_data
+                $valData = $reimbursement->validation_data ?? [];
+                if (!isset($valData['bulk_approved_steps'])) {
+                    $valData['bulk_approved_steps'] = [];
+                }
+                $stepOrder = $currentStep->order ?? 1;
+                if (!in_array($stepOrder, $valData['bulk_approved_steps'])) {
+                    $valData['bulk_approved_steps'][] = $stepOrder;
+                }
+                $data['validation_data'] = $valData;
             }
 
             $reimbursement->update($data);
