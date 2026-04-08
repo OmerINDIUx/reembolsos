@@ -216,7 +216,8 @@
                                 
                                 <div class="flex items-center space-x-5">
                                     <div class="flex items-center justify-center w-10 h-10 border border-transparent">
-                                        <input type="checkbox" value="{{ $r->id }}" x-model="selectedIds" data-amount="{{ $r->total }}" data-has-uuid="{{ $r->uuid ? '1' : '0' }}" data-mismatch="{{ (!$uuidMatch || !$totalMatch) ? '1' : '0' }}" @click.stop class="w-6 h-6 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200 cursor-pointer" />
+                                        <input type="checkbox" value="{{ $r->id }}" x-model="selectedIds" data-amount="{{ $r->total }}" data-has-uuid="{{ $r->uuid ? '1' : '0' }}" data-mismatch="{{ (!$uuidMatch || !$totalMatch) ? '1' : '0' }}" @click.stop class="reimbursement-checkbox w-6 h-6 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200 cursor-pointer" />
+
                                     </div>
                                     <div class="flex flex-col">
                                         <span class="text-[9px] font-black uppercase tracking-widest text-indigo-500 mb-0.5 block italic">{{ $compositeId }}</span>
@@ -636,6 +637,70 @@
                 
                 init() {
                     // Modal is now inline, no need to move it.
+                }
+            }));
+
+            Alpine.data('bulkAudit', () => ({
+                selectedIds: [],
+                openModal: false,
+                confirmed: false,
+                selectedAction: '',
+                selectAll: false,
+                
+                toggleAll() {
+                    if (this.selectAll) {
+                        const checkboxes = document.querySelectorAll('.reimbursement-checkbox');
+                        checkboxes.forEach(cb => {
+                            if (!this.selectedIds.includes(String(cb.value))) {
+                                this.selectedIds.push(String(cb.value));
+                            }
+                        });
+                    } else {
+                        this.selectedIds = [];
+                    }
+                },
+                
+                get selectedCount() {
+                    return this.selectedIds.length;
+                },
+                
+                get totalAmount() {
+                    let sum = 0;
+                    this.selectedIds.forEach(id => {
+                        const el = document.querySelector(`input[type="checkbox"][value="${id}"]`);
+                        if (el) sum += parseFloat(el.dataset.amount || 0);
+                    });
+                    return sum;
+                },
+                
+                get missingUuidCount() {
+                    let count = 0;
+                    this.selectedIds.forEach(id => {
+                        const el = document.querySelector(`input[type="checkbox"][value="${id}"]`);
+                        if (el && el.dataset.hasUuid === '0') count++;
+                    });
+                    return count;
+                },
+                
+                get mismatchCount() {
+                    let count = 0;
+                    this.selectedIds.forEach(id => {
+                        const el = document.querySelector(`input[type="checkbox"][value="${id}"]`);
+                        if (el && el.dataset.mismatch === '1') count++;
+                    });
+                    return count;
+                },
+                
+                get totalAlerts() {
+                    return this.missingUuidCount + this.mismatchCount;
+                },
+                
+                formatMoney(amount) {
+                    return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                },
+                
+                init() {
+                    // Modal is now inline.
                 }
             }));
         });
