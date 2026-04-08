@@ -30,15 +30,9 @@
                                 Aprobación Masiva (CSV)
                             </button>
                             @endif
-                            @if(Auth::user()->isAdmin())
                              <a href="{{ route('reimbursements.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
-                                 Nuevo Reembolso (Admin)
+                                 Nuevo Reembolso
                             </a>
-                            @else
-                            <span class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 border border-transparent rounded-md font-semibold text-xs text-gray-500 dark:text-gray-400 uppercase tracking-widest cursor-not-allowed">
-                                Recepción Cerrada
-                            </span>
-                            @endif
 
                         </div>
                     </div>

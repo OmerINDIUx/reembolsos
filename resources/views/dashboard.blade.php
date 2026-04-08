@@ -28,17 +28,10 @@
                 
                 @if(!Auth::user()->isAdminView())
                 <div class="flex gap-3">
-                    @if(Auth::user()->isAdmin())
                     <a href="{{ route('reimbursements.create') }}" class="inline-flex items-center px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-indigo-500/30">
                         <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                        Nuevo Reembolso (Admin)
+                        Nuevo Reembolso
                     </a>
-                    @else
-                    <div class="inline-flex items-center px-5 py-2.5 bg-amber-50 text-amber-700 border border-amber-200 font-bold rounded-xl shadow-sm">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        Recepción Cerrada
-                    </div>
-                    @endif
                 </div>
                 @endif
             </div>
@@ -432,16 +425,10 @@
                     <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-indigo-600/40 relative overflow-hidden group">
                         <div class="relative z-10">
                             <h4 class="text-2xl font-black mb-4 leading-none tracking-tighter">¿Nuevo Gasto?</h4>
-                            <p class="text-indigo-100 text-xs mb-8 font-bold leading-relaxed opacity-80 group-hover:opacity-100 transition-opacity">La plataforma se encuentra en mantenimiento preventivo. La recepción de nuevos comprobantes se reanudará en la v1.</p>
-                            @if(Auth::user()->isAdmin())
+                            <p class="text-indigo-100 text-xs mb-8 font-bold leading-relaxed opacity-80 group-hover:opacity-100 transition-opacity">La plataforma se encuentra habilitada para la recepción de comprobantes. ¡Inicia tu solicitud ahora!</p>
                             <a href="{{ route('reimbursements.create') }}" class="inline-flex items-center justify-center w-full px-6 py-4 bg-white text-indigo-600 font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-indigo-50 transition-all transform hover:-translate-y-1 shadow-lg">
-                                Iniciar Solicitud (Admin) &rarr;
+                                Iniciar Solicitud &rarr;
                             </a>
-                            @else
-                            <a href="{{ route('reimbursements.index') }}" class="inline-flex items-center justify-center w-full px-6 py-4 bg-white/20 text-white font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-white/30 transition-all shadow-lg">
-                                Ver Mis Gastos &rarr;
-                            </a>
-                            @endif
                         </div>
                         <svg class="absolute -right-12 -bottom-12 w-48 h-48 text-white/5 opacity-40 group-hover:scale-110 transition-transform duration-700" fill="currentColor" viewBox="0 0 24 24"><path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                     </div>

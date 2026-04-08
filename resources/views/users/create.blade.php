@@ -33,6 +33,7 @@
                             <div>
                                 <label for="password_confirmation" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Confirmar Contraseña</label>
                                 <input type="password" name="password_confirmation" id="password_confirmation" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" required>
+                                <div id="password-match-msg" class="text-xs mt-1 hidden"></div>
                             </div>
                         </div>
 
@@ -80,5 +81,31 @@
     </div>
     
     @push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const password = document.getElementById('password');
+            const confirm = document.getElementById('password_confirmation');
+            const msg = document.getElementById('password-match-msg');
+
+            function checkMatch() {
+                if (password.value === '' && confirm.value === '') {
+                    msg.classList.add('hidden');
+                    return;
+                }
+
+                msg.classList.remove('hidden');
+                if (password.value === confirm.value) {
+                    msg.textContent = '✓ Las contraseñas coinciden';
+                    msg.className = 'text-xs mt-1 text-green-600 font-medium';
+                } else {
+                    msg.textContent = '✗ Las contraseñas no coinciden';
+                    msg.className = 'text-xs mt-1 text-red-600 font-medium';
+                }
+            }
+
+            password.addEventListener('input', checkMatch);
+            confirm.addEventListener('input', checkMatch);
+        });
+    </script>
     @endpush
 </x-app-layout>
