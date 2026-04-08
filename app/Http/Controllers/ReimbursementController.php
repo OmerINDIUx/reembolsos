@@ -218,7 +218,12 @@ class ReimbursementController extends Controller
                                 ->get();
 
         if (!$type || !in_array($type, $allowedTypes)) {
-            $isMarkedInAnyCC = $user->isAdmin() || $user->authorizedCostCenters()->wherePivot('can_do_special', true)->exists();
+            $hasActiveTrip = \App\Models\TravelEvent::where('status', 'active')
+                ->whereHas('participants', function($q) use ($user) {
+                    $q->where('users.id', $user->id);
+                })->exists();
+
+            $isMarkedInAnyCC = $user->isAdmin() || $hasActiveTrip || $user->authorizedCostCenters()->wherePivot('can_do_special', true)->exists();
             return view('reimbursements.select_type', compact('drafts', 'isMarkedInAnyCC'));
         }
 
@@ -241,17 +246,17 @@ class ReimbursementController extends Controller
                 $inheritedCCs = CostCenter::whereIn('id', $eventCCIds)->with('beneficiary')->get();
                 foreach($inheritedCCs as $icc) {
                     if (!$costCenters->contains('id', $icc->id)) {
-                        // Attach a virtual pivot so they are treated as authorized/marked for the purposes of view logic
+                        // Attach a virtual pivot so they are treated as authorized/marked if it's a travel type
                         $icc->setRelation('pivot', new \Illuminate\Database\Eloquent\Relations\Pivot([
-                            'can_do_special' => true,
+                            'can_do_special' => ($type === 'viaje'),
                             'cost_center_id' => $icc->id,
                             'user_id' => $user->id
                         ]));
                         $costCenters->push($icc);
                     } else {
-                        // If already present but not marked, promote them to marked if they are in an event
+                        // If already present but not marked, promote them ONLY if they are in an event AND type is viaje
                         $existing = $costCenters->firstWhere('id', $icc->id);
-                        if (!$existing->pivot->can_do_special) {
+                        if ($type === 'viaje' && !$existing->pivot->can_do_special) {
                             $existing->pivot->can_do_special = true;
                         }
                     }
@@ -278,15 +283,7 @@ class ReimbursementController extends Controller
                     return $isMarked;
                 }
 
-                // Standard reimbursement: unmarked users can only have ONE (none pending/approved)
-                if (!$isMarked) {
-                    $hasExisting = Reimbursement::where('cost_center_id', $cc->id)
-                        ->where('user_id', $user->id)
-                        ->where('status', '!=', 'rechazado')
-                        ->exists();
-                    return !$hasExisting;
-                }
-
+                // Standard reimbursement: unmarked users can create as many as needed
                 return true;
             });
         }
@@ -2427,7 +2424,9 @@ class ReimbursementController extends Controller
             $event = \App\Models\TravelEvent::find($travelEventId);
             if ($event && $event->status === 'active' && $event->participants()->where('users.id', $user->id)->exists()) {
                 $isAuthorized = true;
-                $isMarked = true; // Event participants behave as "marked" users for event expenses
+                if ($type === 'viaje') {
+                    $isMarked = true; // Event participants inherit "marked" status ONLY for travel expenses
+                }
             }
         }
 
@@ -2438,15 +2437,7 @@ class ReimbursementController extends Controller
             return (bool)$isMarked;
         }
 
-        // Standard reimbursement: unmarked users can only have ONE (none pending/approved)
-        if (!$isMarked) {
-            $hasExisting = Reimbursement::where('cost_center_id', $cc->id)
-                ->where('user_id', $user->id)
-                ->where('status', '!=', 'rechazado')
-                ->exists();
-            return !$hasExisting;
-        }
-
+        // Standard reimbursement: unmarked users can create as many as needed
         return true;
     }
 
