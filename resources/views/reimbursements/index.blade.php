@@ -26,6 +26,10 @@
                         <h3 class="text-lg font-medium">Listado de Reembolsos</h3>
                         <div class="flex space-x-2">
                             @if($user->isAdmin() || $user->isTreasury() || $user->isCxp())
+                            <button type="button" x-data @click="$dispatch('open-caratula-pdf-modal')" class="inline-flex items-center px-4 py-2 bg-emerald-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-emerald-500 focus:bg-emerald-700 active:bg-emerald-900 transition ease-in-out duration-150">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                Descargar Carátulas (PDF)
+                            </button>
                             <button type="button" x-data @click="$dispatch('open-bulk-approval-modal')" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
                                 Aprobación Masiva (CSV)
                             </button>
@@ -227,6 +231,12 @@
                                     
                                     <div x-show="selectedGroupCount > 0" x-transition.opacity class="flex items-center space-x-4">
                                         <span class="text-xs font-black text-indigo-600 uppercase tracking-widest" x-text="selectedGroupCount + ' Seleccionados'"></span>
+                                        
+                                        <button type="button" @click="downloadCaratula()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-emerald-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                            <span>Descargar Carátula</span>
+                                        </button>
+
                                         <button type="button" @click="openModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                                             <span>Acción Masiva</span>
@@ -899,6 +909,11 @@
                 formatMoney(amount) {
                     return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 },
+
+                downloadCaratula() {
+                    const ids = this.selectedIds.join(',');
+                    window.location.href = `{{ route('reimbursements.download_caratula') }}?ids=${ids}`;
+                },
                 
                 init() {
                     // Modal now handled inline with the partial.
@@ -906,4 +921,68 @@
             }));
         });
     </script>
+    <!-- Caratula PDF Modal -->
+    <div x-data="{ open: false, week: '', cost_center_id: '' }" 
+         @open-caratula-pdf-modal.window="open = true" 
+         x-show="open" 
+         class="fixed z-50 inset-0 overflow-y-auto" 
+         style="display: none;">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="open = false" aria-hidden="true"></div>
+            <div class="inline-block bg-white dark:bg-gray-800 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full border border-gray-100 dark:border-gray-700">
+                <div class="p-8">
+                    <div class="flex items-center space-x-4 mb-6">
+                        <div class="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-black text-gray-900 dark:text-white tracking-tight leading-none">Generar Carátulas PDF</h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Consolidado de reembolsos y comprobantes.</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-5">
+                        <!-- Semana -->
+                        <div>
+                            <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Semana Fiscal</label>
+                            @php
+                                $pdfWeeks = \App\Models\Reimbursement::select('week')->whereNotNull('week')->distinct()->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")->orderByRaw("SUBSTRING_INDEX(week, '-', 1) DESC")->pluck('week');
+                            @endphp
+                            <select x-model="week" class="w-full rounded-xl border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 text-sm font-bold">
+                                <option value="">Todas las semanas</option>
+                                @foreach($pdfWeeks as $pw)
+                                    <option value="{{ $pw }}">Semana {{ $pw }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <!-- Centro de Costos -->
+                        <div>
+                            <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Centro de Costos / Obra</label>
+                            @php
+                                $pdfCCs = \App\Models\CostCenter::orderBy('name')->get();
+                            @endphp
+                            <select x-model="cost_center_id" class="w-full rounded-xl border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 text-sm font-bold">
+                                <option value="">Todos los centros</option>
+                                @foreach($pdfCCs as $pcc)
+                                    <option value="{{ $pcc->id }}">{{ $pcc->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mt-8 flex flex-col space-y-3">
+                        <button type="button" 
+                                @click="window.location.href = `{{ route('reimbursements.download_caratula') }}?week=${week}&cost_center_id=${cost_center_id}&tab={{ request('tab', 'management') }}`; open = false" 
+                                class="w-full inline-flex justify-center rounded-xl px-4 py-3 bg-emerald-600 text-sm font-black text-white uppercase tracking-widest hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100 dark:shadow-none">
+                            Descargar Carátula PDF
+                        </button>
+                        <button type="button" @click="open = false" class="text-xs font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-colors pb-2">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </x-app-layout>

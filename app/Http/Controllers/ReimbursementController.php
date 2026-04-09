@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Smalot\PdfParser\Parser;
 use App\Services\NotificationBatchService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use setasign\Fpdi\Fpdi;
 
 class ReimbursementController extends Controller
 {
@@ -2087,6 +2089,285 @@ class ReimbursementController extends Controller
         }
         
         abort(404);
+    }
+
+    /**
+     * Download a consolidated PDF cover sheet for multiple reimbursements.
+     */
+    public function downloadCaratula(Request $request)
+    {
+        set_time_limit(600);
+        ini_set('memory_limit', '512M');
+
+        $ids = $request->input('ids');
+        if ($ids) {
+            $idsArr = is_array($ids) ? $ids : explode(',', $ids);
+            $query = Reimbursement::whereIn('id', $idsArr);
+        } else {
+            // Fallback to filters
+            $user = Auth::user();
+            $tab = $request->input('tab', 'management');
+            $query = Reimbursement::with(['user', 'costCenter'])
+                ->where('status', '!=', 'borrador');
+            $this->applyTabScope($query, $tab, $user);
+
+            if ($request->filled('week')) $query->where('week', $request->week);
+
+            if ($request->filled('cc')) {
+                $query->whereHas('costCenter', fn($q) => $q->where('name', $request->cc));
+            }
+            if ($request->filled('cost_center_id')) {
+                $query->where('cost_center_id', $request->cost_center_id);
+            }
+
+            if ($request->filled('type')) $query->where('type', $request->type);
+
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
+
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('folio', 'like', "%{$search}%")
+                      ->orWhere('uuid', 'like', "%{$search}%")
+                      ->orWhere('nombre_emisor', 'like', "%{$search}%")
+                      ->orWhere('title', 'like', "%{$search}%");
+                });
+            }
+
+            if ($request->filled('from_date') || $request->filled('to_date')) {
+                $fromDate = $request->from_date;
+                $toDate = $request->to_date;
+                $query->where(function($q) use ($fromDate, $toDate) {
+                    if ($fromDate && $toDate) {
+                        $q->whereBetween('created_at', [$fromDate . ' 00:00:00', $toDate . ' 23:59:59'])
+                          ->orWhereBetween('fecha', [$fromDate, $toDate]);
+                    } elseif ($fromDate) {
+                        $q->whereDate('created_at', '>=', $fromDate)
+                          ->orWhereDate('fecha', '>=', $fromDate);
+                    } elseif ($toDate) {
+                        $q->whereDate('created_at', '<=', $toDate)
+                          ->orWhereDate('fecha', '<=', $toDate);
+                    }
+                });
+            }
+
+            if ($request->filled('travel_event_id')) {
+                $query->where('travel_event_id', $request->travel_event_id);
+            }
+        }
+
+        $reimbursements = $query->with(['payee', 'costCenter', 'files', 'children', 'children.files'])->get();
+
+        if ($reimbursements->isEmpty()) {
+            return back()->with('error', 'No se encontraron reembolsos para generar la carátula.');
+        }
+
+        // Group by Payee and Cost Center
+        $groups = $reimbursements->groupBy(function($r) {
+            return $r->payee_id . '-' . $r->cost_center_id;
+        });
+
+        $pdf = new Fpdi();
+        $tempFiles = [];
+
+        foreach ($groups as $groupKey => $groupItems) {
+            $first = $groupItems->first();
+            $payee = $first->payee ?: $first->user;
+            $costCenter = $first->costCenter;
+            $week = $first->week;
+
+            // Prepare summary data for the cover page
+            $groupedByTypeAndCat = $groupItems->groupBy(function($item) {
+                return $item->type . '-' . $item->category;
+            })->map(function($items) {
+                return [
+                    'type' => $items->first()->type,
+                    'category' => $items->first()->category,
+                    'subtotal' => $items->sum('subtotal'),
+                    'impuestos' => $items->sum('impuestos'),
+                    'total' => $items->sum('total'),
+                ];
+            });
+
+            $totals = [
+                'subtotal' => $groupItems->sum('subtotal'),
+                'impuestos' => $groupItems->sum('impuestos'),
+                'total' => $groupItems->sum('total'),
+            ];
+
+            // Render Cover Page PDF
+            $html = view('reimbursements.pdf.caratula', [
+                'payee' => $payee,
+                'costCenter' => $costCenter,
+                'week' => $week,
+                'date' => now()->format('d/m/Y H:i'),
+                'groupedItems' => $groupedByTypeAndCat,
+                'totals' => $totals,
+                'count' => $groupItems->count(),
+            ])->render();
+
+            $coverPdf = Pdf::loadHTML($html)->output();
+            $coverPath = tempnam(sys_get_temp_dir(), 'cover_');
+            file_put_contents($coverPath, $coverPdf);
+            $tempFiles[] = $coverPath;
+
+            // Add Cover Page to FPDI
+            $pageCount = $pdf->setSourceFile($coverPath);
+            for ($i = 1; $i <= $pageCount; $i++) {
+                $pageId = $pdf->importPage($i);
+                $pdf->addPage();
+                $pdf->useTemplate($pageId);
+            }
+
+            // Append each reimbursement's attachments (Parent and Children)
+            foreach ($groupItems as $reimbursement) {
+                // Add Parent
+                $this->processReimbursementAttachments($pdf, $reimbursement);
+                
+                // Add Children (individual expenses in trips/funds)
+                if ($reimbursement->children->count() > 0) {
+                    foreach ($reimbursement->children as $child) {
+                        $this->processReimbursementAttachments($pdf, $child);
+                    }
+                }
+            }
+        }
+
+        // Cleanup temp files
+        foreach ($tempFiles as $file) {
+            @unlink($file);
+        }
+
+        $outputName = 'CARATULAS_' . now()->format('Ymd_His') . '.pdf';
+        return response($pdf->Output('S'), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $outputName . '"'
+        ]);
+    }
+
+    /**
+     * Process all attachments for a single reimbursement record.
+     */
+    private function processReimbursementAttachments($pdf, $reimbursement) {
+        $itemTitle = "FOLIO: " . ($reimbursement->true_folio ?? ('ID-'.$reimbursement->id)) . " | " . ($reimbursement->title ?? ($reimbursement->category ?? 'COMPROBANTE'));
+        
+        // 1. PDF Attachment
+        if ($reimbursement->pdf_path && Storage::exists($reimbursement->pdf_path)) {
+            $path = Storage::path($reimbursement->pdf_path);
+            $mime = Storage::mimeType($reimbursement->pdf_path);
+            
+            if (str_contains($mime, 'pdf')) {
+                try {
+                    $reimPageCount = $pdf->setSourceFile($path);
+                    for ($i = 1; $i <= $reimPageCount; $i++) {
+                        $pageId = $pdf->importPage($i);
+                        $pdf->addPage();
+                        $pdf->useTemplate($pageId);
+                        
+                        // Overlay Title - High Visibility
+                        $pdf->SetFillColor(79, 70, 229); // Indigo
+                        $pdf->SetTextColor(255, 255, 255);
+                        $pdf->SetFont('Arial', 'B', 7);
+                        $pdf->SetXY(10, 3);
+                        $pdf->Cell(190, 5, utf8_decode($itemTitle . " (PAG. $i)"), 0, 0, 'R', true);
+                    }
+                } catch (\Exception $e) {
+                    Log::error("FPDI merge error (PDF): " . $e->getMessage());
+                }
+            } else {
+                $this->addImageToPdf($pdf, $path, $itemTitle);
+            }
+        }
+
+        // 2. Ticket Attachment
+        if ($reimbursement->ticket_path && Storage::exists($reimbursement->ticket_path) && $reimbursement->ticket_path !== $reimbursement->pdf_path) {
+            $path = Storage::path($reimbursement->ticket_path);
+            $this->addImageToPdf($pdf, $path, $itemTitle . " [TICKET]");
+        }
+
+        // 3. Extra files
+        foreach($reimbursement->files as $extra) {
+            if (Storage::exists($extra->file_path)) {
+                $path = Storage::path($extra->file_path);
+                $mime = $extra->mime_type;
+                $extraTitle = $itemTitle . " [" . strtoupper($extra->original_name ?? 'ANEXO') . "]";
+                if (str_contains($mime, 'pdf')) {
+                    try {
+                        $extraPageCount = $pdf->setSourceFile($path);
+                        for ($i = 1; $i <= $extraPageCount; $i++) {
+                            $pageId = $pdf->importPage($i);
+                            $pdf->addPage();
+                            $pdf->useTemplate($pageId);
+                            
+                            // Overlay Title
+                            $pdf->SetFillColor(79, 70, 229);
+                            $pdf->SetTextColor(255, 255, 255);
+                            $pdf->SetFont('Arial', 'B', 7);
+                            $pdf->SetXY(10, 3);
+                            $pdf->Cell(190, 5, utf8_decode($extraTitle . " (PAG. $i)"), 0, 0, 'R', true);
+                        }
+                    } catch (\Exception $e) {
+                        Log::error("FPDI merge error (Extra PDF): " . $e->getMessage());
+                    }
+                } else {
+                    $this->addImageToPdf($pdf, $path, $extraTitle);
+                }
+            }
+        }
+    }
+
+    /**
+     * Helper to add a scaled image to the PDF that fits on one page.
+     */
+    private function addImageToPdf($pdf, $path, $title = '')
+    {
+        try {
+            list($width, $height) = getimagesize($path);
+            if (!$width || !$height) {
+                $pdf->addPage();
+                $pdf->Image($path, 10, 10, 190);
+                return;
+            }
+
+            $maxWidth = 190;
+            $maxHeight = 245; // Reduced for larger header
+            $ratio = $width / $height;
+            
+            $w = $maxWidth;
+            $h = $w / $ratio;
+            
+            if ($h > $maxHeight) {
+                $h = $maxHeight;
+                $w = $h * $ratio;
+            }
+            
+            $pdf->addPage();
+            
+            // Add Prominent Title Bar
+            if ($title) {
+                $pdf->SetFillColor(243, 244, 246); // Gray 100
+                $pdf->Rect(10, 10, 190, 12, 'F');
+                $pdf->SetDrawColor(79, 70, 229); // Indigo 600
+                $pdf->Line(10, 10, 10, 22); // Left accent line
+                
+                $pdf->SetFont('Arial', 'B', 10);
+                $pdf->SetTextColor(31, 41, 55); // Gray 800
+                $pdf->SetXY(15, 12.5);
+                $pdf->Cell(180, 7, utf8_decode($title), 0, 1, 'L');
+                $yOffset = 25;
+            } else {
+                $yOffset = 10;
+            }
+
+            $x = (210 - $w) / 2;
+            $pdf->Image($path, $x, $yOffset, $w, $h);
+        } catch (\Exception $e) {
+            Log::error("FPDF Image Error: " . $e->getMessage());
+            $pdf->addPage();
+            $pdf->Image($path, 10, 10, 190);
+        }
     }
 
     /**
