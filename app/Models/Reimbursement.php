@@ -184,7 +184,13 @@ class Reimbursement extends Model
         $typeAbbr = strtoupper(substr($this->type ?? 'REE', 0, 3));
         $ccAbbr = $this->costCenter ? ($this->costCenter->abbreviation ?? 'SCC') : 'SCC';
         $year = $this->fecha ? $this->fecha->format('Y') : ($this->created_at ? $this->created_at->format('Y') : date('Y'));
+        
+        // Extract only the week number if it contains a year (format W-Y)
         $week = $this->week ?? '00';
+        if (str_contains($week, '-')) {
+            $week = explode('-', $week)[0];
+        }
+
         return "{$ccAbbr}-{$typeAbbr}-{$year}-{$week}-" . str_pad($this->id, 3, '0', STR_PAD_LEFT);
     }
 }
