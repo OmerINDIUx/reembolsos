@@ -662,8 +662,14 @@
                         </div>
                         
                         <div class="flex flex-col items-center space-y-4">
-                            <div x-show="lastAutoSave" x-cloak class="text-[10px] font-black text-gray-400 uppercase tracking-widest animate-pulse">
-                                <span class="text-green-500">●</span> Guardado autom. <span x-text="lastAutoSave"></span>
+                            <div class="flex flex-col items-center space-y-1">
+                                <div class="flex items-center space-x-2 text-[10px] font-black text-gray-400 uppercase tracking-widest opacity-80">
+                                    <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    <span>Se auto-guarda cada 30 segundos</span>
+                                </div>
+                                <div x-show="lastAutoSave" x-cloak class="text-[9px] font-black text-gray-400 uppercase tracking-widest animate-pulse">
+                                    <span class="text-green-500">●</span> Última sincronización: <span x-text="lastAutoSave"></span>
+                                </div>
                             </div>
                             <div class="flex items-center space-x-4">
                                 <button type="button" @click="saveDraft(false)" 
