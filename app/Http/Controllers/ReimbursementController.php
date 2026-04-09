@@ -1293,6 +1293,10 @@ class ReimbursementController extends Controller
 
             $data = [];
 
+            if (!$reimbursement->canBeApprovedBy($user)) {
+                return back()->with('error', 'No tienes permiso para realizar esta acción en este momento.');
+            }
+
             if ($request->status === 'rechazado' || $request->status === 'requiere_correccion') {
                  // Append rejection/correction reason
                  $currentObs = $reimbursement->observaciones;
@@ -1305,28 +1309,34 @@ class ReimbursementController extends Controller
                  $data['status'] = $request->status;
             } elseif ($request->status === 'aprobado') {
                 // DYNAMIC APPROVAL LOGIC
-                $currentStep = $reimbursement->currentStep;
-                if (($currentStep && $user->id === $currentStep->user_id) || $user->isAdmin()) {
-                    // Record approval in legacy columns if possible (order 1-6)
-                    $this->mapApprovalData($currentStep->order ?? 1, $user->id, $data);
-                    
-                    // Find next step
-                    $nextStep = $reimbursement->costCenter->approvalSteps()
-                        ->where('order', '>', $currentStep->order ?? 0)
-                        ->orderBy('order', 'asc')
-                        ->first();
-                        
-                    if ($nextStep) {
-                        $data['current_step_id'] = $nextStep->id;
-                        $data['status'] = 'pendiente'; // Or something better, but status names are tied to steps in current views
+                if ($reimbursement->canBeApprovedBy($user)) {
+                    if ($reimbursement->status === 'pendiente_pago') {
+                        // Keep current status to pass to handleDynamicApprovals which finalizes it
+                        $data['status'] = 'aprobado'; 
                     } else {
-                        $data['current_step_id'] = null;
-                        $data['status'] = 'pendiente_pago'; // Move to Accounting funnel instead of final Paid
+                        $currentStep = $reimbursement->currentStep;
+                        // Record approval in legacy columns if possible (order 1-6)
+                        $this->mapApprovalData($currentStep->order ?? 1, $user->id, $data);
+                        
+                        // Find next step
+                        $nextStep = $reimbursement->costCenter->approvalSteps()
+                            ->where('order', '>', $currentStep->order ?? 0)
+                            ->orderBy('order', 'asc')
+                            ->first();
+                            
+                        if ($nextStep) {
+                            $data['current_step_id'] = $nextStep->id;
+                            $data['status'] = 'pendiente'; // Move forward in workflow
+                        } else {
+                            $data['current_step_id'] = null;
+                            $data['status'] = 'pendiente_pago'; // Move to Accounting funnel instead of final Paid
+                        }
                     }
                 }
             }
         }
 
+        $originalStatus = $reimbursement->status;
         $reimbursement->update($data);
 
         // RECORD INITIAL AUDIT LOG (for the direct action taken by the user)
@@ -1346,7 +1356,7 @@ class ReimbursementController extends Controller
             ]);
         } elseif ($request->status === 'aprobado' && !isset($data['error'])) {
             // Check for Auto-Approvals for non-consecutive or consecutive levels
-            $this->handleDynamicApprovals($reimbursement, $user);
+            $this->handleDynamicApprovals($reimbursement, $user, false, $originalStatus);
         }
 
         // DYNAMIC NOTIFICATIONS
@@ -2185,7 +2195,7 @@ class ReimbursementController extends Controller
     /**
      * Recursive/Iterative logic to handle auto-approvals based on historical or current user identity.
      */
-    private function handleDynamicApprovals(\App\Models\Reimbursement $reimbursement, $user, $isBulk = false)
+    private function handleDynamicApprovals(\App\Models\Reimbursement $reimbursement, $user, $isBulk = false, $originalStatus = null)
     {
         // 1. Record the approval for the STEP the user is technically in right now
         // This is the "Manual" approval that triggered the chain
@@ -2200,7 +2210,8 @@ class ReimbursementController extends Controller
         ]);
 
         // 2. If it was in the CXP final funnel, this approval FINISHES the entire document
-        if ($reimbursement->status === 'pendiente_pago') {
+        $statusToCheck = $originalStatus ?? $reimbursement->status;
+        if ($statusToCheck === 'pendiente_pago') {
             $reimbursement->update([
                 'status' => 'aprobado'
             ]);
@@ -2481,7 +2492,7 @@ class ReimbursementController extends Controller
                         $sq->where('user_id', $user->id);
                     });
                     
-                    if ($user->isCxp()) {
+                    if ($user->isCxp() || $user->isTreasury()) {
                         $q->orWhere('status', 'pendiente_pago');
                     }
                 });

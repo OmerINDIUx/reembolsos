@@ -18,9 +18,8 @@ foreach($batches as $b) {
 }
 
 
-echo "\nRecent Reimbursements (last 2h):\n";
-foreach($reimbursements as $r) {
-    $approver = $r->currentStep ? ($r->currentStep->user ? $r->currentStep->user->email : 'No user in step') : 'No step';
-    echo "ID: " . $r->id . ", Folio: " . $r->folio . ", Status: " . $r->status . ", Approver: " . $approver . ", CreatedAt: " . $r->created_at . "\n";
+$users = App\Models\User::all();
+foreach($users as $u) {
+    echo "Email: " . $u->email . ", Role: " . $u->role . "\n";
 }
 

@@ -163,9 +163,9 @@ class Reimbursement extends Model
     {
         if ($user->isAdmin()) return true;
 
-        // NEW: Shared Funnel for Accounts Payable (CXP)
+        // NEW: Shared Funnel for Accounts Payable (CXP) and Treasury
         if ($this->status === 'pendiente_pago') {
-            return $user->isCxp();
+            return $user->isCxp() || $user->isTreasury();
         }
         
         // Re-calculate currentStep if not loaded
