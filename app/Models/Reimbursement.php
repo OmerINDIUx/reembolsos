@@ -6,7 +6,19 @@ use Illuminate\Database\Eloquent\Model;
 
 class Reimbursement extends Model
 {
-    //
+    protected static function booted()
+    {
+        static::created(function ($reimbursement) {
+            // Sync folio with the composite format once ID is available
+            $reimbursement->folio = $reimbursement->true_folio;
+            $reimbursement->saveQuietly();
+        });
+
+        static::updating(function ($reimbursement) {
+            // Re-sync folio if categories or week change
+            $reimbursement->folio = $reimbursement->true_folio;
+        });
+    }
 
     protected $fillable = [
         'type',

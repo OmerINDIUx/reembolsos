@@ -353,10 +353,10 @@
                                     @endforeach
 
                                     <div class="col-span-1 md:col-span-2">
-                                        <label for="search_audit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar (Folio, UUID, Emisor, Título)</label>
+                                        <label for="search_audit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscador General</label>
                                         <input type="text" name="search_audit" id="search_audit" value="{{ request('search_audit') }}" 
                                                 class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
-                                                placeholder="Buscar...">
+                                                placeholder="Busca cualquier dato en esta auditoría...">
                                     </div>
 
                                     <div>

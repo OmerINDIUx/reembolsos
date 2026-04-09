@@ -172,7 +172,10 @@ class ReimbursementController extends Controller
                         str_contains(strtolower($r->folio), $s) || 
                         str_contains(strtolower($r->uuid), $s) || 
                         str_contains(strtolower($r->nombre_emisor), $s) || 
-                        str_contains(strtolower($r->title), $s)
+                        str_contains(strtolower($r->rfc_emisor), $s) || 
+                        str_contains(strtolower($r->title), $s) || 
+                        str_contains(strtolower($r->category), $s) || 
+                        str_contains(strtolower($r->observaciones), $s)
                     );
                 }
                 if ($request->filled('status_audit')) {
@@ -2215,6 +2218,7 @@ class ReimbursementController extends Controller
             return $r->payee_id . '-' . $r->cost_center_id;
         });
 
+        /** @var \setasign\Fpdi\Fpdi $pdf */
         $pdf = new Fpdi();
         $tempFiles = [];
 
@@ -2296,7 +2300,7 @@ class ReimbursementController extends Controller
     /**
      * Process all attachments for a single reimbursement record.
      */
-    private function processReimbursementAttachments($pdf, $reimbursement) {
+    private function processReimbursementAttachments(\setasign\Fpdi\Fpdi $pdf, $reimbursement) {
         $itemTitle = "FOLIO: " . ($reimbursement->true_folio ?? ('ID-'.$reimbursement->id)) . " | " . ($reimbursement->title ?? ($reimbursement->category ?? 'COMPROBANTE'));
         
         // 1. PDF Attachment
@@ -2317,7 +2321,7 @@ class ReimbursementController extends Controller
                         $pdf->SetTextColor(255, 255, 255);
                         $pdf->SetFont('Arial', 'B', 7);
                         $pdf->SetXY(10, 3);
-                        $pdf->Cell(190, 5, utf8_decode($itemTitle . " (PAG. $i)"), 0, 0, 'R', true);
+                        $pdf->Cell(190, 5, mb_convert_encoding($itemTitle . " (PAG. $i)", 'ISO-8859-1', 'UTF-8'), 0, 0, 'R', true);
                     }
                 } catch (\Exception $e) {
                     Log::error("FPDI merge error (PDF): " . $e->getMessage());
@@ -2352,7 +2356,7 @@ class ReimbursementController extends Controller
                             $pdf->SetTextColor(255, 255, 255);
                             $pdf->SetFont('Arial', 'B', 7);
                             $pdf->SetXY(10, 3);
-                            $pdf->Cell(190, 5, utf8_decode($extraTitle . " (PAG. $i)"), 0, 0, 'R', true);
+                            $pdf->Cell(190, 5, mb_convert_encoding($extraTitle . " (PAG. $i)", 'ISO-8859-1', 'UTF-8'), 0, 0, 'R', true);
                         }
                     } catch (\Exception $e) {
                         Log::error("FPDI merge error (Extra PDF): " . $e->getMessage());
@@ -2367,7 +2371,7 @@ class ReimbursementController extends Controller
     /**
      * Helper to add a scaled image to the PDF that fits on one page.
      */
-    private function addImageToPdf($pdf, $path, $title = '')
+    private function addImageToPdf(\setasign\Fpdi\Fpdi $pdf, $path, $title = '')
     {
         try {
             list($width, $height) = getimagesize($path);
@@ -2401,7 +2405,7 @@ class ReimbursementController extends Controller
                 $pdf->SetFont('Arial', 'B', 10);
                 $pdf->SetTextColor(31, 41, 55); // Gray 800
                 $pdf->SetXY(15, 12.5);
-                $pdf->Cell(180, 7, utf8_decode($title), 0, 1, 'L');
+                $pdf->Cell(180, 7, mb_convert_encoding($title, 'ISO-8859-1', 'UTF-8'), 0, 1, 'L');
                 $yOffset = 25;
             } else {
                 $yOffset = 10;
