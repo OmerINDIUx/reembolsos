@@ -182,16 +182,21 @@
                             </div>
 
                             <!-- Buttons -->
-                            <div class="col-span-1 md:col-span-6 flex justify-end space-x-2 mt-2">
+                            <div class="col-span-1 md:col-span-6 flex justify-end items-center space-x-2 mt-2">
                                 <a href="{{ route('reimbursements.index') }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
                                     Limpiar
                                 </a>
                                 <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
                                     Filtrar
                                 </button>
-                                <button type="button" onclick="exportData()" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
-                                    Exportar
-                                </button>
+                                
+                                @if($user->isCxp() || $user->isTreasury())
+                                <div class="ml-4 pl-4 border-l border-gray-300 dark:border-gray-600 flex items-center space-x-2">
+                                    <button type="button" x-data @click="$dispatch('open-export-modal')" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
+                                        Exportar
+                                    </button>
+                                </div>
+                                @endif
                             </div>
                         </form>
                     </div>
@@ -422,7 +427,7 @@
                                     <tr>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                             <div class="flex flex-col">
-                                <span>{{ $r->folio ? $r->folio : substr($r->uuid, 0, 8).'...' }}</span>
+                                <span>{{ $r->true_folio }}</span>
                                 <span class="text-xs text-gray-500 font-normal">
                                     {{ ucfirst(str_replace('_', ' ', $r->type ?? 'Reembolso')) }}
                                 </span>
@@ -547,8 +552,8 @@
                                     Aprobación Masiva de Reembolsos
                                 </h3>
                                 <div class="mt-2">
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                                        Sube el archivo CSV exportado del sistema. El sistema buscará el <strong>Folio</strong> y el <strong>UUID</strong> para marcar los reembolsos como <strong>Pagados</strong> (Aprobación Final).
+                                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-4 bg-gray-50 dark:bg-gray-700/30 p-2 rounded-md">
+                                        Sube el archivo CSV exportado del sistema. El sistema buscará el <strong>Folio</strong>, y confirmará con el <strong>Monto (Total)</strong> o el <strong>UUID</strong> para validar tus tickets sin factura automáticamente y prepararlos para el Pago.
                                     </p>
                                     
                                     <div class="space-y-4">
@@ -667,19 +672,19 @@
             const form = document.getElementById('filter-form');
             const container = document.getElementById('results-container');
             
-            window.exportData = function() {
+            window.exportData = function(weekValue = null) {
                 const fromDate = document.getElementById('from_date').value;
                 const toDate = document.getElementById('to_date').value;
                 
-                /* 
-                if (!fromDate || !toDate) {
-                    alert('Por favor selecciona un rango de fechas (Desde y Hasta) para exportar. \n\nNota: La búsqueda incluye tanto la fecha de creación del reembolso como la fecha de expedición del XML.');
+                const params = new URLSearchParams(new FormData(form));
+                if (weekValue) {
+                    params.set('export_week', weekValue);
+                } else if (!fromDate && !toDate) {
+                    alert('Por favor selecciona una semana válida.');
                     return;
                 }
-                */
                 
-                const params = new URLSearchParams(new FormData(form)).toString();
-                window.location.href = "{{ route('reimbursements.export') }}?" + params;
+                window.location.href = "{{ route('reimbursements.export') }}?" + params.toString();
             }
             
             // Function to handle fetching and updating
@@ -788,6 +793,45 @@
     <!-- Bulk Main Action Modal logic moved into the component above -->
 
     
+    <!-- Export Modal -->
+    <div x-data="{ open: false, selectedWeek: '' }" 
+         @open-export-modal.window="open = true" 
+         x-show="open" 
+         class="fixed z-50 inset-0 overflow-y-auto" 
+         style="display: none;">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="open = false" aria-hidden="true"></div>
+            <div class="inline-block bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full dark:bg-gray-800">
+                <div class="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+                            <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-2">Exportar Reembolsos</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Selecciona la semana fiscal que deseas exportar a Excel.</p>
+                            
+                            @php
+                                $exportWeeks = \App\Models\Reimbursement::select('week')->whereNotNull('week')->distinct()->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")->orderByRaw("SUBSTRING_INDEX(week, '-', 1) DESC")->pluck('week');
+                            @endphp
+                            
+                            <select x-model="selectedWeek" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-green-500 focus:ring-green-500">
+                                <option value="">Selecciona una semana...</option>
+                                @foreach($exportWeeks as $ew)
+                                    <option value="{{ $ew }}">Semana {{ $ew }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse dark:bg-gray-900/50">
+                    <button type="button" @click="exportData(selectedWeek); open = false" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">Confirmar y Exportar</button>
+                    <button type="button" @click="open = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         document.addEventListener('alpine:init', () => {
             Alpine.data('bulkAuditIndex', () => ({

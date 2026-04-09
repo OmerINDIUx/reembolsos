@@ -1479,10 +1479,19 @@ class ReimbursementController extends Controller
     {
         set_time_limit(300);
         $user = Auth::user();
-        $query = Reimbursement::with(['user', 'costCenter', 'directorApprover', 'controlApprover', 'executiveApprover', 'cxpApprover', 'direccionApprover', 'treasuryApprover']);
+        $query = Reimbursement::with(['user', 'payee', 'costCenter', 'directorApprover', 'controlApprover', 'executiveApprover', 'cxpApprover', 'direccionApprover', 'treasuryApprover'])
+            ->where('status', '!=', 'borrador');
+            
+        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->hasPendingApprovals();
+        $tab = $request->input('tab', $canManage ? 'management' : 'active');
+        
+        // Synchronize with dashboard visibility logic
+        $this->applyTabScope($query, $tab, $user);
 
-        // Mandatory date filtering for export as per request (Creation or Expedition)
-        if ($request->filled('from_date') || $request->filled('to_date')) {
+        // Mandatory filtering for export
+        if ($request->filled('export_week')) {
+            $query->where('week', $request->export_week);
+        } elseif ($request->filled('from_date') || $request->filled('to_date')) {
             $fromDate = $request->from_date;
             $toDate = $request->to_date;
 
@@ -1517,20 +1526,8 @@ class ReimbursementController extends Controller
             $query->where('type', $request->type);
         }
 
-        // Apply role-based visibility
-        if (!$user->isAdmin() && !$user->isAdminView()) {
-            if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
-                 $query->whereHas('costCenter', function($q) use ($user) {
-                    if ($user->isDirector()) $q->where('director_id', $user->id);
-                    if ($user->isControlObra()) $q->where('control_obra_id', $user->id);
-                    if ($user->isExecutiveDirector()) $q->where('director_ejecutivo_id', $user->id);
-                });
-            } elseif ($user->isCxp() || $user->isDireccion() || $user->isTreasury()) {
-                // CXP and Treasury see all approved up to their level or beyond
-            } else {
-                $query->where('user_id', $user->id);
-            }
-        }
+        // Standard filters from the view have already been applied via common filters section below
+        // or by applyTabScope above. No need for redundant role-based visibility here as it is handled by applyTabScope.
 
         $reimbursements = $query->latest()->get();
 
@@ -1556,6 +1553,9 @@ class ReimbursementController extends Controller
                 'Categoría',
                 'Semana',
                 'Receptor',
+                'Beneficiario del Pago',
+                'Banco',
+                'Cuenta CLABE',
                 'Fecha Expedición XML',
                 'Fecha Creación Reembolso',
                 'Método de Pago',
@@ -1623,7 +1623,7 @@ class ReimbursementController extends Controller
                 }
 
                 fputcsv($file, [
-                    $r->folio ?? 'N/A',
+                    $r->true_folio ?? 'N/A',
                     $r->uuid ?? 'N/A',
                     $r->nombre_emisor . " (" . $r->rfc_emisor . ")",
                     ucfirst(str_replace('_', ' ', $r->type ?? 'Reembolso')),
@@ -1631,6 +1631,9 @@ class ReimbursementController extends Controller
                     ucfirst($r->category ?? 'N/A'),
                     $r->week ?? 'N/A',
                     $r->nombre_receptor . " (" . $r->rfc_receptor . ")",
+                    $r->payee ? $r->payee->name : ($r->user->name ?? 'N/A'),
+                    $r->payee ? ($r->payee->bank_name ?? 'N/A') : ($r->user->bank_name ?? 'N/A'),
+                    "'" . ($r->payee ? ($r->payee->clabe ?? 'N/A') : ($r->user->clabe ?? 'N/A')),
                     $r->fecha ? $r->fecha->format('d/m/Y H:i') : 'N/A',
                     $r->created_at ? $r->created_at->format('d/m/Y H:i') : 'N/A',
                     $r->metodo_pago ?? 'N/A',
@@ -1847,13 +1850,14 @@ class ReimbursementController extends Controller
             return back()->with('error', 'El archivo CSV está vacío o no se puede leer.');
         }
 
-        // Find Folio and UUID columns dynamically
+        // Find Folio, UUID, Total columns dynamically
         $folioIdx = array_search('Folio', $header);
         $uuidIdx = array_search('UUID', $header);
+        $totalIdx = array_search('Total', $header);
 
-        if ($folioIdx === false || $uuidIdx === false) {
+        if ($folioIdx === false || $uuidIdx === false || $totalIdx === false) {
             fclose($handle);
-            return back()->with('error', 'El archivo CSV no tiene el formato correcto (faltan las columnas Folio o UUID).');
+            return back()->with('error', 'El archivo CSV no tiene el formato correcto (faltan las columnas Folio, UUID o Total).');
         }
 
         $processed = 0;
@@ -1867,14 +1871,40 @@ class ReimbursementController extends Controller
         while (($row = fgetcsv($handle)) !== false) {
             $folio = $row[$folioIdx] ?? null;
             $uuid = $row[$uuidIdx] ?? null;
+            $rawTotalStr = $row[$totalIdx] ?? '';
 
-            if (!$folio || !$uuid || $uuid === 'N/A') continue;
+            if (!$folio) continue; // Si no hay Folio ignorar
 
-            $reimbursement = Reimbursement::where('folio', $folio)
-                ->where('uuid', $uuid)
-                ->first();
+            // Extraer el ID basado estrictamente en el Folio Compuesto ("INDILAB...-008" o  "REE-008")
+            $parts = explode('-', $folio);
+            $idStr = end($parts);
+            $extractedId = intval($idStr);
+            
+            $reimbursement = null;
+            if ($extractedId > 0) {
+                $reimbursement = Reimbursement::find($extractedId);
+            }
 
             if ($reimbursement) {
+                // Validación estricta: UUID exacto O Monto exacto (si no hay código XML)
+                $isValid = false;
+                if ($uuid && $uuid !== 'N/A' && $uuid !== 'SIN UUID') {
+                    if ($reimbursement->uuid === $uuid) {
+                        $isValid = true;
+                    }
+                } else {
+                    $parsedTotal = (float) filter_var(str_replace(',', '', $rawTotalStr), FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
+                    if (abs($reimbursement->total - $parsedTotal) < 1.0) {
+                        $isValid = true;
+                    }
+                }
+
+                if (!$isValid) {
+                    $failed++;
+                    $errors['not_found'][] = "Folio $folio: Encontrado el ID #$extractedId pero los datos de seguridad (UUID/Monto) en CSV no coinciden con la BD ($parsedTotal vs {$reimbursement->total}). Rechazado por seguridad.";
+                    continue;
+                }
+
                 // 1. Check if already approved
                 if ($reimbursement->status === 'aprobado') {
                     $failed++;
@@ -1890,27 +1920,36 @@ class ReimbursementController extends Controller
                 }
 
                 // 3. Check workflow profile
-                // Admins, CXP, and Treasury can approve records that are in the administrative pipeline
-                $adminFlow = ['aprobado_ejecutivo', 'aprobado_cxp', 'aprobado_direccion'];
-                if (!$user->isAdmin() && !in_array($reimbursement->status, $adminFlow)) {
+                // CXP and Treasury can approve records that are in the final payment funnel
+                $paymentFunnel = ['pendiente_pago', 'aprobado_ejecutivo', 'aprobado_cxp', 'aprobado_direccion'];
+                if (!$user->isAdmin() && !in_array($reimbursement->status, $paymentFunnel)) {
                     $failed++;
                     $statusLabel = ucwords(str_replace('_', ' ', $reimbursement->status));
-                    $errors['invalid_status'][] = "Folio $folio: El estatus '$statusLabel' requiere aprobaciones previas de Directores antes de pasar a Cuentas por Pagar.";
+                    $errors['invalid_status'][] = "Folio $folio: El estatus '$statusLabel' no está en el embudo de Cuentas por Pagar (requiere ser 'pendiente_pago').";
                     continue;
                 }
 
                 // If we reach here, we can approve
                 $reimbursement->update([
                     'status' => 'aprobado',
-                    'approved_by_treasury_id' => $user->id,
-                    'approved_by_treasury_at' => now(),
+                    'approved_by_cxp_id' => $user->id,
+                    'approved_by_cxp_at' => now(),
                 ]);
                 $processed++;
+                
+                // Add an audit approval trail entry just like the single approval
+                $reimbursement->approvals()->create([
+                    'user_id' => $user->id,
+                    'step_name' => 'Cuentas por Pagar (Masivo)',
+                    'action' => 'aprobado',
+                    'comment' => 'Aprobación Masiva por CSV',
+                    'is_bulk' => true
+                ]);
 
                 // Notify owner - wrapped in try catch to avoid stopping the whole process
                 try {
                     if ($reimbursement->user) {
-                        $reimbursement->user->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->folio} fue aprobado masivamente.", "success"));
+                        $reimbursement->user->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->true_folio} fue aprobado masivamente.", "success"));
                         NotificationBatchService::add($reimbursement->user, $reimbursement);
                     }
                 } catch (\Exception $e) {

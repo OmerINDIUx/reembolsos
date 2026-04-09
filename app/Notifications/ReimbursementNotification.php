@@ -43,7 +43,7 @@ class ReimbursementNotification extends Notification
      */
     public function toMail(object $notifiable): MailMessage
     {
-        $folio = $this->reimbursement ? ($this->reimbursement->folio ?? substr($this->reimbursement->uuid, 0, 8) ?? 'S/F') : 'VARIOS';
+        $folio = $this->reimbursement ? ($this->reimbursement->true_folio ?? 'S/F') : 'VARIOS';
         
         $details = [];
         if ($this->reimbursement) {
@@ -76,7 +76,7 @@ class ReimbursementNotification extends Notification
     {
         return [
             'reimbursement_id' => $this->reimbursement ? $this->reimbursement->id : null,
-            'reimbursement_folio' => $this->reimbursement ? ($this->reimbursement->folio ?? substr($this->reimbursement->uuid, 0, 8) ?? 'S/F') : 'VARIOS',
+            'reimbursement_folio' => $this->reimbursement ? ($this->reimbursement->true_folio ?? 'S/F') : 'VARIOS',
             'message' => $this->message,
             'type' => $this->type, // success, danger, warning, info
             'url' => $this->reimbursement ? route('reimbursements.show', $this->reimbursement->id) : route('reimbursements.index')

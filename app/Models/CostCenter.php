@@ -82,44 +82,59 @@ class CostCenter extends Model
 
     /**
      * Get an abbreviation for the cost center.
-     * Rule: Use $this->code if present, else intelligent acronym.
+     * Rule: 3 letters based on the name. If it collides with an older CC, use 4 letters.
      */
     public function getAbbreviationAttribute()
     {
-        // Ignore generic "CC-" codes or numeric-only codes
-        if (!empty($this->code) && !str_starts_with(strtoupper($this->code), 'CC-')) {
-            return strtoupper($this->code);
+        // To ensure consistent abbreviations across the app without making DB schemas, 
+        // we'll compute it dynamically for all CCs up to this one.
+        static $campsites = null;
+        if ($campsites === null) {
+            $campsites = \App\Models\CostCenter::orderBy('id', 'asc')->get(['id', 'name']);
         }
 
-        if (empty($this->name)) {
-            return 'SCC';
-        }
-
-        // Clean name: capitalize, remove special chars, but keep spaces and hyphens
-        $cleanName = strtoupper($this->name);
-        
-        // Split by spaces and hyphens
-        $words = preg_split('/[\s\-]+/', $cleanName, -1, PREG_SPLIT_NO_EMPTY);
-        
-        // Filter out short connector words (DE, Y, LA, EL, CON, etc.)
         $stopWords = ['DE', 'Y', 'LA', 'EL', 'LOS', 'LAS', 'CON', 'PARA', 'POR', 'EN'];
-        $filteredWords = array_values(array_filter($words, fn($w) => !in_array($w, $stopWords) && strlen($w) > 1));
+        $seen = [];
 
-        if (count($filteredWords) >= 3) {
-            // Take initials of the first 3 relevant words
-            return substr($filteredWords[0], 0, 1) . 
-                   substr($filteredWords[1], 0, 1) . 
-                   substr($filteredWords[2], 0, 1);
-        } elseif (count($filteredWords) == 2) {
-            // First of first word + First TWO of second word (Matches PEO for "Parque Eólico")
-            return substr($filteredWords[0], 0, 1) . 
-                   substr($filteredWords[1], 0, 2);
-        } elseif (count($filteredWords) == 1) {
-            // First 3 letters of the only word
-            return substr($filteredWords[0], 0, 3);
+        foreach ($campsites as $c) {
+            $cleanName = strtoupper($c->name ?? '');
+            $words = preg_split('/[\s\-]+/', $cleanName, -1, PREG_SPLIT_NO_EMPTY);
+            $filteredWords = array_values(array_filter($words, fn($w) => !in_array($w, $stopWords) && strlen($w) > 1));
+
+            $baseAbbr = 'SCC';
+            if (count($filteredWords) >= 3) {
+                $baseAbbr = substr($filteredWords[0], 0, 1) . substr($filteredWords[1], 0, 1) . substr($filteredWords[2], 0, 1);
+            } elseif (count($filteredWords) == 2) {
+                $baseAbbr = substr($filteredWords[0], 0, 1) . substr($filteredWords[1], 0, 2);
+            } elseif (count($filteredWords) == 1) {
+                $baseAbbr = substr($filteredWords[0], 0, 3);
+            }
+
+            if (isset($seen[$baseAbbr])) {
+                // Collision! Make it 4 chars
+                if (count($filteredWords) >= 4) {
+                     $baseAbbr .= substr($filteredWords[3], 0, 1);
+                } elseif (count($filteredWords) >= 3) {
+                     $baseAbbr .= substr($filteredWords[2], 1, 1);
+                } elseif (count($filteredWords) >= 2) {
+                     $baseAbbr = substr($filteredWords[0], 0, 2) . substr($filteredWords[1], 0, 2);
+                } elseif (count($filteredWords) == 1) {
+                     $baseAbbr = substr($filteredWords[0], 0, 4);
+                }
+            }
+
+            // In case 4-char also collides (rare), just force it
+            if (isset($seen[$baseAbbr])) {
+                $baseAbbr .= $c->id;
+            }
+
+            $seen[$baseAbbr] = true;
+
+            if ($c->id === $this->id) {
+                return $baseAbbr;
+            }
         }
 
-        // Extreme fallback
-        return substr(str_replace(' ', '', $cleanName), 0, 3);
+        return 'SCC';
     }
 }

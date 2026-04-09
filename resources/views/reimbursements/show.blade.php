@@ -99,7 +99,7 @@
                         </span>
 
                         <span class="text-xs text-gray-500 bg-white border border-gray-200 px-2.5 py-0.5 rounded-md dark:bg-gray-800 dark:border-gray-700">
-                            Folio: {{ $reimbursement->folio ?? 'PENDIENTE' }}
+                            Folio: {{ $reimbursement->true_folio ?? 'PENDIENTE' }}
                         </span>
                     </div>
                     <h1 class="text-3xl font-bold text-gray-900 dark:text-white leading-tight">
