@@ -69,13 +69,7 @@
                                     </p>
                                 @endif
                             </div>
-                            <div class="flex items-center space-x-4">
-                                <button type="button" @click="$dispatch('open-caratula-pdf-modal')" class="inline-flex items-center px-4 py-2 bg-emerald-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-emerald-500 transition ease-in-out duration-150 shadow-lg shadow-emerald-100 dark:shadow-none">
-                                    <svg class="w-3.5 h-3.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                    Descargar Carátula (PDF)
-                                </button>
                                 <a href="{{ route('reimbursements.audit', ['week' => $selectedWeek, 'tab' => request('tab')]) }}" class="text-[10px] font-black text-indigo-600 hover:underline uppercase tracking-widest">Ver toda la semana</a>
-                            </div>
                         </div>
                     </div>
 
@@ -176,6 +170,62 @@
                     @endif
 
 
+                    {{-- Global Audit Filters (Detail View) --}}
+                    <div class="px-8 mt-4 mb-6">
+                        <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <form action="{{ route('reimbursements.audit') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4" novalidate>
+                                {{-- Preserve existing params --}}
+                                @foreach(request()->except(['search_audit', 'type_audit', 'category_audit', 'xml_audit', 'cc', 'week']) as $name => $value)
+                                    <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                                @endforeach
+
+                                {{-- Row 1 --}}
+                                <div class="col-span-1 md:col-span-3">
+                                    <label for="search_audit_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscador General</label>
+                                    <input type="text" name="search_audit" id="search_audit_det" value="{{ request('search_audit') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Busca cualquier dato del reembolso...">
+                                </div>
+                                <div class="col-span-1 md:col-span-3">
+                                    <label for="cc_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Centro de Costos / Obra</label>
+                                    <select name="cc" id="cc_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <option value="">Selecciona CC...</option>
+                                        @foreach($authorizedCCs as $cc)
+                                            <option value="{{ $cc->name }}" {{ (request('cc') == $cc->name || $selectedCcName == $cc->name) ? 'selected' : '' }}>{{ $cc->name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                {{-- Row 2 --}}
+                                <div class="col-span-1 md:col-span-2">
+                                    <label for="week_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana Fiscal</label>
+                                    <select name="week" id="week_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <option value="">Selecciona Semana...</option>
+                                        @foreach($availableWeeks as $w)
+                                            <option value="{{ $w }}" {{ (request('week') == $w || $selectedWeek == $w) ? 'selected' : '' }}>Semana {{ $w }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-span-1 md:col-span-2">
+                                    <label for="type_audit_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Reembolso</label>
+                                    <select name="type_audit" id="type_audit_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <option value="">Todos</option>
+                                        <option value="reembolso" {{ request('type_audit') == 'reembolso' ? 'selected' : '' }}>Reembolso</option>
+                                        <option value="comida" {{ request('type_audit') == 'comida' ? 'selected' : '' }}>Comida</option>
+                                        <option value="fondo_fijo" {{ request('type_audit') == 'fondo_fijo' ? 'selected' : '' }}>Fondo Fijo</option>
+                                        <option value="viaje" {{ request('type_audit') == 'viaje' ? 'selected' : '' }}>Viaje</option>
+                                    </select>
+                                </div>
+                                <div class="col-span-1 md:col-span-2 flex justify-end items-end space-x-2">
+                                    <a href="{{ route('reimbursements.audit', request()->only(['tab'])) }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
+                                        Limpiar
+                                    </a>
+                                    <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
+                                        Filtrar
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
                     {{-- Detalle de Items (Card-Style strictly aligned with summary) --}}
                     <div class="p-4 md:p-8 space-y-3 relative">
                         
@@ -188,9 +238,9 @@
                             <div x-show="selectedCount > 0" x-transition.opacity class="flex items-center space-x-4">
                                 <span class="text-xs font-black text-indigo-600 uppercase tracking-widest" x-text="selectedCount + ' Seleccionados'"></span>
                                 
-                                <button type="button" @click="downloadCaratula()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-emerald-200 flex items-center space-x-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                    <span>Descargar Carátula</span>
+                                <button type="button" @click="openModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                                    <span>Acción Masiva</span>
                                 </button>
 
                                 <button type="button" @click="openModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
@@ -343,26 +393,43 @@
                              @endif
                          </div>
 
-                         {{-- New Nested Audit Filters (Style matching Index) --}}
-                         <div class="px-8 mb-6">
+                         {{-- Global Audit Filters (Summary View) --}}
+                         <div class="px-8 mt-4 mb-6">
                             <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                                <form action="{{ route('reimbursements.audit') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end" novalidate>
+                                <form action="{{ route('reimbursements.audit') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4" novalidate>
                                     {{-- Preserve existing params --}}
-                                    @foreach(request()->except(['search_audit', 'status_audit', 'category_audit']) as $name => $value)
+                                    @foreach(request()->except(['search_audit', 'type_audit', 'category_audit', 'xml_audit', 'cc', 'week']) as $name => $value)
                                         <input type="hidden" name="{{ $name }}" value="{{ $value }}">
                                     @endforeach
 
-                                    <div class="col-span-1 md:col-span-2">
-                                        <label for="search_audit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscador General</label>
-                                        <input type="text" name="search_audit" id="search_audit" value="{{ request('search_audit') }}" 
-                                                class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
-                                                placeholder="Busca cualquier dato en esta auditoría..."
-                                                oninput="debounceSubmit(this)">
+                                    {{-- Row 1 --}}
+                                    <div class="col-span-1 md:col-span-3">
+                                        <label for="search_audit_sum" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscador General</label>
+                                        <input type="text" name="search_audit" id="search_audit_sum" value="{{ request('search_audit') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Busca cualquier dato del reembolso...">
+                                    </div>
+                                    <div class="col-span-1 md:col-span-3">
+                                        <label for="cc_sum" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Centro de Costos / Obra</label>
+                                        <select name="cc" id="cc_sum" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                            <option value="">Selecciona CC...</option>
+                                            @foreach($authorizedCCs as $cc)
+                                                <option value="{{ $cc->name }}" {{ (request('cc') == $cc->name || $selectedCcName == $cc->name) ? 'selected' : '' }}>{{ $cc->name }}</option>
+                                            @endforeach
+                                        </select>
                                     </div>
 
-                                    <div>
-                                        <label for="type_audit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo</label>
-                                        <select name="type_audit" id="type_audit" onchange="this.form.submit()" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    {{-- Row 2 --}}
+                                    <div class="col-span-1 md:col-span-2">
+                                        <label for="week_sum" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana Fiscal</label>
+                                        <select name="week" id="week_sum" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                            <option value="">Selecciona Semana...</option>
+                                            @foreach($availableWeeks as $w)
+                                                <option value="{{ $w }}" {{ (request('week') == $w || $selectedWeek == $w) ? 'selected' : '' }}>Semana {{ $w }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-span-1 md:col-span-2">
+                                        <label for="type_audit_sum" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Reembolso</label>
+                                        <select name="type_audit" id="type_audit_sum" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                             <option value="">Todos</option>
                                             <option value="reembolso" {{ request('type_audit') == 'reembolso' ? 'selected' : '' }}>Reembolso</option>
                                             <option value="comida" {{ request('type_audit') == 'comida' ? 'selected' : '' }}>Comida</option>
@@ -370,22 +437,8 @@
                                             <option value="viaje" {{ request('type_audit') == 'viaje' ? 'selected' : '' }}>Viaje</option>
                                         </select>
                                     </div>
-
-                                    <div>
-                                        <label for="category_audit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo Gasto</label>
-                                        <select name="category_audit" id="category_audit" onchange="this.form.submit()" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                            <option value="">Todos</option>
-                                            @foreach($categories as $category)
-                                                <option value="{{ $category }}" {{ request('category_audit') == $category ? 'selected' : '' }}>
-                                                    {{ ucfirst($category) }}
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                    </div>
-
-                                    <div class="md:col-span-2 flex justify-end space-x-2">
-                                        <a href="{{ route('reimbursements.audit', request()->only(['week', 'cc', 'tab'])) }}" 
-                                            class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
+                                    <div class="col-span-1 md:col-span-2 flex justify-end items-end space-x-2">
+                                        <a href="{{ route('reimbursements.audit', request()->only(['tab'])) }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
                                             Limpiar
                                         </a>
                                         <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
@@ -533,11 +586,52 @@
                         @endforelse
 
                     @else
-                        <div class="p-20 text-center">
-                            <h3 class="text-xl font-black text-gray-400 uppercase tracking-widest">Favor de seleccionar una semana fiscal para auditar</h3>
-                            <a href="{{ route('reimbursements.index', ['tab' => request('tab', 'management')]) }}" class="mt-6 inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-xl font-black uppercase tracking-widest text-xs">
-                                ← Ver todas las semanas
-                            </a>
+                        <div class="px-8 mt-4 mb-20">
+                            {{-- Global Audit Filters (Landing View) --}}
+                            <div class="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-xl mb-8">
+                                <form action="{{ route('reimbursements.audit') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-6" novalidate>
+                                    <input type="hidden" name="tab" value="{{ request('tab', 'management') }}">
+
+                                    {{-- Row 1 --}}
+                                    <div class="col-span-1 md:col-span-3">
+                                        <label for="search_audit_land" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscador General</label>
+                                        <input type="text" name="search_audit" id="search_audit_land" value="{{ request('search_audit') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Busca cualquier dato del reembolso...">
+                                    </div>
+                                    <div class="col-span-1 md:col-span-3">
+                                        <label for="cc_land" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Centro de Costos / Obra</label>
+                                        <select name="cc" id="cc_land" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                            <option value="">Selecciona CC...</option>
+                                            @foreach($authorizedCCs as $cc)
+                                                <option value="{{ $cc->name }}" {{ request('cc') == $cc->name ? 'selected' : '' }}>{{ $cc->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    {{-- Row 2 --}}
+                                    <div class="col-span-1 md:col-span-3">
+                                        <label for="week_land" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana Fiscal</label>
+                                        <select name="week" id="week_land" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                            <option value="">Selecciona Semana...</option>
+                                            @foreach($availableWeeks as $w)
+                                                <option value="{{ $w }}" {{ request('week') == $w ? 'selected' : '' }}>Semana {{ $w }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-span-1 md:col-span-3 flex justify-end items-end space-x-2">
+                                        <a href="{{ route('reimbursements.audit', ['tab' => request('tab', 'management')]) }}" class="inline-flex items-center px-6 py-3 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[44px]">
+                                            Limpiar
+                                        </a>
+                                        <button type="submit" class="inline-flex items-center px-6 py-3 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[44px]">
+                                            Filtrar Auditoría
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div class="text-center py-12">
+                                <h3 class="text-xl font-normal text-gray-400 uppercase tracking-[0.2em]">Comienza seleccionando una semana para auditar</h3>
+                                <p class="text-sm text-gray-400 mt-2">Usa los filtros superiores para navegar entre proyectos y semanas.</p>
+                            </div>
                         </div>
                     @endif
 

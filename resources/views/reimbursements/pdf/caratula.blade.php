@@ -16,12 +16,12 @@
         .header {
             text-align: center;
             margin-bottom: 20px;
-            border-bottom: 2px solid #4f46e5;
+            border-bottom: 2px solid #0052c7;
             padding-bottom: 10px;
         }
         .header h1 {
             margin: 0;
-            color: #4f46e5;
+            color: #0052c7;
             font-size: 22px;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -75,7 +75,7 @@
             background-color: #f9fafb;
             font-weight: bold;
             font-size: 12px;
-            border-top: 2px solid #4f46e5;
+            border-top: 2px solid #0052c7;
         }
         .text-right {
             text-align: right;
@@ -107,7 +107,7 @@
             font-weight: bold;
         }
         .group-header {
-            background-color: #4f46e5;
+            background-color: #0052c7;
             color: white;
             padding: 5px 10px;
             font-weight: bold;

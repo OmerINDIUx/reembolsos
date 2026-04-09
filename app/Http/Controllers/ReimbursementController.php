@@ -163,7 +163,7 @@ class ReimbursementController extends Controller
         $selectedType    = $request->input('type');
 
         // Global Audit Filters
-        if ($request->filled('search_audit') || $request->filled('type_audit') || $request->filled('category_audit')) {
+        if ($request->filled('search_audit') || $request->filled('type_audit') || $request->filled('category_audit') || $request->filled('xml_audit')) {
             $allReimbursements = $allReimbursements->filter(function($r) use ($request) {
                 $pass = true;
                 if ($request->filled('search_audit')) {
@@ -183,6 +183,13 @@ class ReimbursementController extends Controller
                 }
                 if ($request->filled('category_audit')) {
                     $pass = $pass && ($r->category === $request->category_audit);
+                }
+                if ($request->filled('xml_audit')) {
+                    if ($request->xml_audit === 'with_xml') {
+                        $pass = $pass && !empty($r->uuid);
+                    } elseif ($request->xml_audit === 'no_xml') {
+                        $pass = $pass && empty($r->uuid);
+                    }
                 }
                 return $pass;
             });
@@ -242,7 +249,25 @@ class ReimbursementController extends Controller
 
         $categories = $this->getCategories();
 
-        return view('reimbursements.audit', compact('groupedByWeek', 'auditItems', 'auditMeta', 'selectedWeek', 'selectedCcName', 'selectedType', 'auditStats', 'categories'));
+        // Data for Global Filters (matching index)
+        $availableWeeks = Reimbursement::select('week')
+            ->whereNotNull('week')
+            ->distinct()
+            ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
+            ->orderByRaw("SUBSTRING_INDEX(week, '-', 1) DESC")
+            ->pluck('week');
+
+        if ($user->isAdmin() || $user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
+            $authorizedCCs = \App\Models\CostCenter::orderBy('name')->get();
+        } else {
+            $authorizedCCs = $user->authorizedCostCenters()->orderBy('name')->get();
+        }
+
+        return view('reimbursements.audit', compact(
+            'groupedByWeek', 'auditItems', 'auditMeta', 'selectedWeek', 
+            'selectedCcName', 'selectedType', 'auditStats', 'categories',
+            'availableWeeks', 'authorizedCCs'
+        ));
     }
 
 
@@ -2315,7 +2340,7 @@ class ReimbursementController extends Controller
                         $pdf->useTemplate($pageId);
                         
                         // Overlay Title - High Visibility
-                        $pdf->SetFillColor(79, 70, 229); // Indigo
+                        $pdf->SetFillColor(0, 82, 199); // Brand Blue
                         $pdf->SetTextColor(255, 255, 255);
                         $pdf->SetFont('Arial', 'B', 7);
                         $pdf->SetXY(10, 3);
@@ -2350,7 +2375,7 @@ class ReimbursementController extends Controller
                             $pdf->useTemplate($pageId);
                             
                             // Overlay Title
-                            $pdf->SetFillColor(79, 70, 229);
+                            $pdf->SetFillColor(0, 82, 199); // Brand Blue
                             $pdf->SetTextColor(255, 255, 255);
                             $pdf->SetFont('Arial', 'B', 7);
                             $pdf->SetXY(10, 3);
