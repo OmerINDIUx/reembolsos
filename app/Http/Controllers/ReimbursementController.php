@@ -109,14 +109,20 @@ class ReimbursementController extends Controller
                 ->withQueryString();
 
             $currentWeeks = $weeksPaginator->pluck('week');
-            $reimbursements = $query->whereIn('week', $currentWeeks)->get();
+            
+            $reimbursements = $query->whereIn('week', $currentWeeks)
+                ->reorder()
+                ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
+                ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', 1) AS UNSIGNED) DESC")
+                ->orderBy('created_at', 'desc')
+                ->get();
             
             // Available Weeks for filters
             $availableWeeks = Reimbursement::select('week')
                 ->whereNotNull('week')
                 ->distinct()
                 ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
-                ->orderByRaw("SUBSTRING_INDEX(week, '-', 1) DESC")
+                ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', 1) AS UNSIGNED) DESC")
                 ->pluck('week');
 
             // Authorized Cost Centers
@@ -155,7 +161,10 @@ class ReimbursementController extends Controller
             ->orderBy('created_at', 'desc');
         $this->applyTabScope($query, $tab, $user);
 
-        $allReimbursements = $query->get();
+        $allReimbursements = $query->reorder()
+            ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
+            ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', 1) AS UNSIGNED) DESC")
+            ->get();
 
         // Filter parameters from the request
         $selectedWeek    = $request->input('week');

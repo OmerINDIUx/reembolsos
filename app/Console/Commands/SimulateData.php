@@ -39,7 +39,8 @@ class SimulateData extends Command
         }
 
         $xmlFiles = glob("$xmlPath/*.xml");
-        $this->info('Encontrados ' . count($xmlFiles) . ' archivos XML.');
+        $pdfFiles = glob("$pdfPath/*.pdf");
+        $this->info('Encontrados ' . count($xmlFiles) . ' archivos XML y ' . count($pdfFiles) . ' archivos PDF.');
 
         $categories = ['viaticos', 'comida', 'gasolina', 'mantenimiento', 'hospedaje', 'transporte', 'servicios', 'otros'];
         $statuses = ['pendiente', 'aprobado', 'pagado', 'rechazado'];
@@ -82,10 +83,6 @@ class SimulateData extends Command
                 $user = $users->random();
                 $cc = $costCenters->random();
                 
-                // Random date between Jan and April 2026
-                $randomDate = Carbon::create(2026, rand(1, 4), rand(1, 28));
-                $week = $randomDate->addDays(2)->format('W-Y');
-
                 $status = collect($statuses)->random();
                 
                 // Copy XML to storage
@@ -93,14 +90,20 @@ class SimulateData extends Command
                 $storagePathXml = "xmls/{$uuid}.xml";
                 Storage::put($storagePathXml, $xmlContent);
 
-                // Copy PDF if exists
-                $baseName = pathinfo($file, PATHINFO_FILENAME);
-                $matchingPdf = "$pdfPath/$baseName.pdf";
+                // Copy PDF (Sequential assignment)
                 $storagePathPdf = null;
-                if (file_exists($matchingPdf)) {
+                if (!empty($pdfFiles)) {
+                    $pdfFile = $pdfFiles[$bar->getProgress() % count($pdfFiles)];
                     $storagePathPdf = "pdfs/{$uuid}.pdf";
-                    Storage::put($storagePathPdf, file_get_contents($matchingPdf));
+                    Storage::put($storagePathPdf, file_get_contents($pdfFile));
                 }
+
+                // Target weeks 10 to 15 of 2026
+                // Week 10 starts around March 2, 2026
+                // Week 15 starts around April 6, 2026
+                $selectedWeekNum = rand(10, 15);
+                $randomDate = Carbon::now()->setISODate(2026, $selectedWeekNum, rand(1, 5));
+                $week = $randomDate->clone()->addDays(2)->format('W-Y');
 
                 // Simulate approvals for "pagado" or "aprobado"
                 $approvalData = [];
@@ -140,9 +143,20 @@ class SimulateData extends Command
                     'subtotal' => $data['subtotal'],
                     'impuestos' => $data['impuestos'],
                     'moneda' => $data['moneda'],
+                    'metodo_pago' => $data['metodo_pago'],
+                    'forma_pago' => $data['forma_pago'],
+                    'uso_cfdi' => $data['uso_cfdi'],
+                    'lugar_expedicion' => $data['lugar_expedicion'],
+                    'regimen_fiscal_emisor' => $data['regimen_fiscal_emisor'],
                     'xml_path' => $storagePathXml,
                     'pdf_path' => $storagePathPdf,
                     'status' => $status,
+                    'validation_data' => [
+                        'uuid_match' => true,
+                        'total_match' => true,
+                        'xml_matched' => true,
+                        'pdf_matched' => !empty($storagePathPdf),
+                    ],
                     'observaciones' => 'Simulación automática.',
                     'created_at' => $randomDate,
                     'updated_at' => $randomDate,
@@ -226,6 +240,11 @@ class SimulateData extends Command
                 'subtotal' => $subtotal,
                 'impuestos' => (float)$total - (float)$subtotal,
                 'moneda' => $moneda,
+                'metodo_pago' => (string)$xml['MetodoPago'] ?? 'PUE',
+                'forma_pago' => (string)$xml['FormaPago'] ?? '03',
+                'uso_cfdi' => $receptor ? (string)$receptor['UsoCFDI'] : 'G03',
+                'lugar_expedicion' => (string)$xml['LugarExpedicion'] ?? '52785',
+                'regimen_fiscal_emisor' => $emisor ? (string)$emisor['RegimenFiscal'] : '601',
             ];
         } catch (\Exception $e) {
             return ['uuid' => null];

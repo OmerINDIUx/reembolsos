@@ -1,4 +1,7 @@
-<x-mail::message>
+<div style="text-align: center; margin-bottom: 25px;">
+    <img src="{{ $message->embed(public_path('images/indi.png')) }}" alt="Logo INDI" style="height: 60px; width: auto;">
+</div>
+
 # Hola {{ $name }},
 
 Has sido invitado(a) a formar parte del **Sistema de Reembolsos**.
