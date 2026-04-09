@@ -178,6 +178,7 @@
 
                     {{-- Detalle de Items (Card-Style strictly aligned with summary) --}}
                     <div class="p-4 md:p-8 space-y-3 relative">
+                        
                         <div class="flex justify-between items-center px-2 mb-4 bg-gray-50/80 dark:bg-gray-800/50 p-2 rounded-xl border border-gray-200 dark:border-gray-700">
                             <label class="flex items-center space-x-3 cursor-pointer select-none">
                                 <input type="checkbox" x-model="selectAll" @change="toggleAll" class="w-5 h-5 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200" />
@@ -340,7 +341,58 @@
                                 </div>
                              </div>
                              @endif
-                        </div>
+                         </div>
+
+                         {{-- New Nested Audit Filters (Style matching Index) --}}
+                         <div class="px-8 mb-6">
+                            <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <form action="{{ route('reimbursements.audit') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end" novalidate>
+                                    {{-- Preserve existing params --}}
+                                    @foreach(request()->except(['search_audit', 'status_audit', 'category_audit']) as $name => $value)
+                                        <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                                    @endforeach
+
+                                    <div class="col-span-1 md:col-span-2">
+                                        <label for="search_audit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar (Folio, UUID, Emisor, Título)</label>
+                                        <input type="text" name="search_audit" id="search_audit" value="{{ request('search_audit') }}" 
+                                                class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+                                                placeholder="Buscar...">
+                                    </div>
+
+                                    <div>
+                                        <label for="status_audit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label>
+                                        <select name="status_audit" id="status_audit" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                            <option value="">Todos</option>
+                                            <option value="pendiente" {{ request('status_audit') == 'pendiente' ? 'selected' : '' }}>Pendiente</option>
+                                            <option value="aprobado" {{ request('status_audit') == 'aprobado' ? 'selected' : '' }}>Pagado</option>
+                                            <option value="rechazado" {{ request('status_audit') == 'rechazado' ? 'selected' : '' }}>Rechazado</option>
+                                            <option value="requiere_correccion" {{ request('status_audit') == 'requiere_correccion' ? 'selected' : '' }}>Corrección</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label for="category_audit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo Gasto</label>
+                                        <select name="category_audit" id="category_audit" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                            <option value="">Todos</option>
+                                            <option value="comida" {{ request('category_audit') == 'comidas' ? 'selected' : '' }}>Comidas</option>
+                                            <option value="gasolina" {{ request('category_audit') == 'combustibles y lubricantes' ? 'selected' : '' }}>Gasolina</option>
+                                            <option value="hospedaje" {{ request('category_audit') == 'hospedajes' ? 'selected' : '' }}>Hospedaje</option>
+                                            <option value="otros" {{ request('category_audit') == 'otros' ? 'selected' : '' }}>Otros</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="md:col-span-2 flex justify-end space-x-2">
+                                        <a href="{{ route('reimbursements.audit', request()->only(['week', 'cc', 'tab'])) }}" 
+                                            class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
+                                            Limpiar
+                                        </a>
+                                        <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
+                                            Filtrar
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                         </div>
 
                         @php 
                             $groupedByCC = $displayItems->groupBy(function($item) {
@@ -499,7 +551,7 @@
 
 
     <!-- Caratula PDF Modal (audit view) -->
-    <div x-data="{ open: false, week: '{{ $auditMeta['week'] ?? '' }}', cost_center_id: '{{ $auditItems->first()->cost_center_id ?? '' }}' }" 
+    <div x-data="{ open: false, week: '{{ $auditMeta['week'] ?? '' }}', cost_center_id: '{{ ($auditItems && $auditItems->count() > 0) ? $auditItems->first()->cost_center_id : '' }}' }" 
          @open-caratula-pdf-modal.window="open = true" 
          x-show="open" 
          class="fixed z-50 inset-0 overflow-y-auto" 
@@ -542,7 +594,7 @@
                             <select x-model="cost_center_id" class="w-full rounded-xl border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 text-sm font-bold">
                                 <option value="">Todos los centros</option>
                                 @foreach($pdfCCs as $pcc)
-                                    <option value="{{ $pcc->id }}" {{ ($auditItems->first()->cost_center_id ?? '') == $pcc->id ? 'selected' : '' }}>{{ $pcc->name }}</option>
+                                    <option value="{{ $pcc->id }}" {{ (isset($auditItems) && $auditItems->count() > 0 && $auditItems->first()->cost_center_id == $pcc->id) ? 'selected' : '' }}>{{ $pcc->name }}</option>
                                 @endforeach
                             </select>
                         </div>

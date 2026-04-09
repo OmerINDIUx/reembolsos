@@ -143,60 +143,56 @@
                             <input type="hidden" name="sort_order" id="input-sort-order" value="{{ request('sort_order', 'desc') }}">
                             
                             <!-- Search Input -->
-                            <div class="col-span-1 md:col-span-2">
+                            <div class="col-span-1 md:col-span-3">
                                 <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar (Folio, UUID, Emisor, Título)</label>
                                 <input type="text" name="search" id="search" value="{{ request('search') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Buscar...">
                             </div>
 
-                            <!-- Status Filter -->
-                            <div>
-                                <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label>
-                                <select name="status" id="status" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                    <option value="">Todos</option>
-                                    <option value="pendiente" {{ request('status') == 'pendiente' ? 'selected' : '' }}>En Proceso (Pendiente)</option>
-                                    <option value="aprobado" {{ request('status') == 'aprobado' ? 'selected' : '' }}>Pagado (Finalizado)</option>
-                                    <option value="requiere_correccion" {{ request('status') == 'requiere_correccion' ? 'selected' : '' }}>Requiere Corrección</option>
-                                    <option value="rechazado" {{ request('status') == 'rechazado' ? 'selected' : '' }}>Rechazado</option>
-                                    <option value="borrador" {{ request('status') == 'borrador' ? 'selected' : '' }}>Borrador</option>
+                            <!-- Cost Center Filter -->
+                            <div class="col-span-1 md:col-span-3">
+                                <label for="cost_center_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Centro de Costos / Obra</label>
+                                <select name="cost_center_id" id="cost_center_id" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    <option value="">Todos los permitidos</option>
+                                    @foreach($authorizedCCs as $acc)
+                                        <option value="{{ $acc->id }}" {{ request('cost_center_id') == $acc->id ? 'selected' : '' }}>{{ $acc->name }}</option>
+                                    @endforeach
                                 </select>
                             </div>
 
-                            <!-- Type Filter -->
-                            <div>
-                                <label for="type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo</label>
-                                <select name="type" id="type" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                    <option value="">Todos</option>
-                                    <option value="reembolso" {{ request('type') == 'reembolso' ? 'selected' : '' }}>Reembolso</option>
-                                    <option value="viaje" {{ request('type') == 'viaje' ? 'selected' : '' }}>Viaje</option>
-                                    <option value="comida" {{ request('type') == 'comida' ? 'selected' : '' }}>Comida</option>
-                                    <option value="fondo_fijo" {{ request('type') == 'fondo_fijo' ? 'selected' : '' }}>Fondo Fijo</option>
+                            <!-- Week From -->
+                            <div class="col-span-1 md:col-span-2">
+                                <label for="from_week" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana Desde</label>
+                                <select name="from_week" id="from_week" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    <option value="">Cualquiera</option>
+                                    @foreach($availableWeeks as $aw)
+                                        <option value="{{ $aw }}" {{ request('from_week') == $aw ? 'selected' : '' }}>Semana {{ $aw }}</option>
+                                    @endforeach
                                 </select>
                             </div>
 
-                            <!-- Date From -->
-                            <div>
-                                <label for="from_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Desde (Creación/Expedición)</label>
-                                <input type="date" name="from_date" id="from_date" value="{{ request('from_date') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                            </div>
-
-                            <!-- Date To -->
-                            <div>
-                                <label for="to_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hasta (Creación/Expedición)</label>
-                                <input type="date" name="to_date" id="to_date" value="{{ request('to_date') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            <!-- Week To -->
+                            <div class="col-span-1 md:col-span-2">
+                                <label for="to_week" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana Hasta</label>
+                                <select name="to_week" id="to_week" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    <option value="">Cualquiera</option>
+                                    @foreach($availableWeeks as $aw)
+                                        <option value="{{ $aw }}" {{ request('to_week') == $aw ? 'selected' : '' }}>Semana {{ $aw }}</option>
+                                    @endforeach
+                                </select>
                             </div>
 
                             <!-- Buttons -->
-                            <div class="col-span-1 md:col-span-6 flex justify-end items-center space-x-2 mt-2">
-                                <a href="{{ route('reimbursements.index') }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
+                            <div class="col-span-1 md:col-span-2 flex justify-end items-end space-x-2">
+                                <a href="{{ route('reimbursements.index') }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
                                     Limpiar
                                 </a>
-                                <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
+                                <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
                                     Filtrar
                                 </button>
                                 
-                                @if($user->isCxp() || $user->isTreasury())
-                                <div class="ml-4 pl-4 border-l border-gray-300 dark:border-gray-600 flex items-center space-x-2">
-                                    <button type="button" x-data @click="$dispatch('open-export-modal')" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
+                                @if(Auth::user()->isCxp() || Auth::user()->isTreasury())
+                                <div class="ml-2 pl-2 border-l border-gray-300 dark:border-gray-600 flex items-center">
+                                    <button type="button" x-data @click="$dispatch('open-export-modal')" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
                                         Exportar
                                     </button>
                                 </div>

@@ -70,22 +70,20 @@ class ReimbursementController extends Controller
             $query->where('type', $request->type);
         }
 
-        if ($request->filled('from_date') || $request->filled('to_date')) {
-            $fromDate = $request->from_date;
-            $toDate = $request->to_date;
+        if ($request->filled('from_week') || $request->filled('to_week')) {
+            $fromWeek = $request->from_week;
+            $toWeek = $request->to_week;
 
-            $query->where(function($q) use ($fromDate, $toDate) {
-                if ($fromDate && $toDate) {
-                    $q->whereBetween('created_at', [$fromDate . ' 00:00:00', $toDate . ' 23:59:59'])
-                      ->orWhereBetween('fecha', [$fromDate, $toDate]);
-                } elseif ($fromDate) {
-                    $q->whereDate('created_at', '>=', $fromDate)
-                      ->orWhereDate('fecha', '>=', $fromDate);
-                } elseif ($toDate) {
-                    $q->whereDate('created_at', '<=', $toDate)
-                      ->orWhereDate('fecha', '<=', $toDate);
-                }
-            });
+            if ($fromWeek) {
+                $query->whereRaw("CONCAT(SUBSTRING_INDEX(week, '-', -1), LPAD(SUBSTRING_INDEX(week, '-', 1), 2, '0')) >= ?", [
+                    explode('-', $fromWeek)[1] . str_pad(explode('-', $fromWeek)[0], 2, '0', STR_PAD_LEFT)
+                ]);
+            }
+            if ($toWeek) {
+                $query->whereRaw("CONCAT(SUBSTRING_INDEX(week, '-', -1), LPAD(SUBSTRING_INDEX(week, '-', 1), 2, '0')) <= ?", [
+                    explode('-', $toWeek)[1] . str_pad(explode('-', $toWeek)[0], 2, '0', STR_PAD_LEFT)
+                ]);
+            }
         }
 
         $sortField = $request->input('sort_by', 'created_at');
@@ -113,11 +111,31 @@ class ReimbursementController extends Controller
             $currentWeeks = $weeksPaginator->pluck('week');
             $reimbursements = $query->whereIn('week', $currentWeeks)->get();
             
-            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'weeksPaginator'));
+            // Available Weeks for filters
+            $availableWeeks = Reimbursement::select('week')
+                ->whereNotNull('week')
+                ->distinct()
+                ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
+                ->orderByRaw("SUBSTRING_INDEX(week, '-', 1) DESC")
+                ->pluck('week');
+
+            // Authorized Cost Centers
+            if ($user->isAdmin() || $user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
+                $authorizedCCs = \App\Models\CostCenter::orderBy('name')->get();
+            } else {
+                $authorizedCCs = $user->authorizedCostCenters()->orderBy('name')->get();
+            }
+
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'weeksPaginator', 'availableWeeks', 'authorizedCCs'));
         }
 
         $reimbursements = $query->paginate(10)->appends($request->all());
-        return view('reimbursements.index', compact('reimbursements', 'globalSearch'));
+        
+        // Fallback for cases where it's not grouped by week (unlikely in index)
+        $availableWeeks = Reimbursement::select('week')->whereNotNull('week')->distinct()->pluck('week');
+        $authorizedCCs = $user->isAdmin() ? \App\Models\CostCenter::all() : $user->authorizedCostCenters()->get();
+
+        return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'authorizedCCs'));
     }
 
     /**
@@ -143,6 +161,34 @@ class ReimbursementController extends Controller
         $selectedWeek    = $request->input('week');
         $selectedCcName  = $request->input('cc');
         $selectedType    = $request->input('type');
+
+        // Global Audit Filters
+        if ($request->filled('search_audit') || $request->filled('status_audit') || $request->filled('category_audit')) {
+            $allReimbursements = $allReimbursements->filter(function($r) use ($request) {
+                $pass = true;
+                if ($request->filled('search_audit')) {
+                    $s = strtolower($request->search_audit);
+                    $pass = $pass && (
+                        str_contains(strtolower($r->folio), $s) || 
+                        str_contains(strtolower($r->uuid), $s) || 
+                        str_contains(strtolower($r->nombre_emisor), $s) || 
+                        str_contains(strtolower($r->title), $s)
+                    );
+                }
+                if ($request->filled('status_audit')) {
+                    $pass = $pass && ($r->status === $request->status_audit);
+                }
+                if ($request->filled('category_audit')) {
+                    // Normalize comparison
+                    $catSearch = $request->category_audit;
+                    if ($catSearch === 'comida') $catSearch = 'comidas';
+                    if ($catSearch === 'gasolina') $catSearch = 'combustibles y lubricantes';
+                    if ($catSearch === 'hospedaje') $catSearch = 'hospedajes';
+                    $pass = $pass && ($r->category === $catSearch);
+                }
+                return $pass;
+            });
+        }
 
         // Build stats for dashboard panels
         $auditStats = null;
