@@ -356,28 +356,30 @@
                                         <label for="search_audit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscador General</label>
                                         <input type="text" name="search_audit" id="search_audit" value="{{ request('search_audit') }}" 
                                                 class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
-                                                placeholder="Busca cualquier dato en esta auditoría...">
+                                                placeholder="Busca cualquier dato en esta auditoría..."
+                                                oninput="debounceSubmit(this)">
                                     </div>
 
                                     <div>
-                                        <label for="status_audit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label>
-                                        <select name="status_audit" id="status_audit" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <label for="type_audit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo</label>
+                                        <select name="type_audit" id="type_audit" onchange="this.form.submit()" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                             <option value="">Todos</option>
-                                            <option value="pendiente" {{ request('status_audit') == 'pendiente' ? 'selected' : '' }}>Pendiente</option>
-                                            <option value="aprobado" {{ request('status_audit') == 'aprobado' ? 'selected' : '' }}>Pagado</option>
-                                            <option value="rechazado" {{ request('status_audit') == 'rechazado' ? 'selected' : '' }}>Rechazado</option>
-                                            <option value="requiere_correccion" {{ request('status_audit') == 'requiere_correccion' ? 'selected' : '' }}>Corrección</option>
+                                            <option value="reembolso" {{ request('type_audit') == 'reembolso' ? 'selected' : '' }}>Reembolso</option>
+                                            <option value="comida" {{ request('type_audit') == 'comida' ? 'selected' : '' }}>Comida</option>
+                                            <option value="fondo_fijo" {{ request('type_audit') == 'fondo_fijo' ? 'selected' : '' }}>Fondo Fijo</option>
+                                            <option value="viaje" {{ request('type_audit') == 'viaje' ? 'selected' : '' }}>Viaje</option>
                                         </select>
                                     </div>
 
                                     <div>
                                         <label for="category_audit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo Gasto</label>
-                                        <select name="category_audit" id="category_audit" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <select name="category_audit" id="category_audit" onchange="this.form.submit()" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                             <option value="">Todos</option>
-                                            <option value="comida" {{ request('category_audit') == 'comidas' ? 'selected' : '' }}>Comidas</option>
-                                            <option value="gasolina" {{ request('category_audit') == 'combustibles y lubricantes' ? 'selected' : '' }}>Gasolina</option>
-                                            <option value="hospedaje" {{ request('category_audit') == 'hospedajes' ? 'selected' : '' }}>Hospedaje</option>
-                                            <option value="otros" {{ request('category_audit') == 'otros' ? 'selected' : '' }}>Otros</option>
+                                            @foreach($categories as $category)
+                                                <option value="{{ $category }}" {{ request('category_audit') == $category ? 'selected' : '' }}>
+                                                    {{ ucfirst($category) }}
+                                                </option>
+                                            @endforeach
                                         </select>
                                     </div>
 
@@ -699,6 +701,16 @@
 
 
     
+
+    <script>
+        let searchTimeout;
+        function debounceSubmit(input) {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                input.form.submit();
+            }, 500);
+        }
+    </script>
     <script>
         document.addEventListener('alpine:init', () => {
             Alpine.data('bulkAuditIndex', () => ({

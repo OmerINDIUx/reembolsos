@@ -163,7 +163,7 @@ class ReimbursementController extends Controller
         $selectedType    = $request->input('type');
 
         // Global Audit Filters
-        if ($request->filled('search_audit') || $request->filled('status_audit') || $request->filled('category_audit')) {
+        if ($request->filled('search_audit') || $request->filled('type_audit') || $request->filled('category_audit')) {
             $allReimbursements = $allReimbursements->filter(function($r) use ($request) {
                 $pass = true;
                 if ($request->filled('search_audit')) {
@@ -178,16 +178,11 @@ class ReimbursementController extends Controller
                         str_contains(strtolower($r->observaciones), $s)
                     );
                 }
-                if ($request->filled('status_audit')) {
-                    $pass = $pass && ($r->status === $request->status_audit);
+                if ($request->filled('type_audit')) {
+                    $pass = $pass && ($r->type === $request->type_audit);
                 }
                 if ($request->filled('category_audit')) {
-                    // Normalize comparison
-                    $catSearch = $request->category_audit;
-                    if ($catSearch === 'comida') $catSearch = 'comidas';
-                    if ($catSearch === 'gasolina') $catSearch = 'combustibles y lubricantes';
-                    if ($catSearch === 'hospedaje') $catSearch = 'hospedajes';
-                    $pass = $pass && ($r->category === $catSearch);
+                    $pass = $pass && ($r->category === $request->category_audit);
                 }
                 return $pass;
             });
@@ -245,7 +240,9 @@ class ReimbursementController extends Controller
             ];
         }
 
-        return view('reimbursements.audit', compact('groupedByWeek', 'auditItems', 'auditMeta', 'selectedWeek', 'selectedCcName', 'selectedType', 'auditStats'));
+        $categories = $this->getCategories();
+
+        return view('reimbursements.audit', compact('groupedByWeek', 'auditItems', 'auditMeta', 'selectedWeek', 'selectedCcName', 'selectedType', 'auditStats', 'categories'));
     }
 
 
@@ -2218,7 +2215,7 @@ class ReimbursementController extends Controller
             return $r->payee_id . '-' . $r->cost_center_id;
         });
 
-        /** @var \setasign\Fpdi\Fpdi $pdf */
+        /** @var \setasign\Fpdi\Fpdi|\FPDF|mixed $pdf */
         $pdf = new Fpdi();
         $tempFiles = [];
 
@@ -2299,8 +2296,9 @@ class ReimbursementController extends Controller
 
     /**
      * Process all attachments for a single reimbursement record.
+     * @param \setasign\Fpdi\Fpdi|\FPDF|mixed $pdf
      */
-    private function processReimbursementAttachments(\setasign\Fpdi\Fpdi $pdf, $reimbursement) {
+    private function processReimbursementAttachments($pdf, $reimbursement) {
         $itemTitle = "FOLIO: " . ($reimbursement->true_folio ?? ('ID-'.$reimbursement->id)) . " | " . ($reimbursement->title ?? ($reimbursement->category ?? 'COMPROBANTE'));
         
         // 1. PDF Attachment
@@ -2370,8 +2368,9 @@ class ReimbursementController extends Controller
 
     /**
      * Helper to add a scaled image to the PDF that fits on one page.
+     * @param \setasign\Fpdi\Fpdi|\FPDF|mixed $pdf
      */
-    private function addImageToPdf(\setasign\Fpdi\Fpdi $pdf, $path, $title = '')
+    private function addImageToPdf($pdf, $path, $title = '')
     {
         try {
             list($width, $height) = getimagesize($path);
