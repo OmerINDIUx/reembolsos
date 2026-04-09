@@ -36,6 +36,9 @@
                 @endif
             </div>
 
+            <!-- Time Filter Bar -->
+            <x-time-filter-bar :action="route('panel')" :periods="$periods" />
+
             <!-- Stats Grid (Dynamic based on Role) -->
             <div class="mb-10">
                 <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] mb-4">

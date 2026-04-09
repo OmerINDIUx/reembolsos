@@ -30,6 +30,9 @@
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-8">
             
+            <!-- Time Filter Bar -->
+            <x-time-filter-bar :action="route('users.show', $user)" :periods="$periods" />
+            
             <!-- Summary Stats -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <!-- Personal Pending -->

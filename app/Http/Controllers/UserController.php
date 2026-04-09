@@ -81,24 +81,26 @@ class UserController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(User $user)
+    public function show(Request $request, User $user)
     {
+        $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
         $user->load(['director', 'subordinates', 'costCenters']);
 
         // 1. Personal Spending Stats
-        $pendingQuery = $user->reimbursements()->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
-        $approvedQuery = $user->reimbursements()->where('status', 'aprobado');
+        $pendingQuery = $user->reimbursements()->applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
+        $approvedQuery = $user->reimbursements()->applyTimeFilters($request)->where('status', 'aprobado');
 
         $stats = [
             'pending_count' => (clone $pendingQuery)->count(),
             'pending_amount' => (clone $pendingQuery)->sum('total'),
             'approved_count' => (clone $approvedQuery)->count(),
             'approved_amount' => (clone $approvedQuery)->sum('total'),
-            'rejected_count' => $user->reimbursements()->where('status', 'rechazado')->count(),
+            'rejected_count' => $user->reimbursements()->applyTimeFilters($request)->where('status', 'rechazado')->count(),
         ];
 
         // 2. Category Breakdown (Personal)
         $categoryBreakdown = $user->reimbursements()
+            ->applyTimeFilters($request)
             ->where('status', '!=', 'borrador')
             ->select('category', DB::raw('sum(total) as amount'), DB::raw('count(*) as count'))
             ->groupBy('category')
@@ -107,6 +109,7 @@ class UserController extends Controller
 
         // 3. Status Breakdown
         $statusBreakdown = $user->reimbursements()
+            ->applyTimeFilters($request)
             ->where('status', '!=', 'borrador')
             ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total) as amount'))
             ->groupBy('status')
@@ -138,7 +141,7 @@ class UserController extends Controller
             $q->where('user_id', $user->id);
         })->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->count();
 
-        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount'));
+        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount', 'periods'));
     }
 
     /**

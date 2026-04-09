@@ -81,9 +81,26 @@ class TravelEventController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(TravelEvent $travelEvent)
+    public function show(Request $request, TravelEvent $travelEvent)
     {
-        return view('travel_events.show', compact('travelEvent'));
+        $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
+        $travelEvent->load(['user', 'director', 'costCenter', 'participants']);
+        
+        $reimbursements = $travelEvent->reimbursements()
+            ->applyTimeFilters($request)
+            ->with(['user', 'currentStep'])
+            ->latest()
+            ->get();
+            
+        $stats = [
+            'total_amount' => $reimbursements->sum('total'),
+            'count' => $reimbursements->count(),
+            'approved_amount' => $reimbursements->where('status', 'aprobado')->sum('total'),
+            'pending_amount' => $reimbursements->whereNotIn('status', ['aprobado', 'rechazado', 'borrador', 'en_evento'])->sum('total'),
+            'queued_amount' => $reimbursements->where('status', 'en_evento')->sum('total'),
+        ];
+
+        return view('travel_events.show', compact('travelEvent', 'reimbursements', 'stats', 'periods'));
     }
 
     /**

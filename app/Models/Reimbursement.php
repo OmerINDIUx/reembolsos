@@ -4,8 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+use App\Traits\HasTimeFilters;
+
 class Reimbursement extends Model
 {
+    use HasTimeFilters;
+
     protected static function booted()
     {
         static::created(function ($reimbursement) {

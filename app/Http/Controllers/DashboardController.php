@@ -12,16 +12,17 @@ use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
+        $periods = Reimbursement::getAvailableTimePeriods();
 
         $stats = [];
         $recentReimbursements = collect();
 
         // Standard stats based on roles
         // 1. PERSONAL STATS (For everyone)
-        $myRequestsQuery = Reimbursement::where('user_id', $user->id);
+        $myRequestsQuery = Reimbursement::where('user_id', $user->id)->applyTimeFilters($request);
         $stats['personal'] = [
             'pending_count' => (clone $myRequestsQuery)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->count(),
             'approved_count' => (clone $myRequestsQuery)->where('status', 'aprobado')->count(),
@@ -34,12 +35,11 @@ class DashboardController extends Controller
         // 2. MANAGEMENT STATS (For Approvers/Admins)
         if ($user->isAdmin() || $user->isAdminView()) {
             $stats['management'] = [
-                'pending_count' => Reimbursement::whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->count(),
-                'approved_count' => Reimbursement::where('status', 'aprobado')->count(),
-                'rejected_count' => Reimbursement::where('status', 'rechazado')->count(),
-                'pending_amount' => Reimbursement::whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->sum('total'),
-                'approved_amount' => Reimbursement::where('status', 'aprobado')->sum('total'),
+                'pending_amount' => Reimbursement::applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->sum('total'),
+                'approved_amount' => Reimbursement::applyTimeFilters($request)->where('status', 'aprobado')->sum('total'),
             ];
+            $stats['management']['pending_count'] = Reimbursement::applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->count();
+            $stats['management']['approved_count'] = Reimbursement::applyTimeFilters($request)->where('status', 'aprobado')->count();
             $recentReimbursements = (clone $myRequestsQuery)->with('costCenter')->latest()->limit(10)->get();
 
         } else {
@@ -50,9 +50,11 @@ class DashboardController extends Controller
 
             if ($scopedCcIds->isNotEmpty()) {
                 $pendingFlowQuery = Reimbursement::whereIn('cost_center_id', $scopedCcIds)
+                    ->applyTimeFilters($request)
                     ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
 
                 $approvedFlowQuery = Reimbursement::whereIn('cost_center_id', $scopedCcIds)
+                    ->applyTimeFilters($request)
                     ->where('status', 'aprobado');
 
                 $stats['management'] = [
@@ -68,15 +70,15 @@ class DashboardController extends Controller
         }
 
         // New Detailed Analytics (Available for Admins and Managers)
-        $analytics = $this->getAnalyticsData($user);
+        $analytics = $this->getAnalyticsData($user, $request);
         $notifications = $user->unreadNotifications()->latest()->take(5)->get();
 
-        return view('dashboard', compact('stats', 'recentReimbursements', 'notifications', 'analytics'));
+        return view('dashboard', compact('stats', 'recentReimbursements', 'notifications', 'analytics', 'periods'));
     }
 
-    private function getAnalyticsData($user)
+    private function getAnalyticsData($user, Request $request)
     {
-        $queryBuilder = Reimbursement::query()->whereNotIn('status', ['rechazado', 'borrador']);
+        $queryBuilder = Reimbursement::query()->applyTimeFilters($request)->whereNotIn('status', ['rechazado', 'borrador']);
 
         // Limit scope if not admin
         if (!$user->isAdmin() && !$user->isAdminView()) {
@@ -89,7 +91,7 @@ class DashboardController extends Controller
         }
 
         // 1. Status Breakdown (Including all statuses for the doughnut chart)
-        $statusQuery = Reimbursement::query()->where('status', '!=', 'borrador');
+        $statusQuery = Reimbursement::query()->applyTimeFilters($request)->where('status', '!=', 'borrador');
         if (!$user->isAdmin() && !$user->isAdminView()) {
             $statusQuery->where(function($q) use ($user) {
                 $q->where('user_id', $user->id)
@@ -131,7 +133,7 @@ class DashboardController extends Controller
 
         // 1.1 Detailed Items for Chart (Ungrouped)
         // Fetch up to 30 recent pending/in-process items to show individual slices
-        $detailedItems = Reimbursement::query();
+        $detailedItems = Reimbursement::query()->applyTimeFilters($request);
         if (!$user->isAdmin() && !$user->isAdminView()) {
             $detailedItems->where(function($q) use ($user) {
                 $q->where('user_id', $user->id)

@@ -107,16 +107,17 @@ class CostCenterController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(CostCenter $costCenter)
+    public function show(Request $request, CostCenter $costCenter)
     {
+        $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
         $costCenter->load(['director', 'controlObra', 'directorEjecutivo', 'accountant', 'direccion', 'tesoreria', 'beneficiary', 'approvalSteps.user']);
 
         // 1. Basic Stats
         // ONLY marked users affect the budget
         $markedUserIds = $costCenter->authorizedUsers()->wherePivot('can_do_special', true)->pluck('users.id');
 
-        $pendingQuery = $costCenter->reimbursements()->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
-        $approvedQuery = $costCenter->reimbursements()->where('status', 'aprobado');
+        $pendingQuery = $costCenter->reimbursements()->applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
+        $approvedQuery = $costCenter->reimbursements()->applyTimeFilters($request)->where('status', 'aprobado');
 
         // Budget affecting queries: filtered by type and source (standalone vs travel event)
         $budgetFilter = function($q) use ($markedUserIds) {
@@ -141,6 +142,7 @@ class CostCenterController extends Controller
 
         // 2. Status Breakdown (for chart/overview)
         $statusBreakdown = $costCenter->reimbursements()
+            ->applyTimeFilters($request)
             ->where('status', '!=', 'borrador')
             ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total) as amount'))
             ->groupBy('status')
@@ -148,6 +150,7 @@ class CostCenterController extends Controller
 
         // 3. Step Breakdown (Bottlenecks)
         $stepBreakdown = $costCenter->reimbursements()
+            ->applyTimeFilters($request)
             ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])
             ->with('currentStep')
             ->select('current_step_id', DB::raw('count(*) as count'), DB::raw('sum(total) as amount'))
@@ -156,6 +159,7 @@ class CostCenterController extends Controller
 
         // 4. Category Breakdown
         $categoryBreakdown = $costCenter->reimbursements()
+            ->applyTimeFilters($request)
             ->where('status', '!=', 'borrador')
             ->select('category', DB::raw('sum(total) as amount'), DB::raw('count(*) as count'))
             ->groupBy('category')
@@ -195,7 +199,7 @@ class CostCenterController extends Controller
         // 8. Budget Renewals
         $budgetRenewals = $costCenter->budgetRenewals()->with('user')->get();
 
-        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements', 'budgetRenewals'));
+        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements', 'budgetRenewals', 'periods'));
     }
 
     /**

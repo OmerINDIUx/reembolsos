@@ -24,7 +24,35 @@
                     </a>
                 </div>
             </div>
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                @php
+                    $canClose = (Auth::user()->isAdmin() || Auth::id() === $travelEvent->director_id) && $travelEvent->status === 'active';
+                @endphp
+
+                <!-- Time Filter Bar -->
+                <x-time-filter-bar :action="route('travel_events.show', $travelEvent)" :periods="$periods" />
+
+                <!-- Summary Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total Gastado</p>
+                        <h4 class="text-3xl font-black text-gray-900 dark:text-white leading-none">${{ number_format($stats['total_amount'], 2) }}</h4>
+                        <p class="text-[9px] font-bold text-gray-400 mt-2 uppercase">{{ $stats['count'] }} Comprobantes</p>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-1">Pagado / Recuperado</p>
+                        <h4 class="text-3xl font-black text-gray-900 dark:text-white leading-none">${{ number_format($stats['approved_amount'], 2) }}</h4>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-amber-500 mb-1">En Tránsito (Flujo)</p>
+                        <h4 class="text-3xl font-black text-gray-900 dark:text-white leading-none">${{ number_format($stats['pending_amount'], 2) }}</h4>
+                    </div>
+                    <div class="bg-indigo-600 p-6 rounded-3xl shadow-xl shadow-indigo-600/20 text-white">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-indigo-100 mb-1">En Cola (Por enviar)</p>
+                        <h4 class="text-3xl font-black leading-none">${{ number_format($stats['queued_amount'], 2) }}</h4>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
                 <!-- Main Info Card -->
                 <div class="lg:col-span-2 space-y-8">
@@ -117,8 +145,7 @@
 
                     <!-- Facturas en Cola -->
                     @php
-                        $queuedFacturas = $travelEvent->reimbursements()->where('status', 'en_evento')->get();
-                        $canClose = (Auth::user()->isAdmin() || Auth::id() === $travelEvent->director_id) && $travelEvent->status === 'active';
+                        $queuedFacturas = $reimbursements->where('status', 'en_evento');
                     @endphp
 
                     @if($queuedFacturas->count() > 0 || $travelEvent->status === 'active')
