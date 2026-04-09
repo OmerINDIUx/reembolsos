@@ -23,10 +23,16 @@ class User extends Authenticatable
         'password',
         'role',
         'director_id',
-        'must_change_password',
+        'invitation_token',
+        'invitation_sent_at',
         'bank_name',
         'clabe',
     ];
+
+    public function isRegistered()
+    {
+        return $this->password !== null && $this->invitation_token === null;
+    }
 
     public function director()
     {
@@ -112,6 +118,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'invitation_sent_at' => 'datetime',
             'password' => 'hashed',
         ];
     }

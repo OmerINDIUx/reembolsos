@@ -15,6 +15,19 @@
             
             <div class="flex items-center gap-3">
                 @if(Auth::user()->isAdmin())
+                    @if($user->invitation_token)
+                        <form action="{{ route('users.resend_invitation', $user->id) }}" method="POST" class="inline">
+                            @csrf
+                            <button type="submit" class="inline-flex items-center px-4 py-2 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 hover:bg-amber-100 transition-all shadow-sm">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                                Reenviar Invitación
+                            </button>
+                        </form>
+                        <button type="button" onclick="copyInvitationLink('{{ route('invitation.accept', $user->invitation_token) }}')" class="inline-flex items-center px-4 py-2 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl text-xs font-black uppercase tracking-widest text-blue-700 dark:text-blue-400 hover:bg-blue-100 transition-all shadow-sm">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+                            Copiar Link
+                        </button>
+                    @endif
                 <a href="{{ route('users.edit', $user) }}" class="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-black uppercase tracking-widest text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                     Editar Usuario
@@ -250,6 +263,23 @@
                 });
             }
         });
+
+        function copyInvitationLink(url) {
+            navigator.clipboard.writeText(url).then(() => {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Enlace Copiado',
+                    text: 'El enlace de invitación ha sido copiado al portapapeles.',
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 3000,
+                    timerProgressBar: true
+                });
+            }).catch(err => {
+                console.error('Error al copiar: ', err);
+            });
+        }
     </script>
     @endpush
 </x-app-layout>

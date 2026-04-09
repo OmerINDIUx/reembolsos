@@ -6,6 +6,9 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
+use App\Mail\UserInvitation;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 
@@ -32,9 +35,9 @@ class UserController extends Controller
 
         if ($request->filled('status')) {
             if ($request->status === 'active') {
-                $query->where('must_change_password', 0);
+                $query->whereNull('invitation_token');
             } elseif ($request->status === 'inactive') {
-                $query->where('must_change_password', 1);
+                $query->whereNotNull('invitation_token');
             }
         }
 
@@ -59,23 +62,27 @@ class UserController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo,direccion'],
             'bank_name' => ['nullable', 'string', 'max:255'],
             'clabe' => ['nullable', 'string', 'size:18', 'regex:/^[0-9]+$/'],
         ]);
 
-        User::create([
+        $token = Str::random(64);
+
+        $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'password' => null, // Password will be set via invitation
             'role' => $request->role,
             'bank_name' => $request->bank_name,
             'clabe' => $request->clabe,
-            'must_change_password' => ($request->password === 'S20hg00146'),
+            'invitation_token' => $token,
+            'invitation_sent_at' => now(),
         ]);
 
-        return redirect()->route('users.index')->with('success', 'Usuario creado exitosamente.');
+        Mail::to($user->email)->send(new UserInvitation($user));
+
+        return redirect()->route('users.index')->with('success', 'Usuario creado exitosamente. Se ha enviado una invitación por correo.');
     }
 
     /**
@@ -179,7 +186,6 @@ class UserController extends Controller
                 'password' => ['required', 'string', 'min:8', 'confirmed'],
             ]);
             $data['password'] = Hash::make($request->password);
-            $data['must_change_password'] = ($request->password === 'S20hg00146');
         }
 
         $user->update($data);
@@ -199,5 +205,29 @@ class UserController extends Controller
         $user->delete();
 
         return redirect()->route('users.index')->with('success', 'Usuario eliminado.');
+    }
+
+    /**
+     * Resend invitation to a user.
+     */
+    public function resendInvitation(User $user)
+    {
+        if ($user->isRegistered()) {
+            return back()->with('error', 'Este usuario ya ha completado su registro.');
+        }
+
+        // Generate new token if missing
+        if (!$user->invitation_token) {
+            $user->update([
+                'invitation_token' => Str::random(64),
+                'invitation_sent_at' => now(),
+            ]);
+        } else {
+            $user->update(['invitation_sent_at' => now()]);
+        }
+
+        Mail::to($user->email)->send(new UserInvitation($user));
+
+        return back()->with('success', 'La invitación ha sido reenviada exitosamente.');
     }
 }

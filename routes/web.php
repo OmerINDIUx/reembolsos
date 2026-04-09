@@ -5,24 +5,25 @@ use App\Http\Controllers\ReimbursementController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\CostCenterController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\Auth\ForcePasswordChangeController;
-use App\Http\Middleware\ForcePasswordChange;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return redirect()->route('panel');
 });
 
+// Invitation Routes
+Route::get('invitation/accept/{token}', [\App\Http\Controllers\Auth\InvitationController::class, 'accept'])->name('invitation.accept');
+Route::post('invitation/complete', [\App\Http\Controllers\Auth\InvitationController::class, 'complete'])->name('invitation.complete');
+
 Route::get('/panel', [\App\Http\Controllers\DashboardController::class, 'index'])
-    ->middleware(['auth', 'verified', \App\Http\Middleware\ForcePasswordChange::class])
+    ->middleware(['auth', 'verified'])
     ->name('panel');
 
 Route::middleware('auth')->group(function () {
-    Route::get('password/force-change', [\App\Http\Controllers\Auth\ForcePasswordChangeController::class, 'show'])->name('password.force_change');
-    Route::post('password/force-change', [\App\Http\Controllers\Auth\ForcePasswordChangeController::class, 'store'])->name('password.force_change.store');
+    //
 });
 
-Route::middleware(['auth', \App\Http\Middleware\ForcePasswordChange::class])->group(function () {
+Route::middleware(['auth'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -38,6 +39,7 @@ Route::middleware(['auth', \App\Http\Middleware\ForcePasswordChange::class])->gr
 
     Route::middleware('role:admin,admin_view')->group(function() {
         Route::resource('users', UserController::class);
+        Route::post('users/{user}/resend-invitation', [UserController::class, 'resendInvitation'])->name('users.resend_invitation');
     });
 
     Route::middleware('role:admin,admin_view,director,control_obra,director_ejecutivo,accountant')->group(function() {
