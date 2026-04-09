@@ -450,7 +450,7 @@
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">$</span>
                                                     <input type="number" step="0.01" :name="'items['+index+'][subtotal]'" x-model="item.data.subtotal" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-indigo-600 pl-8" :readonly="hasInvoice" :required="!hasInvoice"
-                                                        @input="if(!hasInvoice) item.data.impuestos = (parseFloat(item.data.total || 0) - parseFloat(item.data.subtotal || 0)).toFixed(2)">
+                                                        @input="if(!hasInvoice) item.data.impuestos = Math.max(0, (parseFloat(item.data.total || 0) - parseFloat(item.data.subtotal || 0))).toFixed(2)">
                                                 </div>
                                             </div>
 
@@ -466,7 +466,7 @@
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-indigo-300">$</span>
                                                     <input type="number" step="0.01" :name="'items['+index+'][total]'" x-model="item.data.total" class="w-full bg-indigo-50 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-800 rounded-xl rounded-tl-none text-xl font-black text-indigo-700 dark:text-indigo-300 py-3 pl-10" :readonly="hasInvoice" :required="!hasInvoice" 
-                                                        @input="if(!hasInvoice) item.data.impuestos = (parseFloat(item.data.total || 0) - parseFloat(item.data.subtotal || 0)).toFixed(2)">
+                                                        @input="if(!hasInvoice) item.data.impuestos = Math.max(0, (parseFloat(item.data.total || 0) - parseFloat(item.data.subtotal || 0))).toFixed(2)">
                                                 </div>
                                                 
                                                 <template x-if="!hasInvoice && parseFloat(item.data.subtotal) > parseFloat(item.data.total)">
