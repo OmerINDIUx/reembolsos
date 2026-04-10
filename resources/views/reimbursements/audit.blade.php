@@ -647,7 +647,60 @@
 
 
     <!-- Caratula PDF Modal (audit view) -->
-    <div x-data="{ open: false, week: '{{ $auditMeta['week'] ?? '' }}', cost_center_id: '{{ ($auditItems && $auditItems->count() > 0) ? $auditItems->first()->cost_center_id : '' }}' }" 
+    <div x-data="{
+        open: false, 
+        week: '{{ $auditMeta['week'] ?? '' }}', 
+        cost_center_id: '{{ ($auditItems && $auditItems->count() > 0) ? $auditItems->first()->cost_center_id : '' }}',
+        loading: false, progress: 0,
+        async startDownload(url) {
+            this.loading = true;
+            this.progress = 0;
+            let sim = 0;
+            // Simulate smooth progress (0→85%) while server generates the PDF
+            const ticker = setInterval(() => {
+                if (sim < 85) {
+                    // Easing: fast start, slows down as it approaches 85
+                    sim += (85 - sim) * 0.04;
+                    this.progress = Math.round(sim);
+                }
+            }, 100);
+            try {
+                const response = await fetch(url);
+                clearInterval(ticker);
+                if (!response.ok) throw new Error('Error al generar el PDF');
+                // Read the response (server already generated it, comes in fast)
+                const contentLength = response.headers.get('Content-Length');
+                const total = contentLength ? parseInt(contentLength) : 0;
+                const reader = response.body.getReader();
+                const chunks = [];
+                let received = 0;
+                while(true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    received += value.length;
+                    // Map download phase to 85→99%
+                    if (total) this.progress = Math.round(85 + ((received / total) * 14));
+                }
+                this.progress = 100;
+                const blob = new Blob(chunks, { type: 'application/pdf' });
+                const dlUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = dlUrl;
+                a.download = 'caratula.pdf';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(dlUrl), 1000);
+                setTimeout(() => { this.loading = false; this.open = false; }, 1500);
+            } catch(e) {
+                clearInterval(ticker);
+                this.loading = false;
+                console.error('Error generando caratula:', e);
+                alert('Ocurrió un error al generar la carátula. Intenta de nuevo.');
+            }
+        }
+    }" 
          @open-caratula-pdf-modal.window="open = true" 
          x-show="open" 
          class="fixed z-50 inset-0 overflow-y-auto" 
@@ -697,12 +750,26 @@
                     </div>
 
                     <div class="mt-8 flex flex-col space-y-3">
+                        <!-- Progress Bar (visible during loading) -->
+                        <div x-show="loading" class="w-full">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-black text-emerald-600 uppercase tracking-widest">Generando Carátula...</span>
+                                <span class="text-xs font-black text-gray-500" x-text="progress + '%'"></span>
+                            </div>
+                            <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                                <div class="bg-emerald-500 h-2.5 rounded-full transition-all duration-300 ease-out"
+                                     :style="`width: ${progress}%`"></div>
+                            </div>
+                            <p class="text-[10px] text-gray-400 mt-1.5 text-center">El popup se cerrará automáticamente al terminar.</p>
+                        </div>
+
                         <button type="button" 
-                                @click="window.location.href = `{{ route('reimbursements.download_caratula') }}?week=${week}&cost_center_id=${cost_center_id}&tab={{ request('tab', 'management') }}`; open = false" 
-                                class="w-full inline-flex justify-center rounded-xl px-4 py-3 bg-emerald-600 text-sm font-black text-white uppercase tracking-widest hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100 dark:shadow-none">
+                                x-show="!loading"
+                                @click="startDownload(`{{ route('reimbursements.download_caratula') }}?week=${week}&cost_center_id=${cost_center_id}&tab={{ request('tab', 'management') }}`)"
+                                class="w-full inline-flex justify-center items-center rounded-xl px-4 py-3 bg-emerald-600 text-sm font-black text-white uppercase tracking-widest hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100 dark:shadow-none">
                             Descargar Carátula PDF
                         </button>
-                        <button type="button" @click="open = false" class="text-xs font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-colors pb-2">
+                        <button type="button" @click="open = false" :disabled="loading" class="text-xs font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-colors pb-2 disabled:opacity-40 disabled:cursor-not-allowed">
                             Cancelar
                         </button>
                     </div>

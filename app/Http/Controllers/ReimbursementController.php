@@ -97,6 +97,16 @@ class ReimbursementController extends Controller
             $query->reorder('created_at', 'desc');
         }
 
+        // Calculate available weeks based on scoped query
+        $availableWeeksQuery = clone $query;
+        $availableWeeks = $availableWeeksQuery->reorder()
+            ->select('week')
+            ->whereNotNull('week')
+            ->distinct()
+            ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
+            ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', 1) AS UNSIGNED) DESC")
+            ->pluck('week');
+
         if ($tab === 'management' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history') {
             // Paginate by weeks (5 weeks per page)
             $weeksQuery = clone $query;
@@ -116,14 +126,6 @@ class ReimbursementController extends Controller
                 ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', 1) AS UNSIGNED) DESC")
                 ->orderBy('created_at', 'desc')
                 ->get();
-            
-            // Available Weeks for filters
-            $availableWeeks = Reimbursement::select('week')
-                ->whereNotNull('week')
-                ->distinct()
-                ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
-                ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', 1) AS UNSIGNED) DESC")
-                ->pluck('week');
 
             // Authorized Cost Centers
             if ($user->isAdmin() || $user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
@@ -136,9 +138,6 @@ class ReimbursementController extends Controller
         }
 
         $reimbursements = $query->paginate(10)->appends($request->all());
-        
-        // Fallback for cases where it's not grouped by week (unlikely in index)
-        $availableWeeks = Reimbursement::select('week')->whereNotNull('week')->distinct()->pluck('week');
         $authorizedCCs = $user->isAdmin() ? \App\Models\CostCenter::all() : $user->authorizedCostCenters()->get();
 
         return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'authorizedCCs'));
@@ -1577,6 +1576,13 @@ class ReimbursementController extends Controller
         // Mandatory filtering for export
         if ($request->filled('export_week')) {
             $query->where('week', $request->export_week);
+        } elseif ($request->filled('from_week') || $request->filled('to_week')) {
+            if ($request->filled('from_week')) {
+                $query->where('week', '>=', $request->from_week);
+            }
+            if ($request->filled('to_week')) {
+                $query->where('week', '<=', $request->to_week);
+            }
         } elseif ($request->filled('from_date') || $request->filled('to_date')) {
             $fromDate = $request->from_date;
             $toDate = $request->to_date;
