@@ -1109,11 +1109,6 @@ class ReimbursementController extends Controller
         if ($reimbursement->costCenter && $reimbursement->status !== 'aprobado' && $reimbursement->status !== 'borrador') {
             $nextApprover = $reimbursement->currentStep->user ?? null;
             if ($nextApprover) {
-                $nextApprover->notify(new ReimbursementNotification(
-                    $reimbursement, 
-                    "Nueva solicitud ({$reimbursement->true_folio}) pendiente de tu aprobación en el paso: " . ($reimbursement->currentStep->name ?? 'Inicio'), 
-                    "info"
-                ));
                 NotificationBatchService::add($nextApprover, $reimbursement);
             }
         }
@@ -1450,50 +1445,31 @@ class ReimbursementController extends Controller
             // Notificar al siguiente en la línea
             $nextApprover = $reimbursement->currentStep->user ?? null;
             if ($nextApprover) {
-                $nextApprover->notify(new ReimbursementNotification(
-                    $reimbursement, 
-                    "Acción Requerida: El reembolso {$reimbursement->true_folio} está listo para tu revisión en el paso: " . ($reimbursement->currentStep->name ?? 'Siguiente'),
-                    "warning"
-                ));
                 NotificationBatchService::add($nextApprover, $reimbursement);
             }
             if ($owner) {
-                $owner->notify(new ReimbursementNotification(
-                    $reimbursement,
-                    "Tu reembolso {$reimbursement->true_folio} avanzó al paso: " . ($reimbursement->currentStep->name ?? 'Siguiente'),
-                    "info"
-                ));
                 NotificationBatchService::add($owner, $reimbursement);
             }
         } elseif ($currentStatus === 'pendiente_pago') {
             // Notificar a todos los contadores / CXP
             $accountants = \App\Models\User::where('role', 'accountant')->get();
             foreach ($accountants as $accountant) {
-                $accountant->notify(new ReimbursementNotification(
-                    $reimbursement,
-                    "Nuevo reembolso ({$reimbursement->true_folio}) pendiente de pago en el módulo de Cuentas por Pagar.",
-                    "info"
-                ));
+                NotificationBatchService::add($accountant, $reimbursement);
             }
             if ($owner) {
-                $owner->notify(new ReimbursementNotification(
-                    $reimbursement,
-                    "Tu reembolso {$reimbursement->true_folio} se encuentra ahora en validación por el área de Cuentas por Pagar.",
-                    "info"
-                ));
                 NotificationBatchService::add($owner, $reimbursement);
             }
         } elseif ($currentStatus === 'aprobado') {
             if ($owner) {
-                $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->true_folio} ha sido APROBADO FINALMENTE.", "success"));
+                NotificationBatchService::add($owner, $reimbursement);
             }
         } elseif ($currentStatus === 'rechazado') {
             if ($owner) {
-                $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->true_folio} ha sido RECHAZADO.", "danger"));
+                NotificationBatchService::add($owner, $reimbursement);
             }
         } elseif ($currentStatus === 'requiere_correccion') {
             if ($owner) {
-                $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->true_folio} requiere corrección por: " . ($request->rejection_reason ?? 'No especificado'), "warning"));
+                NotificationBatchService::add($owner, $reimbursement);
             }
         }
 
@@ -1877,21 +1853,14 @@ class ReimbursementController extends Controller
                 if ($data['status'] === 'pendiente') {
                     $nextApprover = $reimbursement->currentStep->user ?? null;
                     if ($nextApprover) {
-                        $nextApprover->notify(new ReimbursementNotification(
-                            $reimbursement, 
-                            "Acción Requerida (Masivo): El reembolso {$reimbursement->true_folio} está listo para revisión.",
-                            "warning"
-                        ));
                         NotificationBatchService::add($nextApprover, $reimbursement);
                     }
                 } elseif ($data['status'] === 'aprobado') {
                     if ($owner) {
-                        $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->true_folio} ha sido APROBADO FINALMENTE (Masivo).", "success"));
                         NotificationBatchService::add($owner, $reimbursement);
                     }
                 } elseif ($data['status'] === 'rechazado') {
                     if ($owner) {
-                        $owner->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->true_folio} ha sido RECHAZADO (Masivo).", "danger"));
                         NotificationBatchService::add($owner, $reimbursement);
                     }
                 }
@@ -2041,7 +2010,6 @@ class ReimbursementController extends Controller
                 // Notify owner - wrapped in try catch to avoid stopping the whole process
                 try {
                     if ($reimbursement->user) {
-                        $reimbursement->user->notify(new ReimbursementNotification($reimbursement, "Tu reembolso {$reimbursement->true_folio} fue aprobado masivamente.", "success"));
                         NotificationBatchService::add($reimbursement->user, $reimbursement);
                     }
                 } catch (\Exception $e) {

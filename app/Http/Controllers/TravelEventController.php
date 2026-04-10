@@ -238,7 +238,7 @@ class TravelEventController extends Controller
         // Notificar al siguiente en línea (N1, usualmente el Director de Centro de Costos) si hay facturas procesadas
         if ($count > 0 && $costCenter && $firstStep) {
             $notifMsg = "El Viaje '{$travelEvent->name}' ha sido CERRADO enviando {$count} facturas al ciclo N1 de aprobación.";
-            $firstStep->user->notify(new \App\Notifications\ReimbursementNotification(null, $notifMsg, "info"));
+            // Notification removed to favor consolidated batching 5 minutes later
             
             foreach ($reimbursements as $reimb) {
                 NotificationBatchService::add($firstStep->user, $reimb);
