@@ -30,7 +30,13 @@ class TravelEventController extends Controller
         $directors = User::whereIn('role', ['admin', 'director'])->get();
         $costCenters = CostCenter::orderBy('name')->get();
         $users = User::orderBy('name')->get();
-        return view('travel_events.create', compact('directors', 'costCenters', 'users'));
+        
+        // Generate suggested code: TRV-YYYY-XXXX
+        $year = date('Y');
+        $count = TravelEvent::whereYear('created_at', $year)->count() + 1;
+        $suggestedCode = "TRV-{$year}-" . str_pad($count, 4, '0', STR_PAD_LEFT);
+        
+        return view('travel_events.create', compact('directors', 'costCenters', 'users', 'suggestedCode'));
     }
 
     /**

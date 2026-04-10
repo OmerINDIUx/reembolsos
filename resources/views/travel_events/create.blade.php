@@ -61,8 +61,8 @@
                         <!-- Código Sugerido -->
                         <div>
                             <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Código Interno *</label>
-                            <input type="text" name="code" value="{{ old('code') }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 text-sm py-3 text-indigo-600 uppercase" required placeholder="Ej: VIAJE-QRO-01">
-                            
+                            <input type="text" name="code" value="{{ old('code', $suggestedCode) }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-100 dark:text-gray-500 rounded-xl shadow-sm focus:ring-indigo-500 text-sm py-3 text-indigo-600 uppercase font-black" required readonly placeholder="Ej: VIAJE-QRO-01">
+                            <p class="mt-2 text-[10px] text-gray-400 font-medium italic">Este código se genera automáticamente para control interno.</p>
                         </div>
 
                         <!-- Tipo de Viaje -->
