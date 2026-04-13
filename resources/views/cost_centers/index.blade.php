@@ -67,12 +67,9 @@
                                 <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-colors">
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <a href="{{ route('cost_centers.show', $cc->id) }}" class="flex items-center group">
-                                            <div class="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/50 group-hover:text-indigo-600 transition-all">
-                                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                                            </div>
-                                            <div class="ml-4">
-                                                <div class="text-sm font-black text-gray-900 dark:text-white group-hover:text-indigo-600 transition-colors">{{ $cc->code }}</div>
-                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest truncate max-w-[150px]">{{ $cc->name }}</div>
+                                            <div>
+                                                <div class="text-sm font-black text-gray-900 dark:text-white group-hover:text-indigo-600 transition-colors underline decoration-dotted decoration-indigo-200 underline-offset-4">{{ $cc->name }}</div>
+                                                <div class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{{ $cc->abbreviation }}</div>
                                                 <div class="text-[9px] text-indigo-500 font-black uppercase mt-1">Benef: {{ $cc->beneficiary->name ?? 'S/A' }}</div>
                                             </div>
                                         </a>

@@ -26,7 +26,7 @@ class CostCenterController extends Controller
                     $q->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
                 },
                 'reimbursements as approved_count' => function($q) {
-                    $q->where('status', 'aprobado');
+                    $q->whereIn('status', ['aprobado', 'pagado']);
                 },
                 'approvalSteps'
             ])
@@ -46,7 +46,7 @@ class CostCenterController extends Controller
             ], 'total')
             ->withSum([
                 'reimbursements as approved_total' => function($q) {
-                    $q->where('status', 'aprobado')
+                    $q->whereIn('status', ['aprobado', 'pagado'])
                       ->whereIn('type', ['fondo_fijo', 'comida', 'viaje'])
                       ->whereNull('travel_event_id')
                       ->whereExists(function($sq) {
@@ -65,7 +65,7 @@ class CostCenterController extends Controller
             ], 'created_at')
             ->withAvg([
                 'reimbursements as avg_approval_days' => function($q) {
-                    $q->where('status', 'aprobado')->whereNotNull('approved_by_treasury_at');
+                    $q->whereIn('status', ['aprobado', 'pagado'])->whereNotNull('approved_by_treasury_at');
                 }
             ], DB::raw('TIMESTAMPDIFF(SECOND, created_at, approved_by_treasury_at) / 86400'))
             ->orderBy('code');
@@ -116,8 +116,8 @@ class CostCenterController extends Controller
         // ONLY marked users affect the budget
         $markedUserIds = $costCenter->authorizedUsers()->wherePivot('can_do_special', true)->pluck('users.id');
 
-        $pendingQuery = $costCenter->reimbursements()->applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
-        $approvedQuery = $costCenter->reimbursements()->applyTimeFilters($request)->where('status', 'aprobado');
+        $pendingQuery = $costCenter->reimbursements()->applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'pagado', 'rechazado', 'borrador']);
+        $approvedQuery = $costCenter->reimbursements()->applyTimeFilters($request)->whereIn('status', ['aprobado', 'pagado']);
 
         // Budget affecting queries: filtered by type and source (standalone vs travel event)
         $budgetFilter = function($q) use ($markedUserIds) {
