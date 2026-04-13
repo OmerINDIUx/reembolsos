@@ -28,6 +28,22 @@
             <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
         </div>
 
+        <div class="border-t border-gray-100 dark:border-gray-800 my-6"></div>
+
+        <!-- Bank Name -->
+        <div class="mt-4">
+            <x-input-label for="bank_name" :value="__('Nombre del Banco')" />
+            <x-text-input id="bank_name" class="block mt-1 w-full uppercase placeholder:normal-case shadow-sm" type="text" name="bank_name" :value="old('bank_name')" required placeholder="Ej. BBVA, Santander..." />
+            <x-input-error :messages="$errors->get('bank_name')" class="mt-2" />
+        </div>
+
+        <!-- CLABE -->
+        <div class="mt-4">
+            <x-input-label for="clabe" :value="__('CLABE (18 dígitos)')" />
+            <x-text-input id="clabe" class="block mt-1 w-full shadow-sm" type="text" name="clabe" :value="old('clabe')" required maxlength="18" minlength="18" oninput="this.value = this.value.replace(/[^0-9]/g, '')" placeholder="000 000 0000000000 0" />
+            <x-input-error :messages="$errors->get('clabe')" class="mt-2" />
+        </div>
+
         <div class="flex items-center justify-end mt-4">
             <x-primary-button>
                 {{ __('Activar Cuenta') }}

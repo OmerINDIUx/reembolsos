@@ -29,12 +29,16 @@ class InvitationController extends Controller
         $request->validate([
             'token' => ['required', 'string'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'bank_name' => ['required', 'string', 'max:255'],
+            'clabe' => ['required', 'string', 'size:18', 'regex:/^[0-9]+$/'],
         ]);
 
         $user = User::where('invitation_token', $request->token)->firstOrFail();
 
         $user->forceFill([
             'password' => Hash::make($request->password),
+            'bank_name' => $request->bank_name,
+            'clabe' => $request->clabe,
             'invitation_token' => null,
             'invitation_sent_at' => null,
         ])->save();

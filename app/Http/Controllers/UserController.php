@@ -63,8 +63,6 @@ class UserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo,direccion'],
-            'bank_name' => ['nullable', 'string', 'max:255'],
-            'clabe' => ['nullable', 'string', 'size:18', 'regex:/^[0-9]+$/'],
         ]);
 
         $token = Str::random(64);
@@ -74,8 +72,6 @@ class UserController extends Controller
             'email' => $request->email,
             'password' => null, // Password will be set via invitation
             'role' => $request->role,
-            'bank_name' => $request->bank_name,
-            'clabe' => $request->clabe,
             'invitation_token' => $token,
             'invitation_sent_at' => now(),
         ]);
