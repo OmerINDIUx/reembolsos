@@ -61,7 +61,16 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            'email' => [
+                'required', 'string', 'email', 'max:255', 'unique:users',
+                function ($attribute, $value, $fail) {
+                    $blockedDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'live.com', 'icloud.com', 'yahoo.com', 'msn.com'];
+                    $domain = substr(strrchr($value, "@"), 1);
+                    if (in_array(strtolower($domain), $blockedDomains)) {
+                        $fail('No se permiten correos personales (Gmail, Outlook, etc.). Por favor usa un correo empresarial.');
+                    }
+                },
+            ],
             'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo,direccion'],
         ]);
 
@@ -163,7 +172,16 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
+            'email' => [
+                'required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id),
+                function ($attribute, $value, $fail) {
+                    $blockedDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'live.com', 'icloud.com', 'yahoo.com', 'msn.com'];
+                    $domain = substr(strrchr($value, "@"), 1);
+                    if (in_array(strtolower($domain), $blockedDomains)) {
+                        $fail('No se permiten correos personales (Gmail, Outlook, etc.). Por favor usa un correo empresarial.');
+                    }
+                },
+            ],
             'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo,direccion'],
             'bank_name' => ['nullable', 'string', 'max:255'],
             'clabe' => ['nullable', 'string', 'size:18', 'regex:/^[0-9]+$/'],
