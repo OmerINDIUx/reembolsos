@@ -175,7 +175,7 @@
                         <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                             <form action="{{ route('reimbursements.audit') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4" novalidate>
                                 {{-- Preserve existing params --}}
-                                @foreach(request()->except(['search_audit', 'type_audit', 'category_audit', 'xml_audit']) as $name => $value)
+                                @foreach(request()->except(['search_audit', 'validation_audit', 'xml_audit', 'method_audit', 'usage_audit']) as $name => $value)
                                     <input type="hidden" name="{{ $name }}" value="{{ $value }}">
                                 @endforeach
 
@@ -185,19 +185,45 @@
                                     <input type="text" name="search_audit" id="search_audit_det" value="{{ request('search_audit') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Busca cualquier dato del reembolso...">
                                 </div>
 
-                                {{-- Row 2 --}}
-                                <div class="col-span-1 md:col-span-3">
-                                    <label for="type_audit_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Reembolso</label>
-                                    <select name="type_audit" id="type_audit_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                        <option value="">Todos</option>
-                                        <option value="reembolso" {{ request('type_audit') == 'reembolso' ? 'selected' : '' }}>Reembolso</option>
-                                        <option value="comida" {{ request('type_audit') == 'comida' ? 'selected' : '' }}>Comida</option>
-                                        <option value="fondo_fijo" {{ request('type_audit') == 'fondo_fijo' ? 'selected' : '' }}>Fondo Fijo</option>
-                                        <option value="viaje" {{ request('type_audit') == 'viaje' ? 'selected' : '' }}>Viaje</option>
+                                {{-- Section: Detail Filters --}}
+                                <div class="col-span-1 md:col-span-2">
+                                    <label for="validation_audit_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Validación</label>
+                                    <select name="validation_audit" id="validation_audit_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <option value="">Cualquier validación</option>
+                                        <option value="success" {{ request('validation_audit') == 'success' ? 'selected' : '' }}>Éxito (Validadas)</option>
+                                        <option value="error" {{ request('validation_audit') == 'error' ? 'selected' : '' }}>Error (Desajuste)</option>
+                                        <option value="manual" {{ request('validation_audit') == 'manual' ? 'selected' : '' }}>Manual (Sin XML)</option>
                                     </select>
                                 </div>
-                                <div class="col-span-1 md:col-span-3 flex justify-end items-end space-x-2">
-                                    <a href="{{ route('reimbursements.audit', request()->only(['tab'])) }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
+                                <div class="col-span-1 md:col-span-2">
+                                    <label for="xml_audit_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Documento XML</label>
+                                    <select name="xml_audit" id="xml_audit_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <option value="">Todos los tipos</option>
+                                        <option value="with_xml" {{ request('xml_audit') == 'with_xml' ? 'selected' : '' }}>Con Factura (XML)</option>
+                                        <option value="no_xml" {{ request('xml_audit') == 'no_xml' ? 'selected' : '' }}>Sin Factura (Ticket)</option>
+                                    </select>
+                                </div>
+                                <div class="col-span-1 md:col-span-2">
+                                    <label for="method_audit_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Método de Pago</label>
+                                    <select name="method_audit" id="method_audit_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <option value="">Cualquiera</option>
+                                        @foreach($availableMethods as $method)
+                                            <option value="{{ $method }}" {{ request('method_audit') == $method ? 'selected' : '' }}>{{ $method }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-span-1 md:col-span-2">
+                                    <label for="usage_audit_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Uso de CFDI</label>
+                                    <select name="usage_audit" id="usage_audit_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <option value="">Cualquiera</option>
+                                        @foreach($availableUsages as $usage)
+                                            <option value="{{ $usage }}" {{ request('usage_audit') == $usage ? 'selected' : '' }}>{{ $usage }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="col-span-1 md:col-span-4 flex justify-end items-end space-x-2">
+                                    <a href="{{ route('reimbursements.audit', request()->only(['tab', 'week', 'cc', 'type'])) }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
                                         Limpiar
                                     </a>
                                     <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
@@ -263,12 +289,14 @@
 
                                     </div>
                                     <div class="flex flex-col">
-                                        <span class="text-[9px] font-black uppercase tracking-widest text-indigo-500 mb-0.5 block italic">{{ $compositeId }}</span>
+                                        <div class="flex items-center space-x-2 mb-0.5">
+                                            <span class="text-[9px] font-black uppercase tracking-widest text-indigo-500 italic">{{ $compositeId }}</span>
+                                        </div>
                                         <span class="text-sm font-black text-gray-700 dark:text-gray-300">{{ $r->nombre_emisor ?: 'S/N' }}</span>
                                         <div class="flex items-center space-x-1 mt-0.5">
                                             <span class="text-[8px] font-black text-gray-400 uppercase tracking-tighter">{{ $r->fecha ? $r->fecha->format('d/m/Y') : 'S/F' }}</span>
                                             <span class="text-gray-300 mx-1">|</span>
-                                            <span class="text-[8px] font-black text-gray-400 uppercase tracking-tighter truncate max-w-[150px]">{{ $r->uuid ?? 'SIN UUID' }}</span>
+                                            <span class="text-[8px] font-black text-gray-400 uppercase tracking-tighter truncate max-w-[150px]">{{ $r->uuid ?? 'TICKET / MANUAL' }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -281,6 +309,16 @@
                                             <div class="w-2.5 h-2.5 rounded-full {{ $semaforoColor }} shadow-sm"></div>
                                             <span class="text-[10px] font-black text-gray-700 dark:text-gray-300 uppercase tracking-tighter">{{ $semaforoText }}</span>
                                         </div>
+                                    </div>
+
+                                    {{-- Documento --}}
+                                    <div class="hidden sm:flex flex-col items-center">
+                                        <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Documento</span>
+                                        @if($r->uuid)
+                                            <span class="text-[9px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded border border-indigo-100 dark:border-indigo-800 uppercase tracking-tighter">Factura</span>
+                                        @else
+                                            <span class="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded border border-amber-100 dark:border-amber-800 uppercase tracking-tighter">Ticket / Manual</span>
+                                        @endif
                                     </div>
 
                                     {{-- Pago/Uso --}}

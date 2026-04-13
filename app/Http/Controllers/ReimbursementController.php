@@ -171,7 +171,7 @@ class ReimbursementController extends Controller
         $selectedType    = $request->input('type');
 
         // Global Audit Filters
-        if ($request->filled('search_audit') || $request->filled('type_audit') || $request->filled('category_audit') || $request->filled('xml_audit')) {
+        if ($request->filled('search_audit') || $request->filled('type_audit') || $request->filled('category_audit') || $request->filled('xml_audit') || $request->filled('validation_audit') || $request->filled('method_audit') || $request->filled('usage_audit')) {
             $allReimbursements = $allReimbursements->filter(function($r) use ($request) {
                 $pass = true;
                 if ($request->filled('search_audit')) {
@@ -198,6 +198,25 @@ class ReimbursementController extends Controller
                     } elseif ($request->xml_audit === 'no_xml') {
                         $pass = $pass && empty($r->uuid);
                     }
+                }
+                if ($request->filled('validation_audit')) {
+                    $val = $r->validation_data ?? [];
+                    $uuidMatch = $val['uuid_match'] ?? true;
+                    $totalMatch = $val['total_match'] ?? true;
+                    
+                    if ($request->validation_audit === 'success') {
+                        $pass = $pass && !empty($r->uuid) && $uuidMatch && $totalMatch;
+                    } elseif ($request->validation_audit === 'error') {
+                        $pass = $pass && !empty($r->uuid) && (!$uuidMatch || !$totalMatch);
+                    } elseif ($request->validation_audit === 'manual') {
+                        $pass = $pass && empty($r->uuid);
+                    }
+                }
+                if ($request->filled('method_audit')) {
+                    $pass = $pass && ($r->metodo_pago === $request->method_audit);
+                }
+                if ($request->filled('usage_audit')) {
+                    $pass = $pass && ($r->uso_cfdi === $request->usage_audit);
                 }
                 return $pass;
             });
@@ -271,10 +290,14 @@ class ReimbursementController extends Controller
             $authorizedCCs = $user->authorizedCostCenters()->orderBy('name')->get();
         }
 
+        // Available methods and usages for filters
+        $availableMethods = $allReimbursements->pluck('metodo_pago')->whereNotNull()->unique()->sort();
+        $availableUsages = $allReimbursements->pluck('uso_cfdi')->whereNotNull()->unique()->sort();
+
         return view('reimbursements.audit', compact(
             'groupedByWeek', 'auditItems', 'auditMeta', 'selectedWeek', 
             'selectedCcName', 'selectedType', 'auditStats', 'categories',
-            'availableWeeks', 'authorizedCCs'
+            'availableWeeks', 'authorizedCCs', 'availableMethods', 'availableUsages'
         ));
     }
 
