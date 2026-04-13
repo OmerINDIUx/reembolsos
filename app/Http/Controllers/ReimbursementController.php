@@ -707,7 +707,6 @@ class ReimbursementController extends Controller
                 // To CXP
                 $cxpUsers = User::where('role', 'accountant')->get();
                 foreach($cxpUsers as $cxp) {
-                    $cxp->notify(new ReimbursementNotification(null, $notifMsg, "info"));
                     foreach($createdReimbursements as $cr) {
                         NotificationBatchService::add($cxp, $cr);
                     }
@@ -724,12 +723,14 @@ class ReimbursementController extends Controller
             }
 
             if ($targetUser) {
-                $targetUser->notify(new ReimbursementNotification(null, $notifMsg, "info"));
                 foreach($createdReimbursements as $cr) {
                     NotificationBatchService::add($targetUser, $cr);
                 }
             }
         }
+
+        // Flush all pending notification batches immediately
+        NotificationBatchService::process();
 
         $message = "Se han creado {$createdCount} reembolsos exitosamente.";
         if ($failedCount > 0) {
@@ -1814,31 +1815,18 @@ class ReimbursementController extends Controller
                      $data['approved_by_direccion_id'] = $user->id;
                      $data['approved_by_direccion_at'] = now();
                      $data['status'] = 'aprobado_direccion';
-                } elseif ($user->isTreasury() || $user->isAdmin()) {
+                } elseif ($user->isTreasury()) {
                      $data['approved_by_treasury_id'] = $user->id;
                      $data['approved_by_treasury_at'] = now();
                      $data['status'] = 'aprobado';
                 }
 
-                // New logic (Dynamic Steps) if it exists
+                // Logic to mark legacy columns based on the current step being approved
                 $currentStep = $reimbursement->currentStep;
-                if (($currentStep && $user->id === $currentStep->user_id) || $user->isAdmin()) {
-                    $this->mapApprovalData($currentStep->order ?? 1, $user->id, $data);
-                    
-                    $nextStep = $reimbursement->costCenter->approvalSteps()
-                        ->where('order', '>', $currentStep->order ?? 0)
-                        ->orderBy('order', 'asc')
-                        ->first();
-                        
-                    if ($nextStep) {
-                        $data['current_step_id'] = $nextStep->id;
-                        $data['status'] = 'pendiente';
-                    } else {
-                        $data['current_step_id'] = null;
-                        $data['status'] = 'aprobado';
-                    }
+                if ($currentStep) {
+                    $this->mapApprovalData($currentStep->order, $user->id, $data);
                 }
-                
+
                 // Track bulk approval step in validation_data
                 $valData = $reimbursement->validation_data ?? [];
                 if (!isset($valData['bulk_approved_steps'])) {
@@ -1849,8 +1837,14 @@ class ReimbursementController extends Controller
                     $valData['bulk_approved_steps'][] = $stepOrder;
                 }
                 $data['validation_data'] = $valData;
+                
+                // Note: We DO NOT advance current_step_id here manually anymore for bulk approvals.
+                // We let handleDynamicApprovals handle the advancement and logging consistently.
+                // We only ensure the status is 'pendiente' if it's not finished, or 'aprobado' if it is.
+                // However, handleDynamicApprovals will handle this too.
             }
 
+            $originalStatus = $reimbursement->status;
             $reimbursement->update($data);
             
             // RECORD AUDIT LOG (BULK)
@@ -1862,33 +1856,23 @@ class ReimbursementController extends Controller
                     'comment' => $request->rejection_reason,
                     'is_bulk' => true
                 ]);
+                
+                // Notify owner of rejection
+                $owner = $reimbursement->user;
+                if ($owner) {
+                    \App\Services\NotificationBatchService::add($owner, $reimbursement);
+                }
             } else {
                 // Check for Auto-Approvals (Bulk included)
                 // Note: handleDynamicApprovals handles the primary audit log for the current step too
-                $this->handleDynamicApprovals($reimbursement, $user, true);
+                $this->handleDynamicApprovals($reimbursement, $user, true, $originalStatus);
             }
 
             $processed++;
-
-            // DYNAMIC NOTIFICATIONS (BULK)
-            if (isset($data['status'])) {
-                $owner = $reimbursement->user;
-                if ($data['status'] === 'pendiente') {
-                    $nextApprover = $reimbursement->currentStep->user ?? null;
-                    if ($nextApprover) {
-                        NotificationBatchService::add($nextApprover, $reimbursement);
-                    }
-                } elseif ($data['status'] === 'aprobado') {
-                    if ($owner) {
-                        NotificationBatchService::add($owner, $reimbursement);
-                    }
-                } elseif ($data['status'] === 'rechazado') {
-                    if ($owner) {
-                        NotificationBatchService::add($owner, $reimbursement);
-                    }
-                }
-            }
         }
+
+        // Flush all pending notification batches immediately so the user gets their summary email now
+        \App\Services\NotificationBatchService::process();
 
         Log::info("BULK_AUDIT_ACTION_END: Processed={$processed} Failed={$failed}");
         
@@ -2045,6 +2029,9 @@ class ReimbursementController extends Controller
         }
 
         fclose($handle);
+
+        // Send all batched notifications immediately after CSV processing
+        \App\Services\NotificationBatchService::process();
 
         $msg = "Se procesaron $processed aprobaciones exitosamente.";
         if ($failed > 0) {
@@ -2602,7 +2589,8 @@ class ReimbursementController extends Controller
     private function handleDynamicApprovals(\App\Models\Reimbursement $reimbursement, $user, $isBulk = false, $originalStatus = null)
     {
         // 1. Record the approval for the STEP the user is technically in right now
-        // This is the "Manual" approval that triggered the chain
+        // This is the "Manual" approval that triggered the chain. 
+        // We do this BEFORE any early returns to ensure the movement is ALWAYS recorded in history.
         $stepAtActionTime = $reimbursement->currentStep;
         
         $reimbursement->approvals()->create([
@@ -2613,12 +2601,20 @@ class ReimbursementController extends Controller
             'is_bulk' => $isBulk
         ]);
 
-        // 2. If it was in the CXP final funnel, this approval FINISHES the entire document
+        // 2. If it was in the CXP final funnel or already finished, this action finalizes the entire document
         $statusToCheck = $originalStatus ?? $reimbursement->status;
-        if ($statusToCheck === 'pendiente_pago') {
-            $reimbursement->update([
-                'status' => 'aprobado'
-            ]);
+        if (in_array($statusToCheck, ['pendiente_pago', 'aprobado'])) {
+            if ($statusToCheck === 'pendiente_pago') {
+                $reimbursement->update(['status' => 'aprobado', 'current_step_id' => null]);
+            }
+            
+            // Notify owner of the final approved state
+            if ($reimbursement->status === 'aprobado' || $reimbursement->status === 'rechazado') {
+                $owner = $reimbursement->user;
+                if ($owner) {
+                    \App\Services\NotificationBatchService::add($owner, $reimbursement);
+                }
+            }
             return;
         }
 
@@ -2628,9 +2624,17 @@ class ReimbursementController extends Controller
             // Refresh model to get latest current_step state
             $reimbursement->refresh();
 
+            // SAFETY: If we are already approved or in payment pending, stop looping
+            if ($reimbursement->status === 'aprobado' || $reimbursement->status === 'pendiente_pago') {
+                break;
+            }
+
             // Find next step
+            // If currentStep is null, we only allow searching from 0 if we are in a pending state without a step (brand new)
+            $currentOrder = $reimbursement->currentStep->order ?? 0;
+            
             $nextStep = $reimbursement->costCenter->approvalSteps()
-                ->where('order', '>', $reimbursement->currentStep->order ?? 0)
+                ->where('order', '>', $currentOrder)
                 ->orderBy('order', 'asc')
                 ->first();
 
@@ -2671,7 +2675,21 @@ class ReimbursementController extends Controller
                     'current_step_id' => $nextStep->id,
                     'status' => 'pendiente'
                 ]);
+
+                // Notify next approver
+                $nextApprover = $nextStep->user ?? null;
+                if ($nextApprover) {
+                    \App\Services\NotificationBatchService::add($nextApprover, $reimbursement);
+                }
                 break;
+            }
+        }
+        
+        // If the entire dynamic loop finished and it's 'aprobado' or 'pendiente_pago', notify the owner
+        if (in_array($reimbursement->status, ['aprobado', 'pendiente_pago', 'rechazado'])) {
+            $owner = $reimbursement->user;
+            if ($owner) {
+                \App\Services\NotificationBatchService::add($owner, $reimbursement);
             }
         }
     }
