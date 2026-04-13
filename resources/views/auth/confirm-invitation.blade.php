@@ -84,19 +84,22 @@
 
                 if (strength <= 1) {
                     strengthBar.style.width = '33%';
-                    strengthBar.className = 'bg-red-500 h-full transition-all duration-300';
+                    strengthBar.style.backgroundColor = '#ef4444'; // Red
                     strengthText.innerText = 'Débil';
-                    strengthText.className = 'text-red-500';
+                    strengthText.style.color = '#ef4444';
+                    strengthText.className = 'font-bold';
                 } else if (strength === 2 || strength === 3) {
                     strengthBar.style.width = '66%';
-                    strengthBar.className = 'bg-amber-500 h-full transition-all duration-300';
+                    strengthBar.style.backgroundColor = '#f59e0b'; // Amber
                     strengthText.innerText = 'Media';
-                    strengthText.className = 'text-amber-500 font-bold';
+                    strengthText.style.color = '#f59e0b';
+                    strengthText.className = 'font-bold';
                 } else {
                     strengthBar.style.width = '100%';
-                    strengthBar.className = 'bg-emerald-500 h-full transition-all duration-300';
+                    strengthBar.style.backgroundColor = '#10b981'; // Emerald
                     strengthText.innerText = 'Fuerte';
-                    strengthText.className = 'text-emerald-500 font-black';
+                    strengthText.style.color = '#10b981';
+                    strengthText.className = 'font-black';
                 }
             }
 
