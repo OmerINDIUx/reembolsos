@@ -44,6 +44,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware('role:admin,admin_view,director,control_obra,director_ejecutivo,accountant')->group(function() {
         Route::resource('cost_centers', CostCenterController::class);
+        Route::patch('cost_centers/{cost_center}/toggle-status', [CostCenterController::class, 'toggleStatus'])->name('cost_centers.toggle_status');
         Route::post('cost_centers/{cost_center}/renew-budget', [CostCenterController::class, 'renewBudget'])->name('cost_centers.renew_budget');
         Route::resource('travel_events', \App\Http\Controllers\TravelEventController::class);
         Route::post('travel_events/{travel_event}/close', [\App\Http\Controllers\TravelEventController::class, 'closeEvent'])->name('travel_events.close');

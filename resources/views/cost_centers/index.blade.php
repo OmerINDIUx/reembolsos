@@ -47,6 +47,38 @@
                         </div>
                     @endif
 
+                    @if (session('error'))
+                        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                            <span class="block sm:inline">{{ session('error') }}</span>
+                        </div>
+                    @endif
+
+                    <!-- Tabs Navigation -->
+                    <div class="mb-6 border-b border-gray-200 dark:border-gray-700">
+                        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                            <a href="{{ route('cost_centers.index', array_merge(request()->query(), ['tab' => 'active'])) }}" 
+                               class="{{ request('tab', 'active') === 'active' 
+                                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' 
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300' }} 
+                                    whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-all">
+                                Centros Activos
+                                <span class="ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium {{ request('tab', 'active') === 'active' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600' }}">
+                                    {{ request('tab', 'active') === 'active' ? $costCenters->total() : '' }}
+                                </span>
+                            </a>
+                            <a href="{{ route('cost_centers.index', array_merge(request()->query(), ['tab' => 'history'])) }}" 
+                               class="{{ request('tab') === 'history' 
+                                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' 
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300' }} 
+                                    whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-all">
+                                Historial (Inactivos)
+                                <span class="ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium {{ request('tab') === 'history' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600' }}">
+                                    {{ request('tab') === 'history' ? $costCenters->total() : '' }}
+                                </span>
+                            </a>
+                        </nav>
+                    </div>
+
                     <div id="results-container">
                         <div class="overflow-x-auto relative shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
                             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -164,21 +196,52 @@
                                         </div>
                                     </td>
                                     @if(Auth::user()->isAdmin() || Auth::user()->isAdminView())
-                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <div class="flex justify-end space-x-3">
+                                    <td class="px-6 py-4 whitespace-nowrap text-right text-xs font-semibold uppercase tracking-widest">
+                                        <div class="flex justify-end items-center space-x-4">
                                             @if(Auth::user()->isAdmin())
-                                            <a href="{{ route('cost_centers.edit', $cc->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/40 p-2 rounded-lg transition-colors">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                                            </a>
-                                            <form action="{{ route('cost_centers.destroy', $cc->id) }}" method="POST" class="inline" onsubmit="return confirm('¿Estás seguro de eliminar este centro de costos?');">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 bg-red-50 dark:bg-red-900/40 p-2 rounded-lg transition-colors">
-                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                                </button>
-                                            </form>
+                                                @if($cc->is_active)
+                                                    <a href="{{ route('cost_centers.edit', $cc->id) }}" class="text-indigo-600 hover:text-indigo-900 transition-colors">
+                                                        Editar
+                                                    </a>
+
+                                                    <form action="{{ route('cost_centers.toggle_status', $cc->id) }}" method="POST" class="inline">
+                                                        @csrf
+                                                        @method('PATCH')
+                                                        <button type="submit" class="text-amber-600 hover:text-amber-900 transition-colors">
+                                                            Desactivar
+                                                        </button>
+                                                    </form>
+
+                                                    @if($cc->reimbursements_count == 0)
+                                                    <form action="{{ route('cost_centers.destroy', $cc->id) }}" method="POST" class="inline" onsubmit="return confirm('¿Estás seguro de eliminar permanentemente este centro de costos?');">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="text-red-600 hover:text-red-900 transition-colors">
+                                                            Eliminar
+                                                        </button>
+                                                    </form>
+                                                    @endif
+                                                @else
+                                                    <form action="{{ route('cost_centers.toggle_status', $cc->id) }}" method="POST" class="inline">
+                                                        @csrf
+                                                        @method('PATCH')
+                                                        <button type="submit" class="text-emerald-600 hover:text-emerald-900 transition-colors">
+                                                            Reactivar
+                                                        </button>
+                                                    </form>
+
+                                                    @if($cc->reimbursements_count == 0)
+                                                    <form action="{{ route('cost_centers.destroy', $cc->id) }}" method="POST" class="inline" onsubmit="return confirm('¿Estás seguro de eliminar permanentemente este centro de costos del historial?');">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="text-red-600 hover:text-red-900 transition-colors">
+                                                            Eliminar
+                                                        </button>
+                                                    </form>
+                                                    @endif
+                                                @endif
                                             @else
-                                            <span class="text-gray-400 italic text-xs">Lectura</span>
+                                                <span class="text-gray-400 italic">Lectura</span>
                                             @endif
                                         </div>
                                     </td>

@@ -21,6 +21,7 @@ class CostCenter extends Model
         'description',
         'budget',
         'beneficiary_id',
+        'is_active',
     ];
 
     public function director()

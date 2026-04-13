@@ -28,6 +28,7 @@ class CostCenterController extends Controller
                 'reimbursements as approved_count' => function($q) {
                     $q->whereIn('status', ['aprobado', 'pagado']);
                 },
+                'reimbursements',
                 'approvalSteps'
             ])
             ->withSum([
@@ -68,6 +69,7 @@ class CostCenterController extends Controller
                     $q->whereIn('status', ['aprobado', 'pagado'])->whereNotNull('approved_by_treasury_at');
                 }
             ], DB::raw('TIMESTAMPDIFF(SECOND, created_at, approved_by_treasury_at) / 86400'))
+            ->where('is_active', $request->get('tab') === 'history' ? false : true)
             ->orderBy('code');
 
         if ($user->isAdmin() || $user->isAdminView()) {
@@ -389,9 +391,29 @@ class CostCenterController extends Controller
              abort(403, 'Unauthorized action.');
         }
 
+        if ($costCenter->reimbursements()->exists()) {
+            return redirect()->back()->with('error', 'No se puede eliminar un centro de costos con reembolsos asociados. Considere desactivarlo en su lugar.');
+        }
+
         $costCenter->delete();
 
         return redirect()->route('cost_centers.index')->with('success', 'Centro de Costos eliminado.');
+    }
+
+    /**
+     * Toggle the active status of a cost center.
+     */
+    public function toggleStatus(CostCenter $costCenter)
+    {
+        if (!Auth::user()->isAdmin()) {
+             abort(403, 'Unauthorized action.');
+        }
+
+        $costCenter->is_active = !$costCenter->is_active;
+        $costCenter->save();
+
+        $status = $costCenter->is_active ? 'activado' : 'desactivado (enviado a Historial)';
+        return redirect()->back()->with('success', "Centro de Costos {$status} correctamente.");
     }
 
     /**
