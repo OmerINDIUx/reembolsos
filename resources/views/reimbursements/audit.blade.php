@@ -997,7 +997,7 @@
                     return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 },
                 
-                downloadCaratula() {
+                async downloadCaratula() {
                     if (this.selectedIds.length === 0) return;
 
                     Swal.fire({
