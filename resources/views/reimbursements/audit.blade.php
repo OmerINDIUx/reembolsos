@@ -651,71 +651,7 @@
 
 
     <!-- Caratula PDF Modal (audit view) -->
-    <div x-data="{
-        open: false, 
-        week: '{{ $auditMeta['week'] ?? '' }}', 
-        cost_center_id: '{{ ($auditItems && $auditItems->count() > 0) ? $auditItems->first()->cost_center_id : '' }}',
-        loading: false, progress: 0,
-        async startDownload(url) {
-            this.loading = true;
-            this.progress = 0;
-            let sim = 0;
-            // Simulate smooth progress (0→85%) while server generates the PDF
-            const ticker = setInterval(() => {
-                if (sim < 85) {
-                    // Easing: fast start, slows down as it approaches 85
-                    sim += (85 - sim) * 0.04;
-                    this.progress = Math.round(sim);
-                }
-            }, 100);
-            try {
-                const response = await fetch("{{ route('reimbursements.download_caratula') }}", {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify({ 
-                        week: this.week, 
-                        cost_center_id: this.cost_center_id, 
-                        tab: '{{ request('tab', 'management') }}' 
-                    })
-                });
-                clearInterval(ticker);
-                if (!response.ok) throw new Error('Error al generar el PDF');
-                // Read the response (server already generated it, comes in fast)
-                const contentLength = response.headers.get('Content-Length');
-                const total = contentLength ? parseInt(contentLength) : 0;
-                const reader = response.body.getReader();
-                const chunks = [];
-                let received = 0;
-                while(true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    chunks.push(value);
-                    received += value.length;
-                    // Map download phase to 85→99%
-                    if (total) this.progress = Math.round(85 + ((received / total) * 14));
-                }
-                this.progress = 100;
-                const blob = new Blob(chunks, { type: 'application/pdf' });
-                const dlUrl = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = dlUrl;
-                a.download = 'caratula.pdf';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(() => URL.revokeObjectURL(dlUrl), 1000);
-                setTimeout(() => { this.loading = false; this.open = false; }, 1500);
-            } catch(e) {
-                clearInterval(ticker);
-                this.loading = false;
-                console.error('Error generando caratula:', e);
-                alert('Ocurrió un error al generar la carátula. Intenta de nuevo.');
-            }
-        }
-    }" 
+    <div x-data="caratulaPdfModal()" 
          @open-caratula-pdf-modal.window="open = true" 
          x-show="open" 
          class="fixed z-50 inset-0 overflow-y-auto" 
@@ -1053,6 +989,74 @@
 
                 init() {
                     // Modal is now inline, no need to move it.
+                }
+            }));
+
+            Alpine.data('caratulaPdfModal', () => ({
+                open: false,
+                week: '{{ $auditMeta['week'] ?? '' }}',
+                cost_center_id: '{{ ($auditItems && $auditItems->count() > 0) ? $auditItems->first()->cost_center_id : '' }}',
+                loading: false,
+                progress: 0,
+                
+                async startDownload() {
+                    this.loading = true;
+                    this.progress = 0;
+                    let sim = 0;
+                    const ticker = setInterval(() => {
+                        if (sim < 85) {
+                            sim += (85 - sim) * 0.04;
+                            this.progress = Math.round(sim);
+                        }
+                    }, 100);
+                    
+                    try {
+                        const response = await fetch("{{ route('reimbursements.download_caratula') }}", {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify({ 
+                                week: this.week, 
+                                cost_center_id: this.cost_center_id, 
+                                tab: '{{ request('tab', 'management') }}' 
+                            })
+                        });
+                        clearInterval(ticker);
+                        if (!response.ok) throw new Error('Error al generar el PDF');
+                        
+                        const contentLength = response.headers.get('Content-Length');
+                        const total = contentLength ? parseInt(contentLength) : 0;
+                        const reader = response.body.getReader();
+                        const chunks = [];
+                        let received = 0;
+                        
+                        while(true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            chunks.push(value);
+                            received += value.length;
+                            if (total) this.progress = Math.round(85 + ((received / total) * 14));
+                        }
+                        
+                        this.progress = 100;
+                        const blob = new Blob(chunks, { type: 'application/pdf' });
+                        const dlUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = dlUrl;
+                        a.download = 'caratula.pdf';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        setTimeout(() => URL.revokeObjectURL(dlUrl), 1000);
+                        setTimeout(() => { this.loading = false; this.open = false; }, 1500);
+                    } catch(e) {
+                        clearInterval(ticker);
+                        this.loading = false;
+                        console.error('Error generando caratula:', e);
+                        Swal.fire('Error', 'No se pudo generar el PDF. El servidor podría estar tardando demasiado.', 'error');
+                    }
                 }
             }));
         });
