@@ -2161,8 +2161,9 @@ class ReimbursementController extends Controller
      */
     public function downloadCaratula(Request $request)
     {
+        Log::info("PDF Generation Started: User=" . Auth::id());
         set_time_limit(1200); // 20 minutes
-        ini_set('memory_limit', '1024M');
+        ini_set('memory_limit', '1014M');
         ini_set('pcre.backtrack_limit', '10000000');
 
         $ids = $request->input('ids');
@@ -2265,6 +2266,7 @@ class ReimbursementController extends Controller
             ];
 
             // Render Cover Page PDF
+            Log::info("Rendering cover HTML for group...");
             $html = view('reimbursements.pdf.caratula', [
                 'payee' => $payee,
                 'costCenter' => $costCenter,
@@ -2275,7 +2277,9 @@ class ReimbursementController extends Controller
                 'count' => $groupItems->count(),
             ])->render();
 
+            Log::info("HTML rendered. Powering up DomPDF...");
             $coverPdf = Pdf::loadHTML($html)->output();
+            Log::info("DomPDF output successfully generated.");
             
             $tempDir = storage_path('app/temp');
             if (!file_exists($tempDir)) @mkdir($tempDir, 0777, true);
