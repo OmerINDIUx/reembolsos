@@ -2349,8 +2349,15 @@ class ReimbursementController extends Controller
                         $pdf->SetXY(10, 3);
                         $pdf->Cell(190, 5, mb_convert_encoding($itemTitle . " (PAG. $i)", 'ISO-8859-1', 'UTF-8'), 0, 0, 'R', true);
                     }
-                } catch (\Exception $e) {
                     Log::error("FPDI merge error (PDF): " . $e->getMessage());
+                    // Add a placeholder page instead of failing
+                    $pdf->addPage();
+                    $pdf->SetFont('Arial', 'B', 12);
+                    $pdf->SetTextColor(200, 0, 0);
+                    $pdf->Cell(0, 10, 'ARCHIVO PDF NO COMPATIBLE PARA UNIR (PDF v1.5+)', 0, 1, 'C');
+                    $pdf->SetFont('Arial', '', 10);
+                    $pdf->SetTextColor(100, 100, 100);
+                    $pdf->MultiCell(0, 10, "\nReferencia: " . mb_convert_encoding($itemTitle, 'ISO-8859-1', 'UTF-8') . "\n\nEste archivo utiliza una técnica de compresión no soportada por el motor gratuito de PDF.\nPor favor, descargue el anexo individualmente si es necesario.", 0, 'C');
                 }
             } else {
                 $this->addImageToPdf($pdf, $path, $itemTitle);
@@ -2386,6 +2393,14 @@ class ReimbursementController extends Controller
                         }
                     } catch (\Exception $e) {
                         Log::error("FPDI merge error (Extra PDF): " . $e->getMessage());
+                        // Add a placeholder page instead of failing
+                        $pdf->addPage();
+                        $pdf->SetFont('Arial', 'B', 12);
+                        $pdf->SetTextColor(200, 0, 0);
+                        $pdf->Cell(0, 10, 'ANEXO PDF NO COMPATIBLE PARA UNIR (PDF v1.5+)', 0, 1, 'C');
+                        $pdf->SetFont('Arial', '', 10);
+                        $pdf->SetTextColor(100, 100, 100);
+                        $pdf->MultiCell(0, 10, "\nReferencia: " . mb_convert_encoding($extraTitle, 'ISO-8859-1', 'UTF-8') . "\n\nEste archivo utiliza una técnica de compresión no soportada por el motor gratuito de PDF.\nPor favor, descargue el anexo individualmente si es necesario.", 0, 'C');
                     }
                 } else {
                     $this->addImageToPdf($pdf, $path, $extraTitle);
@@ -2441,9 +2456,15 @@ class ReimbursementController extends Controller
             $x = (210 - $w) / 2;
             $pdf->Image($path, $x, $yOffset, $w, $h);
         } catch (\Exception $e) {
-            Log::error("FPDF Image Error: " . $e->getMessage());
+            Log::error("FPDF Image Error on $path: " . $e->getMessage());
+            // Last resort: add a page with error text instead of crashing
             $pdf->addPage();
-            $pdf->Image($path, 10, 10, 190);
+            $pdf->SetFont('Arial', 'B', 12);
+            $pdf->SetTextColor(200, 0, 0);
+            $pdf->Cell(0, 10, 'ERROR DE IMAGEN', 0, 1, 'C');
+            $pdf->SetFont('Arial', '', 9);
+            $pdf->SetTextColor(100, 100, 100);
+            $pdf->MultiCell(0, 8, mb_convert_encoding("No se pudo insertar la imagen: $title\nError: " . $e->getMessage(), 'ISO-8859-1', 'UTF-8'), 0, 'C');
         }
     }
 
