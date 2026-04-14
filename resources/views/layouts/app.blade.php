@@ -35,6 +35,19 @@
             <main>
                 {{ $slot }}
             </main>
+
+            <footer class="py-8 mt-auto border-t border-gray-200 dark:border-gray-700/50">
+                <a href="https://indi-lab.com/" target="_blank" rel="noopener noreferrer"
+                   class="flex flex-col items-center gap-1.5 opacity-85 hover:opacity-100 transition-opacity duration-300 group">
+                    <span class="text-[10px] font-semibold tracking-[0.2em] text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors">
+                        Desarrollado por
+                    </span>
+                    <img src="{{ asset('images/INDI Lab - Logo Emergencia.png') }}"
+                         alt="INDI Lab"
+                         class="h-16 w-auto dark:invert dark:brightness-200"
+                    />
+                </a>
+            </footer>
         </div>
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         @stack('scripts')
