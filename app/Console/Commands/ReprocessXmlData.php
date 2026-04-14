@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use App\Models\Reimbursement;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Smalot\PdfParser\Parser;
 
 class ReprocessXmlData extends Command
 {
@@ -95,6 +96,11 @@ class ReprocessXmlData extends Command
                     'regimen_fiscal_emisor' => $data['regimen_fiscal_emisor'],
                 ]);
 
+                // NUEVO: Validar contra el PDF si existe para marcar si UUID y Monto están "OK"
+                if ($r->pdf_path && Storage::exists($r->pdf_path)) {
+                    $this->validatePdf($r, $data['uuid'], $data['total']);
+                }
+
                 $success++;
             } catch (\Exception $e) {
                 Log::error("Error procesando XML para ID {$r->id}: " . $e->getMessage());
@@ -108,6 +114,39 @@ class ReprocessXmlData extends Command
         $this->info("\nProceso finalizado.");
         $this->info("Exitosos: {$success}");
         $this->info("Errores: {$errors}");
+    }
+
+    /**
+     * Valida el PDF contra los datos del XML.
+     */
+    private function validatePdf($reimbursement, $uuid, $total)
+    {
+        try {
+            $parser = new Parser();
+            $pdf = $parser->parseFile(Storage::path($reimbursement->pdf_path));
+            $text = $pdf->getText();
+            $cleanText = str_replace([' ', "\n", "\r", "\t"], '', $text);
+
+            $uuidFound = stripos($text, (string)$uuid) !== false || stripos($cleanText, (string)$uuid) !== false;
+            
+            $totalFormatted = number_format((float)$total, 2);
+            $totalRaw = (string)$total;
+            $totalFound = str_contains($text, $totalFormatted) || str_contains($text, $totalRaw) || 
+                         str_contains($cleanText, $totalFormatted) || str_contains($cleanText, $totalRaw);
+
+            $reimbursement->update([
+                'validation_data' => [
+                    'uuid_match' => $uuidFound,
+                    'total_match' => $totalFound,
+                    'xml_matched' => true,
+                    'pdf_matched' => true,
+                    'message' => $uuidFound ? 'Validación Automática: UUID encontrado.' : 'Validación Automática: UUID NO encontrado.',
+                    'last_validated_at' => now()->toDateTimeString(),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Error validando PDF para ID {$reimbursement->id}: " . $e->getMessage());
+        }
     }
 
     /**
