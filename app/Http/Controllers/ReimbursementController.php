@@ -2161,8 +2161,9 @@ class ReimbursementController extends Controller
      */
     public function downloadCaratula(Request $request)
     {
-        set_time_limit(600);
-        ini_set('memory_limit', '512M');
+        set_time_limit(1200); // 20 minutes
+        ini_set('memory_limit', '1024M');
+        ini_set('pcre.backtrack_limit', '10000000');
 
         $ids = $request->input('ids');
         if ($ids) {
@@ -2275,7 +2276,11 @@ class ReimbursementController extends Controller
             ])->render();
 
             $coverPdf = Pdf::loadHTML($html)->output();
-            $coverPath = tempnam(sys_get_temp_dir(), 'cover_');
+            
+            $tempDir = storage_path('app/temp');
+            if (!file_exists($tempDir)) @mkdir($tempDir, 0777, true);
+            
+            $coverPath = $tempDir . '/cover_' . uniqid() . '.pdf';
             file_put_contents($coverPath, $coverPdf);
             $tempFiles[] = $coverPath;
 
