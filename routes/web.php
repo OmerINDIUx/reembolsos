@@ -59,7 +59,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('reimbursements/{reimbursement}/view-file/{type}', [ReimbursementController::class, 'viewFile'])->name('reimbursements.view_file');
     Route::get('reimbursements/{reimbursement}/download-file/{type}', [ReimbursementController::class, 'downloadFile'])->name('reimbursements.download_file');
     Route::get('reimbursements/{reimbursement}/download-zip', [ReimbursementController::class, 'downloadZip'])->name('reimbursements.download_zip');
-    Route::get('reimbursements/bulk/download-caratula', [ReimbursementController::class, 'downloadCaratula'])->name('reimbursements.download_caratula');
+    Route::match(['get', 'post'], 'reimbursements/bulk/download-caratula', [ReimbursementController::class, 'downloadCaratula'])->name('reimbursements.download_caratula');
     Route::post('reimbursements/{reimbursement}/validate', [ReimbursementController::class, 'validateStoredFiles'])->name('reimbursements.validate');
     Route::post('reimbursements/{reimbursement}/validate-pdf-correction', [ReimbursementController::class, 'validatePdfCorrection'])->name('reimbursements.validate_pdf_correction');
 });

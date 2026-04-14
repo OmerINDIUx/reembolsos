@@ -669,7 +669,18 @@
                 }
             }, 100);
             try {
-                const response = await fetch(url);
+                const response = await fetch("{{ route('reimbursements.download_caratula') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({ 
+                        week: this.week, 
+                        cost_center_id: this.cost_center_id, 
+                        tab: '{{ request('tab', 'management') }}' 
+                    })
+                });
                 clearInterval(ticker);
                 if (!response.ok) throw new Error('Error al generar el PDF');
                 // Read the response (server already generated it, comes in fast)
@@ -769,7 +780,7 @@
 
                         <button type="button" 
                                 x-show="!loading"
-                                @click="startDownload(`{{ route('reimbursements.download_caratula') }}?week=${week}&cost_center_id=${cost_center_id}&tab={{ request('tab', 'management') }}`)"
+                                @click="startDownload()"
                                 class="w-full inline-flex justify-center items-center rounded-xl px-4 py-3 bg-emerald-600 text-sm font-black text-white uppercase tracking-widest hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100 dark:shadow-none">
                             Descargar Carátula PDF
                         </button>
@@ -856,18 +867,33 @@
                     customClass: { popup: 'rounded-2xl shadow-2xl border-none font-sans' }
                 });
 
-                const ids = this.selectedIds.join(',');
+                const ids = this.selectedIds;
                 const tab = '{{ request('tab', 'management') }}';
-                const url = '{{ route('reimbursements.download_caratula') }}?ids=' + ids + '&tab=' + tab;
 
-                // Trigger download via a temporary anchor element
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'CARATULAS_SELECCIONADOS.pdf';
-                a.style.display = 'none';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
+                try {
+                    const response = await fetch('{{ route('reimbursements.download_caratula') }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        },
+                        body: JSON.stringify({ ids: ids, tab: tab })
+                    });
+
+                    if (!response.ok) throw new Error('Error en descarga');
+                    
+                    const blob = await response.blob();
+                    const dlUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = dlUrl;
+                    a.download = 'CARATULAS_SELECCIONADOS.pdf';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(dlUrl);
+                } catch(e) {
+                    Swal.fire('Error', 'No se pudo generar el PDF. Es posible que el lote sea demasiado grande para el servidor.', 'error');
+                }
 
                 // Give the browser time to start the download, then close the modal
                 setTimeout(() => {
@@ -984,18 +1010,33 @@
                         customClass: { popup: 'rounded-2xl shadow-2xl border-none font-sans' }
                     });
 
-                    const ids = this.selectedIds.join(',');
+                    const ids = this.selectedIds;
                     const tab = '{{ request('tab', 'management') }}';
-                    const url = '{{ route('reimbursements.download_caratula') }}?ids=' + ids + '&tab=' + tab;
 
-                    // Trigger download via a temporary anchor element
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'CARATULAS_SELECCIONADOS.pdf';
-                    a.style.display = 'none';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
+                    try {
+                        const response = await fetch('{{ route('reimbursements.download_caratula') }}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify({ ids: ids, tab: tab })
+                        });
+
+                        if (!response.ok) throw new Error('Error en descarga');
+                        
+                        const blob = await response.blob();
+                        const dlUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = dlUrl;
+                        a.download = 'CARATULAS_SELECCIONADOS.pdf';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(dlUrl);
+                    } catch(e) {
+                        Swal.fire('Error', 'No se pudo generar el PDF. Es posible que el lote sea demasiado grande para el servidor.', 'error');
+                    }
 
                     // Give the browser time to start the download, then close the modal
                     setTimeout(() => {
