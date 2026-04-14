@@ -32,6 +32,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('reimbursements/bulk/approve', [ReimbursementController::class, 'bulkApprove'])->name('reimbursements.bulk_approve');
     Route::post('reimbursements/bulk-audit', [ReimbursementController::class, 'bulkAuditAction'])->name('reimbursements.bulk_audit_action');
     Route::get('reimbursements/export', [ReimbursementController::class, 'export'])->name('reimbursements.export');
+    Route::get('reimbursements/export/xml', [ReimbursementController::class, 'exportXml'])->name('reimbursements.export_xml');
     Route::get('reimbursements/audit', [ReimbursementController::class, 'audit'])->name('reimbursements.audit');
     Route::resource('reimbursements', ReimbursementController::class);
     Route::post('reimbursements/parse-xml', [ReimbursementController::class, 'parseCfdi'])->name('reimbursements.parse');

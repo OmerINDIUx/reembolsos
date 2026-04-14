@@ -1746,6 +1746,96 @@ class ReimbursementController extends Controller
     }
 
     /**
+     * Export all XML files of the filtered reimbursements as a ZIP archive.
+     */
+    public function exportXml(Request $request)
+    {
+        set_time_limit(600);
+        $user = Auth::user();
+        
+        $query = Reimbursement::with(['user', 'costCenter'])
+            ->where('status', '!=', 'borrador')
+            ->whereNotNull('xml_path');
+             
+        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->hasPendingApprovals();
+        $tab = $request->input('tab', $canManage ? 'management' : 'active');
+        
+        // Use the same scoping as the dashboard
+        $this->applyTabScope($query, $tab, $user);
+
+        // Mandatory filtering for export (consistent with export method)
+        if ($request->filled('export_week')) {
+            $query->where('week', $request->export_week);
+        } elseif ($request->filled('from_week') || $request->filled('to_week')) {
+            if ($request->filled('from_week')) {
+                $query->where('week', '>=', $request->from_week);
+            }
+            if ($request->filled('to_week')) {
+                $query->where('week', '<=', $request->to_week);
+            }
+        } elseif ($request->filled('from_date') || $request->filled('to_date')) {
+            $fromDate = $request->from_date;
+            $toDate = $request->to_date;
+
+            $query->where(function($q) use ($fromDate, $toDate) {
+                if ($fromDate && $toDate) {
+                    $q->whereBetween('created_at', [$fromDate . ' 00:00:00', $toDate . ' 23:59:59'])
+                      ->orWhereBetween('fecha', [$fromDate, $toDate]);
+                } elseif ($fromDate) {
+                    $q->whereDate('created_at', '>=', $fromDate)
+                      ->orWhereDate('fecha', '>=', $fromDate);
+                } elseif ($toDate) {
+                    $q->whereDate('created_at', '<=', $toDate)
+                      ->orWhereDate('fecha', '<=', $toDate);
+                }
+            });
+        }
+
+        // Apply common filters
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('folio', 'like', "%{$search}%")
+                  ->orWhere('uuid', 'like', "%{$search}%")
+                  ->orWhere('nombre_emisor', 'like', "%{$search}%")
+                  ->orWhere('title', 'like', "%{$search}%");
+            });
+        }
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        $reimbursements = $query->latest()->get();
+
+        if ($reimbursements->isEmpty()) {
+            return back()->with('error', 'No se encontraron archivos XML para los criterios seleccionados o tu perfil no tiene acceso a ellos.');
+        }
+
+        $date = now()->format('Ymd_His');
+        $zipName = "xmls_reembolsos_{$date}.zip";
+
+        return response()->streamDownload(function () use ($reimbursements) {
+            // ZipStream v3 - Disable headers as Laravel handles them
+            $zip = new \ZipStream\ZipStream(sendHttpHeaders: false);
+            
+            foreach ($reimbursements as $r) {
+                if ($r->xml_path && Storage::exists($r->xml_path)) {
+                    // Create a friendly name for the XML file inside the ZIP
+                    $cleanFolio = str_replace(['/', '\\', '*', '?', ':', '"', '<', '>', '|'], '_', $r->true_folio ?? $r->folio ?? $r->id);
+                    $filename = "{$cleanFolio}_{$r->uuid}.xml";
+                    
+                    $zip->addFileFromPath($filename, Storage::path($r->xml_path));
+                }
+            }
+            
+            $zip->finish();
+        }, $zipName);
+    }
+
+    /**
      * Massive approval action from the audit selected view.
      */
     public function bulkAuditAction(Request $request)
