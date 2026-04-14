@@ -2309,7 +2309,7 @@ class ReimbursementController extends Controller
         $outputName = 'CARATULAS_' . now()->format('Ymd_His') . '.pdf';
         return response($pdf->Output('S'), 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="' . $outputName . '"'
+            'Content-Disposition' => 'attachment; filename="' . $outputName . '"'
         ]);
     }
 

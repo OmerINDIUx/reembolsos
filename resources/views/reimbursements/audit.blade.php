@@ -246,9 +246,11 @@
                             <div x-show="selectedCount > 0" x-transition.opacity class="flex items-center space-x-4">
                                 <span class="text-xs font-black text-indigo-600 uppercase tracking-widest" x-text="selectedCount + ' Seleccionados'"></span>
                                 
-                                <button type="button" @click="openModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-                                    <span>Acción Masiva</span>
+                                <button type="button"
+                                    @click="downloadCaratulaSelected()"
+                                    class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-emerald-200 flex items-center space-x-2">
+                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    <span>Descargar Carátula</span>
                                 </button>
 
                                 <button type="button" @click="openModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
@@ -836,25 +838,52 @@
                     this.selectedIds = [];
                 }
             },
-            
+
             formatMoney(amount) {
                 return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             },
-            
+
+            async downloadCaratulaSelected() {
+                if (this.selectedIds.length === 0) return;
+
+                Swal.fire({
+                    title: 'Generando Carátula...',
+                    html: '<p class="text-sm text-gray-500 mt-1">Preparando el PDF con los comprobantes seleccionados.<br>Esto puede tomar unos segundos.</p>',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => Swal.showLoading(),
+                    customClass: { popup: 'rounded-2xl shadow-2xl border-none font-sans' }
+                });
+
+                const ids = this.selectedIds.join(',');
+                const tab = '{{ request('tab', 'management') }}';
+                const url = '{{ route('reimbursements.download_caratula') }}?ids=' + ids + '&tab=' + tab;
+
+                // Trigger download via a temporary anchor element
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'CARATULAS_SELECCIONADOS.pdf';
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                // Give the browser time to start the download, then close the modal
+                setTimeout(() => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Carátula lista!',
+                        text: 'El PDF se está descargando.',
+                        timer: 2000,
+                        showConfirmButton: false,
+                        customClass: { popup: 'rounded-2xl shadow-2xl border-none font-sans' }
+                    });
+                }, 1500);
+            },
+
             init() {
-                // Ensure bulk modal markup is teleported or works fine inline.
-                // We placed it outside the main data loop, but we can access it using Alpine teleport if needed, or just let Alpine handle it.
-                // Since Alpine handles nested state resolution, if modal is inside x-data bounds it works.
-                // I've moved the modal into the main layout root or just bound to document body.
-                // Wait, if the modal is placed outside `x-data="bulkAudit()"`, the modal's internal x-model won't bind.
-                // To fix this, I made sure the `x-data="bulkAudit()"` wrapper actually wraps the END elements too? 
-                // Ah, I ended `</div>` on line 428 in the file content previously? 
-                // We will append the modal to the body by Alpine teleport, wait teleport is not standard in older alpine 3 without plugin.
-                // It's safest to just rely on the existing DOM. The modal is placed right below the main container. Let's make sure it's accessible.
-                
-                init() {
-                    // Modal is now inline.
-                }
+                // Modal is now inline.
             }
         }));
     });
@@ -950,76 +979,6 @@
 
                 init() {
                     // Modal is now inline, no need to move it.
-                }
-            }));
-
-            Alpine.data('bulkAudit', () => ({
-                selectedIds: [],
-                openModal: false,
-                confirmed: false,
-                selectedAction: '',
-                selectAll: false,
-                
-                toggleAll() {
-                    if (this.selectAll) {
-                        const checkboxes = document.querySelectorAll('.reimbursement-checkbox');
-                        checkboxes.forEach(cb => {
-                            if (!this.selectedIds.includes(String(cb.value))) {
-                                this.selectedIds.push(String(cb.value));
-                            }
-                        });
-                    } else {
-                        this.selectedIds = [];
-                    }
-                },
-                
-                get selectedCount() {
-                    return this.selectedIds.length;
-                },
-                
-                get totalAmount() {
-                    let sum = 0;
-                    this.selectedIds.forEach(id => {
-                        const el = document.querySelector(`input[type="checkbox"][value="${id}"]`);
-                        if (el) sum += parseFloat(el.dataset.amount || 0);
-                    });
-                    return sum;
-                },
-                
-                get missingUuidCount() {
-                    let count = 0;
-                    this.selectedIds.forEach(id => {
-                        const el = document.querySelector(`input[type="checkbox"][value="${id}"]`);
-                        if (el && el.dataset.hasUuid === '0') count++;
-                    });
-                    return count;
-                },
-                
-                get mismatchCount() {
-                    let count = 0;
-                    this.selectedIds.forEach(id => {
-                        const el = document.querySelector(`input[type="checkbox"][value="${id}"]`);
-                        if (el && el.dataset.mismatch === '1') count++;
-                    });
-                    return count;
-                },
-                
-                get totalAlerts() {
-                    return this.missingUuidCount + this.mismatchCount;
-                },
-                
-                formatMoney(amount) {
-                    return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                },
-
-                downloadCaratula() {
-                    if (this.selectedIds.length === 0) return;
-                    const ids = this.selectedIds.join(',');
-                    window.location.href = `{{ route('reimbursements.download_caratula') }}?ids=${ids}`;
-                },
-                
-                init() {
-                    // Modal is now inline.
                 }
             }));
         });
