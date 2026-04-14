@@ -2349,6 +2349,7 @@ class ReimbursementController extends Controller
                         $pdf->SetXY(10, 3);
                         $pdf->Cell(190, 5, mb_convert_encoding($itemTitle . " (PAG. $i)", 'ISO-8859-1', 'UTF-8'), 0, 0, 'R', true);
                     }
+                } catch (\Exception $e) {
                     Log::error("FPDI merge error (PDF): " . $e->getMessage());
                     // Add a placeholder page instead of failing
                     $pdf->addPage();
