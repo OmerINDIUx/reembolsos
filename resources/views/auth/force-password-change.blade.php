@@ -33,6 +33,7 @@
                         <input id="password_confirmation" name="password_confirmation" type="password" required 
                                class="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-5 py-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
                                placeholder="Repite tu nueva contraseña">
+                        <div id="password-match-msg" class="text-[10px] mt-2 font-bold uppercase tracking-widest hidden ml-1"></div>
                         <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
                     </div>
 
@@ -59,4 +60,31 @@
             </p>
         </div>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const password = document.getElementById('password');
+            const confirm = document.getElementById('password_confirmation');
+            const msg = document.getElementById('password-match-msg');
+
+            function checkMatch() {
+                if (password.value === '' && confirm.value === '') {
+                    msg.classList.add('hidden');
+                    return;
+                }
+
+                msg.classList.remove('hidden');
+                if (password.value === confirm.value) {
+                    msg.textContent = '✓ Las contraseñas coinciden';
+                    msg.className = 'text-[10px] mt-2 font-bold uppercase tracking-widest text-green-500 ml-1';
+                } else {
+                    msg.textContent = '✗ Las contraseñas no coinciden';
+                    msg.className = 'text-[10px] mt-2 font-bold uppercase tracking-widest text-red-500 ml-1';
+                }
+            }
+
+            password.addEventListener('input', checkMatch);
+            confirm.addEventListener('input', checkMatch);
+        });
+    </script>
 </x-guest-layout>

@@ -28,20 +28,16 @@
                 
                 @if(!Auth::user()->isAdminView())
                 <div class="flex gap-3">
-                    @if(Auth::user()->isAdmin())
                     <a href="{{ route('reimbursements.create') }}" class="inline-flex items-center px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-indigo-500/30">
                         <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                        Nuevo Reembolso (Admin)
+                        Nuevo Reembolso
                     </a>
-                    @else
-                    <div class="inline-flex items-center px-5 py-2.5 bg-amber-50 text-amber-700 border border-amber-200 font-bold rounded-xl shadow-sm">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        Recepción Cerrada
-                    </div>
-                    @endif
                 </div>
                 @endif
             </div>
+
+            <!-- Time Filter Bar -->
+            <x-time-filter-bar :action="route('panel')" :periods="$periods" />
 
             <!-- Stats Grid (Dynamic based on Role) -->
             <div class="mb-10">
@@ -204,30 +200,20 @@
                         <div class="mt-4 pt-4 border-t border-gray-50 dark:border-gray-700">
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
                                 @foreach($analytics['status_breakdown'] as $s)
-                                    <div class="flex items-center gap-1.5 {{ $s->amount == 0 ? 'opacity-30' : 'opacity-100' }}">
-                                        <span class="w-2 h-2 rounded-full shadow-sm" style="background-color: 
-                                            @if($s->status == 'aprobado') #64b032 
-                                            @elseif($s->status == 'rechazado') #ff3000 
-                                            @elseif($s->status == 'requiere_correccion') #ffa608
-                                            @elseif($s->status == 'aprobado_director') #3385fa
-                                            @elseif($s->status == 'aprobado_control') #66a3fb
-                                            @elseif($s->status == 'aprobado_ejecutivo') #004bb3
-                                            @elseif($s->status == 'aprobado_cxp') #003380
-                                            @elseif($s->status == 'aprobado_direccion') #ff8c00
-                                            @else #0066f9 @endif"></span>
-                                        <span class="text-[8px] font-black text-gray-500 dark:text-gray-400 uppercase truncate" title="{{ $s->label }}">
-                                            @if($s->status == 'aprobado') Pagado 
-                                            @elseif($s->status == 'aprobado_director') N2: Dir
-                                            @elseif($s->status == 'aprobado_control') N3: Ctrl
-                                            @elseif($s->status == 'aprobado_ejecutivo') N4: Ejec.
-                                            @elseif($s->status == 'aprobado_cxp') N5: Subdir.
-                                            @elseif($s->status == 'aprobado_direccion') N6: Direcc.
-                                            @elseif($s->status == 'pendiente') N1: Pend.
-                                            @elseif($s->status == 'rechazado') Recha.
-                                            @elseif($s->status == 'requiere_correccion') Correg.
-                                            @else {{ $s->label }} @endif
-                                        </span>
-                                    </div>
+                                    @if($s->count > 0)
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="w-2 h-2 rounded-full shadow-sm" style="background-color: 
+                                                @if($s->status == 'aprobado') #64b032 
+                                                @elseif($s->status == 'rechazado') #ff3000 
+                                                @elseif($s->status == 'requiere_correccion') #ffa608
+                                                @elseif(str_contains($s->status, 'aprobado_')) #3385fa
+                                                @elseif($s->status == 'borrador') #9ca3af
+                                                @else #0066f9 @endif"></span>
+                                            <span class="text-[8px] font-black text-gray-500 dark:text-gray-400 uppercase truncate" title="{{ $s->label }}">
+                                                {{ $s->label }}
+                                            </span>
+                                        </div>
+                                    @endif
                                 @endforeach
                             </div>
                         </div>
@@ -374,11 +360,10 @@
                                                         {{ $reimbursement->status === 'aprobado' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300' : '' }}
                                                         {{ $reimbursement->status === 'rechazado' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300' : '' }}
                                                         {{ $reimbursement->status === 'requiere_correccion' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300' : '' }}
-                                                        {{ in_array($reimbursement->status, ['pendiente', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp', 'aprobado_direccion']) ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300' : '' }}
+                                                        {{ !in_array($reimbursement->status, ['aprobado', 'rechazado', 'requiere_correccion']) ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300' : '' }}
                                                     ">
                                                         @if($reimbursement->status === 'aprobado') Pagado 
-                                                        @elseif($reimbursement->status === 'aprobado_cxp') Aprob. Subdir.
-                                                        @elseif($reimbursement->status === 'aprobado_direccion') Aprob. Direcc.
+                                                        @elseif($reimbursement->status === 'pendiente') En Proceso
                                                         @else {{ str_replace('_', ' ', $reimbursement->status) }} @endif
                                                     </span>
                                                 </td>
@@ -443,16 +428,10 @@
                     <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-indigo-600/40 relative overflow-hidden group">
                         <div class="relative z-10">
                             <h4 class="text-2xl font-black mb-4 leading-none tracking-tighter">¿Nuevo Gasto?</h4>
-                            <p class="text-indigo-100 text-xs mb-8 font-bold leading-relaxed opacity-80 group-hover:opacity-100 transition-opacity">La plataforma se encuentra en mantenimiento preventivo. La recepción de nuevos comprobantes se reanudará en la v1.</p>
-                            @if(Auth::user()->isAdmin())
+                            <p class="text-indigo-100 text-xs mb-8 font-bold leading-relaxed opacity-80 group-hover:opacity-100 transition-opacity">La plataforma se encuentra habilitada para la recepción de comprobantes. ¡Inicia tu solicitud ahora!</p>
                             <a href="{{ route('reimbursements.create') }}" class="inline-flex items-center justify-center w-full px-6 py-4 bg-white text-indigo-600 font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-indigo-50 transition-all transform hover:-translate-y-1 shadow-lg">
-                                Iniciar Solicitud (Admin) &rarr;
+                                Iniciar Solicitud &rarr;
                             </a>
-                            @else
-                            <a href="{{ route('reimbursements.index') }}" class="inline-flex items-center justify-center w-full px-6 py-4 bg-white/20 text-white font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-white/30 transition-all shadow-lg">
-                                Ver Mis Gastos &rarr;
-                            </a>
-                            @endif
                         </div>
                         <svg class="absolute -right-12 -bottom-12 w-48 h-48 text-white/5 opacity-40 group-hover:scale-110 transition-transform duration-700" fill="currentColor" viewBox="0 0 24 24"><path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                     </div>

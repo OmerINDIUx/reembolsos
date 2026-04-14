@@ -46,11 +46,11 @@
 
                             <!-- Status Filter -->
                             <div>
-                                <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus (Acceso)</label>
+                                <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label>
                                 <select name="status" id="status" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                     <option value="">Todos</option>
-                                    <option value="active" {{ request('status') == 'active' ? 'selected' : '' }}>Activos (Contraseña Cambiada)</option>
-                                    <option value="inactive" {{ request('status') == 'inactive' ? 'selected' : '' }}>Inactivos (Pendiente Cambio)</option>
+                                    <option value="active" {{ request('status') == 'active' ? 'selected' : '' }}>Activos (Registro Completo)</option>
+                                    <option value="inactive" {{ request('status') == 'inactive' ? 'selected' : '' }}>Pendientes (Sin Registro)</option>
                                 </select>
                             </div>
 
@@ -82,8 +82,8 @@
                             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nombre</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Usuario</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Correo</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Rol</th>
                                     @if(Auth::user()->isAdmin())
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estatus</th>
@@ -96,10 +96,15 @@
                             </thead>
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 @foreach ($users as $user)
-                                <tr>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                                        {{ $user->name }}
-                                    </td>
+                                <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-all">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                    <a href="{{ route('users.show', $user->id) }}" class="flex items-center group">
+                                        <div>
+                                            <div class="text-sm font-black text-gray-900 dark:text-white group-hover:text-indigo-600 transition-colors underline decoration-dotted decoration-indigo-200 underline-offset-4">{{ $user->name }}</div>
+                                            <div class="text-[10px] text-gray-400 font-bold">Ver Panel Personal &rarr;</div>
+                                        </div>
+                                    </a>
+                                </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                         {{ $user->email }}
                                     </td>
@@ -124,10 +129,10 @@
                                     </td>
                                     @if(Auth::user()->isAdmin())
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                        @if($user->must_change_password)
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
-                                                <span class="w-2 h-2 mr-1.5 rounded-full bg-red-500"></span>
-                                                Inactivo
+                                        @if($user->invitation_token)
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                                <span class="w-2 h-2 mr-1.5 rounded-full bg-amber-500"></span>
+                                                Invitación Pendiente
                                             </span>
                                         @else
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
@@ -140,6 +145,24 @@
 
                                      <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                         @if(!Auth::user()->isAdminView())
+                                            @if($user->invitation_token)
+                                                <form action="{{ route('users.resend_invitation', $user->id) }}" method="POST" class="inline">
+                                                    @csrf
+                                                    <button type="submit" class="text-amber-600 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-600" title="Reenviar Invitación">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                        </svg>
+                                                    </button>
+                                                </form>
+                                                <button type="button" 
+                                                        onclick="copyInvitationLink('{{ route('invitation.accept', $user->invitation_token) }}')" 
+                                                        class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-600" 
+                                                        title="Copiar Enlace de Invitación">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                                    </svg>
+                                                </button>
+                                            @endif
                                         <a href="{{ route('users.edit', $user->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Editar</a>
                                         
                                         @if($user->id !== auth()->id())
@@ -249,5 +272,22 @@
             // Initial attach
             attachPaginationListeners();
         });
+
+        function copyInvitationLink(url) {
+            navigator.clipboard.writeText(url).then(() => {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Enlace Copiado',
+                    text: 'El enlace de invitación ha sido copiado al portapapeles.',
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 3000,
+                    timerProgressBar: true
+                });
+            }).catch(err => {
+                console.error('Error al copiar: ', err);
+            });
+        }
     </script>
 </x-app-layout>

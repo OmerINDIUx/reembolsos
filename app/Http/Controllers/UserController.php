@@ -6,7 +6,11 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
+use App\Mail\UserInvitation;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
@@ -31,9 +35,9 @@ class UserController extends Controller
 
         if ($request->filled('status')) {
             if ($request->status === 'active') {
-                $query->where('must_change_password', 0);
+                $query->whereNull('invitation_token');
             } elseif ($request->status === 'inactive') {
-                $query->where('must_change_password', 1);
+                $query->whereNotNull('invitation_token');
             }
         }
 
@@ -57,29 +61,99 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'email' => [
+                'required', 'string', 'email', 'max:255', 'unique:users',
+                function ($attribute, $value, $fail) {
+                    $blockedDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'live.com', 'icloud.com', 'yahoo.com', 'msn.com'];
+                    $domain = substr(strrchr($value, "@"), 1);
+                    if (in_array(strtolower($domain), $blockedDomains)) {
+                        $fail('No se permiten correos personales (Gmail, Outlook, etc.). Por favor usa un correo empresarial.');
+                    }
+                },
+            ],
             'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo,direccion'],
         ]);
 
-        User::create([
+        $token = Str::random(64);
+
+        $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'password' => null, // Password will be set via invitation
             'role' => $request->role,
-            'must_change_password' => ($request->password === 'S20hg00146'),
+            'invitation_token' => $token,
+            'invitation_sent_at' => now(),
         ]);
 
-        return redirect()->route('users.index')->with('success', 'Usuario creado exitosamente.');
+        Mail::to($user->email)->send(new UserInvitation($user));
+
+        return redirect()->route('users.index')->with('success', 'Usuario creado exitosamente. Se ha enviado una invitación por correo.');
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(Request $request, User $user)
     {
-        // Not really needed for users usually
-        return redirect()->route('users.edit', $id);
+        $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
+        $user->load(['director', 'subordinates', 'costCenters']);
+
+        // 1. Personal Spending Stats
+        $pendingQuery = $user->reimbursements()->applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
+        $approvedQuery = $user->reimbursements()->applyTimeFilters($request)->where('status', 'aprobado');
+
+        $stats = [
+            'pending_count' => (clone $pendingQuery)->count(),
+            'pending_amount' => (clone $pendingQuery)->sum('total'),
+            'approved_count' => (clone $approvedQuery)->count(),
+            'approved_amount' => (clone $approvedQuery)->sum('total'),
+            'rejected_count' => $user->reimbursements()->applyTimeFilters($request)->where('status', 'rechazado')->count(),
+        ];
+
+        // 2. Category Breakdown (Personal)
+        $categoryBreakdown = $user->reimbursements()
+            ->applyTimeFilters($request)
+            ->where('status', '!=', 'borrador')
+            ->select('category', DB::raw('sum(total) as amount'), DB::raw('count(*) as count'))
+            ->groupBy('category')
+            ->orderBy('amount', 'desc')
+            ->get();
+
+        // 3. Status Breakdown
+        $statusBreakdown = $user->reimbursements()
+            ->applyTimeFilters($request)
+            ->where('status', '!=', 'borrador')
+            ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total) as amount'))
+            ->groupBy('status')
+            ->get();
+
+        // 4. Monthly Trend (Last 6 months)
+        $monthlyTrend = $user->reimbursements()
+            ->where('status', 'aprobado')
+            ->select(
+                DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'),
+                DB::raw('sum(total) as amount')
+            )
+            ->where('created_at', '>=', now()->subMonths(6))
+            ->groupBy('month')
+            ->orderBy('month', 'asc')
+            ->get();
+
+        // 5. Recent Activity
+        $recentReimbursements = $user->reimbursements()
+            ->where('status', '!=', 'borrador')
+            ->with(['costCenter', 'currentStep'])
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        // 6. Approval Task Stats (if they are an approver)
+        // This is complex as it depends on current_step_id pointing to a step they are assigned to
+        $pendingApprovalsCount = \App\Models\Reimbursement::whereHas('currentStep', function($q) use ($user) {
+            $q->where('user_id', $user->id);
+        })->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->count();
+
+        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount', 'periods'));
     }
 
     /**
@@ -98,14 +172,27 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
+            'email' => [
+                'required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id),
+                function ($attribute, $value, $fail) {
+                    $blockedDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'live.com', 'icloud.com', 'yahoo.com', 'msn.com'];
+                    $domain = substr(strrchr($value, "@"), 1);
+                    if (in_array(strtolower($domain), $blockedDomains)) {
+                        $fail('No se permiten correos personales (Gmail, Outlook, etc.). Por favor usa un correo empresarial.');
+                    }
+                },
+            ],
             'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo,direccion'],
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'clabe' => ['nullable', 'string', 'size:18', 'regex:/^[0-9]+$/'],
         ]);
 
         $data = [
             'name' => $request->name,
             'email' => $request->email,
             'role' => $request->role,
+            'bank_name' => $request->bank_name,
+            'clabe' => $request->clabe,
         ];
 
         if ($request->filled('password')) {
@@ -113,7 +200,6 @@ class UserController extends Controller
                 'password' => ['required', 'string', 'min:8', 'confirmed'],
             ]);
             $data['password'] = Hash::make($request->password);
-            $data['must_change_password'] = ($request->password === 'S20hg00146');
         }
 
         $user->update($data);
@@ -133,5 +219,29 @@ class UserController extends Controller
         $user->delete();
 
         return redirect()->route('users.index')->with('success', 'Usuario eliminado.');
+    }
+
+    /**
+     * Resend invitation to a user.
+     */
+    public function resendInvitation(User $user)
+    {
+        if ($user->isRegistered()) {
+            return back()->with('error', 'Este usuario ya ha completado su registro.');
+        }
+
+        // Generate new token if missing
+        if (!$user->invitation_token) {
+            $user->update([
+                'invitation_token' => Str::random(64),
+                'invitation_sent_at' => now(),
+            ]);
+        } else {
+            $user->update(['invitation_sent_at' => now()]);
+        }
+
+        Mail::to($user->email)->send(new UserInvitation($user));
+
+        return back()->with('success', 'La invitación ha sido reenviada exitosamente.');
     }
 }

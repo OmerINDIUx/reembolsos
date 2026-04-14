@@ -7,9 +7,12 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "barryvdh/laravel-dompdf": "^3.1",
+        "fpdf/fpdf": "^1.86",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
         "maennchen/zipstream-php": "^3.2",
+        "setasign/fpdi": "^2.6",
         "smalot/pdfparser": "^2.12",
         "stechstudio/laravel-zipstream": "^5.7"
     },

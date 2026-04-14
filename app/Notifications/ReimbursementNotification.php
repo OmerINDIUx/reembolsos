@@ -35,7 +35,7 @@ class ReimbursementNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
     /**
@@ -43,10 +43,28 @@ class ReimbursementNotification extends Notification
      */
     public function toMail(object $notifiable): MailMessage
     {
+        $folio = $this->reimbursement ? ($this->reimbursement->true_folio ?? 'S/F') : 'VARIOS';
+        
+        $details = [];
+        if ($this->reimbursement) {
+            $details = [
+                'Folio' => $folio,
+                'Centro de Costos' => $this->reimbursement->costCenter->name ?? 'N/A',
+                'Monto' => '$' . number_format($this->reimbursement->total, 2) . ' ' . $this->reimbursement->moneda,
+                'Emisor' => $this->reimbursement->nombre_emisor ?? 'N/A',
+                'Estatus' => ucfirst($this->reimbursement->status),
+            ];
+        }
+
         return (new MailMessage)
-            ->line('The introduction to the notification.')
-            ->action('Notification Action', url('/'))
-            ->line('Thank you for using our application!');
+            ->subject('Notificación de Reembolso: ' . $folio)
+            ->view('emails.notification', [
+                'greeting' => 'Hola ' . $notifiable->name . ',',
+                'bodyText' => $this->message,
+                'actionUrl' => $this->reimbursement ? route('reimbursements.show', $this->reimbursement->id) : route('reimbursements.index'),
+                'actionText' => 'Ver Solicitud',
+                'details' => $details
+            ]);
     }
 
     /**
@@ -58,7 +76,7 @@ class ReimbursementNotification extends Notification
     {
         return [
             'reimbursement_id' => $this->reimbursement ? $this->reimbursement->id : null,
-            'reimbursement_folio' => $this->reimbursement ? ($this->reimbursement->folio ?? substr($this->reimbursement->uuid, 0, 8) ?? 'S/F') : 'VARIOS',
+            'reimbursement_folio' => $this->reimbursement ? ($this->reimbursement->true_folio ?? 'S/F') : 'VARIOS',
             'message' => $this->message,
             'type' => $this->type, // success, danger, warning, info
             'url' => $this->reimbursement ? route('reimbursements.show', $this->reimbursement->id) : route('reimbursements.index')

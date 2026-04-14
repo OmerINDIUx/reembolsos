@@ -23,8 +23,16 @@ class User extends Authenticatable
         'password',
         'role',
         'director_id',
-        'must_change_password',
+        'invitation_token',
+        'invitation_sent_at',
+        'bank_name',
+        'clabe',
     ];
+
+    public function isRegistered()
+    {
+        return $this->password !== null && $this->invitation_token === null;
+    }
 
     public function director()
     {
@@ -39,6 +47,11 @@ class User extends Authenticatable
     public function costCenters()
     {
         return $this->hasMany(CostCenter::class, 'director_id');
+    }
+
+    public function reimbursements()
+    {
+        return $this->hasMany(Reimbursement::class);
     }
 
     public function isAdmin()
@@ -81,6 +94,11 @@ class User extends Authenticatable
         return $this->role === 'direccion';
     }
 
+    public function hasRole(...$roles)
+    {
+        return in_array($this->role, $roles);
+    }
+
     /**
      * The attributes that should be hidden for serialization.
      *
@@ -100,6 +118,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'invitation_sent_at' => 'datetime',
             'password' => 'hashed',
         ];
     }
@@ -117,5 +136,32 @@ class User extends Authenticatable
             'tesoreria' => 'Dirección N6',
             default => 'Usuario Estándar',
         };
+    }
+
+    public function travelEvents()
+    {
+        return $this->belongsToMany(TravelEvent::class, 'travel_event_user');
+    }
+
+    public function authorizedCostCenters()
+    {
+        return $this->belongsToMany(CostCenter::class, 'cost_center_user')
+                    ->withPivot('can_do_special')
+                    ->withTimestamps();
+    }
+
+    public function reimbursementApprovals()
+    {
+        return $this->hasMany(ReimbursementApproval::class);
+    }
+
+    /**
+     * Check if the user has any reimbursement currently assigned to them for approval.
+     */
+    public function hasPendingApprovals()
+    {
+        return Reimbursement::whereHas('currentStep', function($q) {
+            $q->where('user_id', $this->id);
+        })->exists();
     }
 }

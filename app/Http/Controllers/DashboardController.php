@@ -12,118 +12,92 @@ use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
-        
-        // Trigger beta notice on login/dashboard entry
-        if (!session()->has('beta_notice_displayed')) {
-            session()->flash('show_beta_modal', true);
-            session()->put('beta_notice_displayed', true);
-        }
+        $periods = Reimbursement::getAvailableTimePeriods();
 
         $stats = [];
         $recentReimbursements = collect();
 
         // Standard stats based on roles
         // 1. PERSONAL STATS (For everyone)
-        $myRequestsQuery = Reimbursement::where('user_id', $user->id);
+        $myRequestsQuery = Reimbursement::where('user_id', $user->id)->applyTimeFilters($request);
         $stats['personal'] = [
-            'pending_count' => (clone $myRequestsQuery)->whereNotIn('status', ['aprobado', 'rechazado'])->count(),
+            'pending_count' => (clone $myRequestsQuery)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->count(),
             'approved_count' => (clone $myRequestsQuery)->where('status', 'aprobado')->count(),
             'rejected_count' => (clone $myRequestsQuery)->where('status', 'rechazado')->count(),
             'correction_count' => (clone $myRequestsQuery)->where('status', 'requiere_correccion')->count(),
-            'pending_amount' => (clone $myRequestsQuery)->whereNotIn('status', ['aprobado', 'rechazado'])->sum('total'),
+            'pending_amount' => (clone $myRequestsQuery)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->sum('total'),
             'approved_amount' => (clone $myRequestsQuery)->where('status', 'aprobado')->sum('total'),
         ];
 
         // 2. MANAGEMENT STATS (For Approvers/Admins)
         if ($user->isAdmin() || $user->isAdminView()) {
             $stats['management'] = [
-                'pending_count' => Reimbursement::whereNotIn('status', ['aprobado', 'rechazado'])->count(),
-                'approved_count' => Reimbursement::where('status', 'aprobado')->count(),
-                'rejected_count' => Reimbursement::where('status', 'rechazado')->count(),
-                'pending_amount' => Reimbursement::whereNotIn('status', ['aprobado', 'rechazado'])->sum('total'),
-                'approved_amount' => Reimbursement::where('status', 'aprobado')->sum('total'),
+                'pending_amount' => Reimbursement::applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->sum('total'),
+                'approved_amount' => Reimbursement::applyTimeFilters($request)->where('status', 'aprobado')->sum('total'),
             ];
+            $stats['management']['pending_count'] = Reimbursement::applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->count();
+            $stats['management']['approved_count'] = Reimbursement::applyTimeFilters($request)->where('status', 'aprobado')->count();
             $recentReimbursements = (clone $myRequestsQuery)->with('costCenter')->latest()->limit(10)->get();
 
-        } elseif ($user->isCxp() || $user->isDireccion() || $user->isTreasury()) {
-            $stats['management'] = [
-                'pending_count' => Reimbursement::whereNotIn('status', ['aprobado', 'rechazado'])->count(),
-                'approved_count' => Reimbursement::where('status', 'aprobado')->count(),
-                'pending_amount' => Reimbursement::whereNotIn('status', ['aprobado', 'rechazado'])->sum('total'),
-                'approved_amount' => Reimbursement::where('status', 'aprobado')->sum('total'),
-            ];
-            $recentReimbursements = (clone $myRequestsQuery)->with('costCenter')->latest()->limit(10)->get();
-
-        } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
-            // Managers see everything that is "In Transit" (Pending/Approved steps)
-            // for their specific cost centers, even if it's currently at a later step.
-            $scopedCcIds = CostCenter::where(function($q) use ($user) {
-                if ($user->isDirector()) $q->where('director_id', $user->id);
-                if ($user->isControlObra()) $q->where('control_obra_id', $user->id);
-                if ($user->isExecutiveDirector()) $q->where('director_ejecutivo_id', $user->id);
+        } else {
+            // DYNAMIC MANAGEMENT STATS: For anyone assigned as an approver in any cost center step
+            $scopedCcIds = CostCenter::whereHas('approvalSteps', function($q) use ($user) {
+                $q->where('user_id', $user->id);
             })->pluck('id');
 
-            $pendingFlowQuery = Reimbursement::whereIn('cost_center_id', $scopedCcIds)
-                ->whereNotIn('status', ['aprobado', 'rechazado']);
+            if ($scopedCcIds->isNotEmpty()) {
+                $pendingFlowQuery = Reimbursement::whereIn('cost_center_id', $scopedCcIds)
+                    ->applyTimeFilters($request)
+                    ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
 
-            $approvedFlowQuery = Reimbursement::whereIn('cost_center_id', $scopedCcIds)
-                ->where('status', 'aprobado');
+                $approvedFlowQuery = Reimbursement::whereIn('cost_center_id', $scopedCcIds)
+                    ->applyTimeFilters($request)
+                    ->where('status', 'aprobado');
 
-            $stats['management'] = [
-                'pending_count' => $pendingFlowQuery->count(),
-                'pending_amount' => $pendingFlowQuery->sum('total'),
-                'approved_count' => $approvedFlowQuery->count(),
-                'approved_amount' => $approvedFlowQuery->sum('total'),
-                'label' => $user->isDirector() ? 'N1' : ($user->isControlObra() ? 'N2' : 'N3'),
-            ];
+                $stats['management'] = [
+                    'pending_count' => $pendingFlowQuery->count(),
+                    'pending_amount' => $pendingFlowQuery->sum('total'),
+                    'approved_count' => $approvedFlowQuery->count(),
+                    'approved_amount' => $approvedFlowQuery->sum('total'),
+                    'label' => 'Asignados',
+                ];
+            }
 
-            $recentReimbursements = (clone $myRequestsQuery)->with('costCenter')->latest()->limit(10)->get();
-        } else {
             $recentReimbursements = (clone $myRequestsQuery)->with('costCenter')->latest()->limit(10)->get();
         }
 
         // New Detailed Analytics (Available for Admins and Managers)
-        $analytics = $this->getAnalyticsData($user);
+        $analytics = $this->getAnalyticsData($user, $request);
         $notifications = $user->unreadNotifications()->latest()->take(5)->get();
 
-        return view('dashboard', compact('stats', 'recentReimbursements', 'notifications', 'analytics'));
+        return view('dashboard', compact('stats', 'recentReimbursements', 'notifications', 'analytics', 'periods'));
     }
 
-    private function getAnalyticsData($user)
+    private function getAnalyticsData($user, Request $request)
     {
-        $queryBuilder = Reimbursement::query()->where('status', '!=', 'rechazado');
+        $queryBuilder = Reimbursement::query()->applyTimeFilters($request)->whereNotIn('status', ['rechazado', 'borrador']);
 
         // Limit scope if not admin
-        if (!$user->isAdmin() && !$user->isAdminView() && !$user->isCxp() && !$user->isDireccion() && !$user->isTreasury()) {
+        if (!$user->isAdmin() && !$user->isAdminView()) {
             $queryBuilder->where(function($q) use ($user) {
-                $q->where('user_id', $user->id);
-                
-                if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
-                    $q->orWhereHas('costCenter', function($q2) use ($user) {
-                        if ($user->isDirector()) $q2->where('director_id', $user->id);
-                        if ($user->isControlObra()) $q2->where('control_obra_id', $user->id);
-                        if ($user->isExecutiveDirector()) $q2->where('director_ejecutivo_id', $user->id);
-                    });
-                }
+                $q->where('user_id', $user->id)
+                  ->orWhereHas('costCenter.approvalSteps', function($q2) use ($user) {
+                      $q2->where('user_id', $user->id);
+                  });
             });
         }
 
         // 1. Status Breakdown (Including all statuses for the doughnut chart)
-        $statusQuery = Reimbursement::query();
-        if (!$user->isAdmin() && !$user->isAdminView() && !$user->isCxp() && !$user->isDireccion() && !$user->isTreasury()) {
+        $statusQuery = Reimbursement::query()->applyTimeFilters($request)->where('status', '!=', 'borrador');
+        if (!$user->isAdmin() && !$user->isAdminView()) {
             $statusQuery->where(function($q) use ($user) {
-                $q->where('user_id', $user->id);
-                
-                if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
-                    $q->orWhereHas('costCenter', function($q2) use ($user) {
-                        if ($user->isDirector()) $q2->where('director_id', $user->id);
-                        if ($user->isControlObra()) $q2->where('control_obra_id', $user->id);
-                        if ($user->isExecutiveDirector()) $q2->where('director_ejecutivo_id', $user->id);
-                    });
-                }
+                $q->where('user_id', $user->id)
+                  ->orWhereHas('costCenter.approvalSteps', function($q2) use ($user) {
+                      $q2->where('user_id', $user->id);
+                  });
             });
         }
         
@@ -134,15 +108,17 @@ class DashboardController extends Controller
             ->keyBy('status');
 
         $allStatuses = [
-            'pendiente' => 'N1: Pendiente',
-            'aprobado_director' => 'N2: Director',
-            'aprobado_control' => 'N3: Control de Obra',
-            'aprobado_ejecutivo' => 'N4: Director Ejecutivo',
-            'aprobado_cxp' => 'N5: Subdirección CXP',
-            'aprobado_direccion' => 'N6: Dirección General',
-            'aprobado' => 'Pagado (Tesoreria)',
+            'pendiente' => 'En Aprobación',
+            'aprobado_director' => 'Aprob. Director (Old)',
+            'aprobado_control' => 'Aprob. Control (Old)',
+            'aprobado_ejecutivo' => 'Aprob. Ejecut. (Old)',
+            'aprobado_cxp' => 'Aprob. Subdir. (Old)',
+            'aprobado_direccion' => 'Aprob. Direcc. (Old)',
+            'aprobado' => 'Pagado',
             'rechazado' => 'Rechazado',
             'requiere_correccion' => 'Para Corregir',
+            'en_evento' => 'En Evento',
+            'borrador' => 'Borrador',
         ];
 
         $statusBreakdown = collect($allStatuses)->map(function ($label, $key) use ($rawBreakdown) {
@@ -157,18 +133,13 @@ class DashboardController extends Controller
 
         // 1.1 Detailed Items for Chart (Ungrouped)
         // Fetch up to 30 recent pending/in-process items to show individual slices
-        $detailedItems = Reimbursement::query();
-        if (!$user->isAdmin() && !$user->isAdminView() && !$user->isCxp() && !$user->isDireccion() && !$user->isTreasury()) {
+        $detailedItems = Reimbursement::query()->applyTimeFilters($request);
+        if (!$user->isAdmin() && !$user->isAdminView()) {
             $detailedItems->where(function($q) use ($user) {
-                $q->where('user_id', $user->id);
-                
-                if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
-                    $q->orWhereHas('costCenter', function($q2) use ($user) {
-                        if ($user->isDirector()) $q2->where('director_id', $user->id);
-                        if ($user->isControlObra()) $q2->where('control_obra_id', $user->id);
-                        if ($user->isExecutiveDirector()) $q2->where('director_ejecutivo_id', $user->id);
-                    });
-                }
+                $q->where('user_id', $user->id)
+                  ->orWhereHas('costCenter.approvalSteps', function($q2) use ($user) {
+                        $q2->where('user_id', $user->id);
+                  });
             });
         }
         $detailedItems = $detailedItems->whereNotIn('status', ['aprobado', 'rechazado'])

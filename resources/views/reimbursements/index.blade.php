@@ -5,32 +5,38 @@
         </h2>
     </x-slot>
 
+    <style>
+        [x-cloak] { display: none !important; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
                     @php
                         $user = Auth::user();
-                        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector();
+                        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->hasPendingApprovals();
                         $defaultTab = $canManage ? 'management' : 'active';
                     @endphp
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
                         <h3 class="text-lg font-medium">Listado de Reembolsos</h3>
                         <div class="flex space-x-2">
                             @if($user->isAdmin() || $user->isTreasury() || $user->isCxp())
+                            <button type="button" x-data @click="$dispatch('open-caratula-pdf-modal')" class="inline-flex items-center px-4 py-2 bg-emerald-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-emerald-500 focus:bg-emerald-700 active:bg-emerald-900 transition ease-in-out duration-150">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                Descargar Carátulas (PDF)
+                            </button>
                             <button type="button" x-data @click="$dispatch('open-bulk-approval-modal')" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
                                 Aprobación Masiva (CSV)
                             </button>
                             @endif
-                            @if(Auth::user()->isAdmin())
                              <a href="{{ route('reimbursements.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
-                                 Nuevo Reembolso (Admin)
+                                 Nuevo Reembolso
                             </a>
-                            @else
-                            <span class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 border border-transparent rounded-md font-semibold text-xs text-gray-500 dark:text-gray-400 uppercase tracking-widest cursor-not-allowed">
-                                Recepción Cerrada
-                            </span>
-                            @endif
 
                         </div>
                     </div>
@@ -137,269 +143,391 @@
                             <input type="hidden" name="sort_order" id="input-sort-order" value="{{ request('sort_order', 'desc') }}">
                             
                             <!-- Search Input -->
+                            <div class="col-span-1 md:col-span-3">
+                                <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscador General</label>
+                                <input type="text" name="search" id="search" value="{{ request('search') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Busca cualquier dato del reembolso...">
+                            </div>
+
+                            <!-- Cost Center Filter -->
+                            <div class="col-span-1 md:col-span-3">
+                                <label for="cost_center_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Centro de Costos / Obra</label>
+                                <select name="cost_center_id" id="cost_center_id" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    <option value="">Todos los permitidos</option>
+                                    @foreach($authorizedCCs as $acc)
+                                        <option value="{{ $acc->id }}" {{ request('cost_center_id') == $acc->id ? 'selected' : '' }}>{{ $acc->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <!-- Week From -->
                             <div class="col-span-1 md:col-span-2">
-                                <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar (Folio, UUID, Emisor, Título)</label>
-                                <input type="text" name="search" id="search" value="{{ request('search') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Buscar...">
-                            </div>
-
-                            <!-- Status Filter -->
-                            <div>
-                                <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label>
-                                <select name="status" id="status" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                    <option value="">Todos</option>
-                                    <option value="pendiente" {{ request('status') == 'pendiente' ? 'selected' : '' }}>1. Pendiente Director</option>
-                                    <option value="aprobado_director" {{ request('status') == 'aprobado_director' ? 'selected' : '' }}>2. Aprobado Director</option>
-                                    <option value="aprobado_control" {{ request('status') == 'aprobado_control' ? 'selected' : '' }}>3. Aprobado Control de Obra</option>
-                                    <option value="aprobado_ejecutivo" {{ request('status') == 'aprobado_ejecutivo' ? 'selected' : '' }}>4. Aprobado Dir. Ejecutivo</option>
-                                    <option value="aprobado_cxp" {{ request('status') == 'aprobado_cxp' ? 'selected' : '' }}>5. Aprobado Subdirección</option>
-                                    <option value="aprobado_direccion" {{ request('status') == 'aprobado_direccion' ? 'selected' : '' }}>6. Aprobado Dirección</option>
-                                    <option value="aprobado" {{ request('status') == 'aprobado' ? 'selected' : '' }}>7. Pagado (Final)</option>
-                                    <option value="requiere_correccion" {{ request('status') == 'requiere_correccion' ? 'selected' : '' }}>Requiere Corrección</option>
-                                    <option value="rechazado" {{ request('status') == 'rechazado' ? 'selected' : '' }}>Rechazado</option>
+                                <label for="from_week" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana Desde</label>
+                                <select name="from_week" id="from_week" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    <option value="">Cualquiera</option>
+                                    @foreach($availableWeeks as $aw)
+                                        <option value="{{ $aw }}" {{ request('from_week') == $aw ? 'selected' : '' }}>Semana {{ $aw }}</option>
+                                    @endforeach
                                 </select>
                             </div>
 
-                            <!-- Type Filter -->
-                            <div>
-                                <label for="type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo</label>
-                                <select name="type" id="type" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                    <option value="">Todos</option>
-                                    <option value="reembolso" {{ request('type') == 'reembolso' ? 'selected' : '' }}>Reembolso</option>
-                                    <option value="viaje" {{ request('type') == 'viaje' ? 'selected' : '' }}>Viaje</option>
-                                    <option value="comida" {{ request('type') == 'comida' ? 'selected' : '' }}>Comida</option>
-                                    <option value="fondo_fijo" {{ request('type') == 'fondo_fijo' ? 'selected' : '' }}>Fondo Fijo</option>
+                            <!-- Week To -->
+                            <div class="col-span-1 md:col-span-2">
+                                <label for="to_week" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana Hasta</label>
+                                <select name="to_week" id="to_week" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    <option value="">Cualquiera</option>
+                                    @foreach($availableWeeks as $aw)
+                                        <option value="{{ $aw }}" {{ request('to_week') == $aw ? 'selected' : '' }}>Semana {{ $aw }}</option>
+                                    @endforeach
                                 </select>
-                            </div>
-
-                            <!-- Date From -->
-                            <div>
-                                <label for="from_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Desde (Creación/Expedición)</label>
-                                <input type="date" name="from_date" id="from_date" value="{{ request('from_date') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                            </div>
-
-                            <!-- Date To -->
-                            <div>
-                                <label for="to_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hasta (Creación/Expedición)</label>
-                                <input type="date" name="to_date" id="to_date" value="{{ request('to_date') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                             </div>
 
                             <!-- Buttons -->
-                            <div class="col-span-1 md:col-span-6 flex justify-end space-x-2 mt-2">
-                                <a href="{{ route('reimbursements.index') }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
+                            <div class="col-span-1 md:col-span-2 flex justify-end items-end space-x-2">
+                                <a href="{{ route('reimbursements.index') }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
                                     Limpiar
                                 </a>
-                                <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
+                                <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
                                     Filtrar
                                 </button>
-                                <button type="button" onclick="exportData()" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
-                                    Exportar
-                                </button>
+                                
+                                @if(Auth::user()->isCxp() || Auth::user()->isTreasury())
+                                <div class="ml-2 pl-2 border-l border-gray-300 dark:border-gray-600 flex items-center">
+                                    <button type="button" x-data @click="$dispatch('open-export-modal')" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
+                                        Exportar
+                                    </button>
+                                </div>
+                                @endif
                             </div>
                         </form>
                     </div>
 
-                    <div id="results-container">
-                        <div class="overflow-x-auto relative shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead class="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="folio">
-                                            Folio / UUID
-                                            <span class="ml-1">
-                                                @if(request('sort_by') == 'folio')
-                                                    @if(request('sort_order', 'desc') == 'asc')
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                                                    @else
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                    @endif
-                                                @else
-                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
-                                                @endif
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="fecha">
-                                            Fecha
-                                            <span class="ml-1">
-                                                @if(request('sort_by') == 'fecha')
-                                                    @if(request('sort_order', 'desc') == 'asc')
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                                                    @else
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                    @endif
-                                                @else
-                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
-                                                @endif
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="nombre_emisor">
-                                            Emisor
-                                            <span class="ml-1">
-                                                @if(request('sort_by') == 'nombre_emisor')
-                                                    @if(request('sort_order', 'desc') == 'asc')
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                                                    @else
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                    @endif
-                                                @else
-                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
-                                                @endif
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="total">
-                                            Total
-                                            <span class="ml-1">
-                                                @if(request('sort_by') == 'total')
-                                                    @if(request('sort_order', 'desc') == 'asc')
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                                                    @else
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                    @endif
-                                                @else
-                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
-                                                @endif
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        Solicitante / Centro de Costos
-                                    </th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="status">
-                                            Estatus / Ubicación
-                                            <span class="ml-1">
-                                                @if(request('sort_by') == 'status')
-                                                    @if(request('sort_order', 'desc') == 'asc')
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                                                    @else
-                                                        <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                    @endif
-                                                @else
-                                                    <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
-                                                @endif
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th scope="col" class="relative px-6 py-3">
-                                        <span class="sr-only">Acciones</span>
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                @foreach ($reimbursements as $r)
-                                <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                        <div class="flex flex-col">
-                            <span>{{ $r->folio ? $r->folio : substr($r->uuid, 0, 8).'...' }}</span>
-                            <span class="text-xs text-gray-500 font-normal">
-                                {{ ucfirst(str_replace('_', ' ', $r->type ?? 'Reembolso')) }}
-                            </span>
-                        </div>
-                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        {{ $r->fecha ? \Carbon\Carbon::parse($r->fecha)->format('d/m/Y') : '-' }}
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        {{ \Illuminate\Support\Str::limit($r->nombre_emisor, 20) }}
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        ${{ number_format($r->total, 2) }} {{ $r->moneda }}
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        <div class="flex flex-col">
-                                            <span class="font-bold">{{ $r->user->name ?? 'N/A' }}</span>
-                                            <span class="text-xs">{{ $r->costCenter->name ?? 'Sin C.C.' }}</span>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        <div class="flex flex-col space-y-1">
-                                            <span class="px-2 w-fit inline-flex text-xs leading-5 font-semibold rounded-full 
-                                                {{ $r->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
-                                                {{ $r->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
-                                                {{ $r->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
-                                                {{ $r->status === 'aprobado_director' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
-                                                {{ $r->status === 'aprobado_control' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : '' }}
-                                                {{ $r->status === 'aprobado_ejecutivo' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
-                                                {{ $r->status === 'aprobado_cxp' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300' : '' }}
-                                                {{ $r->status === 'aprobado_direccion' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300' : '' }}
-                                                {{ $r->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
-                                            ">
-                                                @if($r->status === 'aprobado') Pagado 
-                                                @elseif($r->status === 'aprobado_cxp') Aprobado Subdirección
-                                                @elseif($r->status === 'aprobado_direccion') Aprobado Dirección
-                                                @else {{ ucfirst(str_replace('_', ' ', $r->status)) }} @endif
-                                            </span>
-                                            <span class="text-[10px] text-gray-400 font-medium italic">
-                                                @if($r->status === 'pendiente') 
-                                                    En: {{ $r->costCenter->director->name ?? 'Director' }} (N1)
-                                                @elseif($r->status === 'aprobado_director') 
-                                                    En: {{ $r->costCenter->controlObra->name ?? 'Control de Obra' }} (N2)
-                                                @elseif($r->status === 'aprobado_control') 
-                                                    En: {{ $r->costCenter->directorEjecutivo->name ?? 'Dir. Ejecutivo' }} (N3)
-                                                @elseif($r->status === 'aprobado_ejecutivo') 
-                                                    En: Subdirección
-                                                @elseif($r->status === 'aprobado_cxp') 
-                                                    En: Dirección
-                                                @elseif($r->status === 'aprobado_direccion') 
-                                                    En: Cuentas por Pagar
-                                                @elseif($r->status === 'aprobado') Finalizado
-                                                @else Rechazado/Corregir
-                                                @endif
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                        @php
-                                            $user = Auth::user();
-                                            $isOwnerOrDesignatedApprover = $r->user_id === $user->id || 
-                                                ($user->isAdmin() || $user->isCxp() || $user->isDireccion() || $user->isTreasury() || $user->isAdminView()) ||
-                                                ($user->isDirector() && $r->costCenter->director_id === $user->id) ||
-                                                ($user->isControlObra() && $r->costCenter->control_obra_id === $user->id) ||
-                                                ($user->isExecutiveDirector() && $r->costCenter->director_ejecutivo_id === $user->id);
-                                        @endphp
+                    @php
+                        $tab = request('tab', $defaultTab);
+                        $isGroupedView = ($tab === 'management' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history' || $tab === 'audit');
+                    @endphp
+                    <div x-data="bulkAuditIndex()" class="relative border-transparent">
+                        {{-- Modal included here to ensure it is always in the same scope --}}
+                        @include('reimbursements.partials.bulk-index-modal')
 
-                                        @if($isOwnerOrDesignatedApprover)
-                                            <a href="{{ route('reimbursements.show', $r->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Ver</a>
-                                            
+
+                    <div id="results-container">
+                        @if($isGroupedView)
+                            @php
+                                $groupedByWeek = $reimbursements->groupBy('week');
+                            @endphp
+
+                            <div class="space-y-6">
+                                @if($tab !== 'management')
+                                <!-- Action Bar for Group (Inline) -->
+                                <div class="flex justify-between items-center px-4 mb-4 bg-gray-50/80 dark:bg-gray-800/50 p-2 rounded-xl border border-gray-200 dark:border-gray-700">
+                                    <label class="flex items-center space-x-3 cursor-pointer select-none">
+                                        <input type="checkbox" x-model="selectAll" @change="toggleAll" class="w-5 h-5 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200" />
+                                        <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Seleccionar Todos</span>
+                                    </label>
+                                    
+                                    <div x-show="selectedGroupCount > 0" x-transition.opacity class="flex items-center space-x-4">
+                                        <span class="text-xs font-black text-indigo-600 uppercase tracking-widest" x-text="selectedGroupCount + ' Seleccionados'"></span>
+                                        
+                                        <button type="button" @click="downloadCaratula()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-emerald-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                            <span>Descargar Carátula</span>
+                                        </button>
+
+                                        <button type="button" @click="openModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                                            <span>Acción Masiva</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                @endif
+                                @forelse($groupedByWeek as $week => $weekItems)
+                                    <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                                        {{-- Header Semana --}}
+                                        <div class="bg-indigo-50/50 dark:bg-indigo-900/20 px-8 py-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                                            <div class="flex items-center space-x-4">
+                                                <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-none">
+                                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                                </div>
+                                                <div>
+                                                    <h3 class="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest italic">Semana Fiscal</h3>
+                                                    <p class="text-xl font-black text-gray-900 dark:text-white leading-none mt-1">{{ $week }}</p>
+                                                </div>
+                                            </div>
+                                            <div class="text-right">
+                                                <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Semana</h3>
+                                                <p class="text-2xl font-black text-indigo-700 dark:text-indigo-400 leading-none mt-1">${{ number_format($weekItems->sum('total'), 2) }}</p>
+                                            </div>
+                                        </div>
+
+                                        {{-- Lista de Centros de Costos --}}
+                                        <div class="p-4 space-y-2">
                                             @php
-                                                $canApproveCurr = ($user->isDirector() && $r->status === 'pendiente' && $r->costCenter->director_id === $user->id) ||
-                                                                 ($user->isControlObra() && $r->status === 'aprobado_director' && $r->costCenter->control_obra_id === $user->id) ||
-                                                                 ($user->isExecutiveDirector() && $r->status === 'aprobado_control' && $r->costCenter->director_ejecutivo_id === $user->id) ||
-                                                                 ($user->isCxp() && $r->status === 'aprobado_ejecutivo') ||
-                                                                 ($user->isDireccion() && $r->status === 'aprobado_cxp') ||
-                                                                 (($user->isTreasury() || $user->isAdmin()) && $r->status === 'aprobado_direccion');
+                                                $groupedByCC = $weekItems->groupBy(function($item) {
+                                                    return $item->costCenter->name ?? 'Sin Centro de Costos';
+                                                });
+                                            @endphp
+                                            @foreach($groupedByCC as $ccName => $ccItems)
+                                                @php
+                                                    $cc = $ccItems->first()->costCenter;
+                                                    $internalId = ($cc->abbreviation ?? 'SCC') . '-' . $week;
+                                                    $invoiceCount = $ccItems->whereNotNull('uuid')->count();
+                                                    $ticketCount = $ccItems->whereNull('uuid')->count();
+                                                    $userCount = $ccItems->pluck('user_id')->unique()->count();
+                                                    
+                                                    $mismatchCount = 0;
+                                                    foreach($ccItems as $rcr) {
+                                                        $val = $rcr->validation_data ?? [];
+                                                        if (!($val['uuid_match'] ?? true) || !($val['total_match'] ?? true)) {
+                                                            $mismatchCount++;
+                                                        }
+                                                    }
+                                                    $idsJson = json_encode($ccItems->pluck('id'));
+                                                    $totalAmount = $ccItems->sum('total');
+                                                @endphp
+                                                <a href="{{ route('reimbursements.audit', ['week' => $week, 'cc' => $ccName, 'tab' => $tab]) }}" 
+                                                   class="flex flex-col md:flex-row items-start md:items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/30 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-md transition-all group no-underline space-y-3 md:space-y-0">
+                                                    <div class="flex items-center space-x-4">
+                                                        @if($tab !== 'management')
+                                                        <div class="flex items-center justify-center border-r border-gray-200 dark:border-gray-700 pr-4" @click.stop>
+                                                            <input type="checkbox"
+                                                                   data-ids="{{ $idsJson }}"
+                                                                   data-amount="{{ $totalAmount }}"
+                                                                   data-has-uuid="{{ $ticketCount }}"
+                                                                   data-mismatch="{{ $mismatchCount }}"
+                                                                   class="cc-group-checkbox w-6 h-6 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200 cursor-pointer" 
+                                                                   @change="toggleGroupData($event.target)" />
+                                                        </div>
+                                                        @endif
+                                                        <div class="flex flex-col">
+                                                            <span class="text-[10px] font-black text-indigo-500 uppercase tracking-widest italic opacity-70">{{ $internalId }}</span>
+                                                            <span class="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{{ $ccName }}</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="flex flex-wrap items-center gap-4 md:gap-8">
+                                                        <div class="flex flex-col items-center">
+                                                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Facturas</span>
+                                                            <span class="text-sm font-black text-gray-900 dark:text-white">{{ $invoiceCount }}</span>
+                                                        </div>
+                                                        <div class="flex flex-col items-center">
+                                                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Tickets</span>
+                                                            <span class="text-sm font-black text-gray-900 dark:text-white">{{ $ticketCount }}</span>
+                                                        </div>
+                                                        <div class="flex flex-col items-center">
+                                                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Solicitantes</span>
+                                                            <span class="text-sm font-black text-gray-900 dark:text-white">{{ $userCount }}</span>
+                                                        </div>
+                                                        <div class="text-right ml-4">
+                                                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest block">Total</span>
+                                                            <span class="text-lg font-black text-gray-900 dark:text-white">${{ number_format($ccItems->sum('total'), 2) }}</span>
+                                                        </div>
+                                                        <div class="p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 group-hover:bg-indigo-600 transition-colors">
+                                                            <svg class="w-4 h-4 text-gray-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                                        </div>
+                                                    </div>
+                                                </a>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @empty
+                                    <div class="p-20 text-center bg-gray-50 dark:bg-gray-800 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                                        <p class="text-gray-400 font-black uppercase tracking-widest text-sm">Sin datos para procesar en el flujo seleccionado</p>
+                                    </div>
+                                @endforelse
+                            </div>
+                        @else
+                            <div class="overflow-x-auto relative shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead class="bg-gray-50 dark:bg-gray-700">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="folio">
+                                                Folio / UUID
+                                                <span class="ml-1">
+                                                    @if(request('sort_by') == 'folio')
+                                                        @if(request('sort_order', 'desc') == 'asc')
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                        @else
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                        @endif
+                                                    @else
+                                                        <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                    @endif
+                                                </span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="fecha">
+                                                Fecha
+                                                <span class="ml-1">
+                                                    @if(request('sort_by') == 'fecha')
+                                                        @if(request('sort_order', 'desc') == 'asc')
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                        @else
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                        @endif
+                                                    @else
+                                                        <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                    @endif
+                                                </span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="nombre_emisor">
+                                                Emisor
+                                                <span class="ml-1">
+                                                    @if(request('sort_by') == 'nombre_emisor')
+                                                        @if(request('sort_order', 'desc') == 'asc')
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                        @else
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                        @endif
+                                                    @else
+                                                        <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                    @endif
+                                                </span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="total">
+                                                Total
+                                                <span class="ml-1">
+                                                    @if(request('sort_by') == 'total')
+                                                        @if(request('sort_order', 'desc') == 'asc')
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                        @else
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                        @endif
+                                                    @else
+                                                        <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                    @endif
+                                                </span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            Solicitante / Centro de Costos
+                                        </th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                            <button type="button" class="sort-header flex items-center group focus:outline-none" data-sort="status">
+                                                Estatus / Ubicación
+                                                <span class="ml-1">
+                                                    @if(request('sort_by') == 'status')
+                                                        @if(request('sort_order', 'desc') == 'asc')
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                                        @else
+                                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                        @endif
+                                                    @else
+                                                        <svg class="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"></path></svg>
+                                                    @endif
+                                                </span>
+                                            </button>
+                                        </th>
+                                        <th scope="col" class="relative px-6 py-3">
+                                            <span class="sr-only">Acciones</span>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                    @foreach ($reimbursements as $r)
+                                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                            <div class="flex flex-col">
+                                <span>{{ $r->true_folio }}</span>
+                                <span class="text-xs text-gray-500 font-normal">
+                                    {{ ucfirst(str_replace('_', ' ', $r->type ?? 'Reembolso')) }}
+                                </span>
+                            </div>
+                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            {{ $r->fecha ? \Carbon\Carbon::parse($r->fecha)->format('d/m/Y') : '-' }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            {{ \Illuminate\Support\Str::limit($r->nombre_emisor, 20) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            ${{ number_format($r->total, 2) }} {{ $r->moneda }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            <div class="flex flex-col">
+                                                <span class="font-bold">{{ $r->user->name ?? 'N/A' }}</span>
+                                                <span class="text-xs">{{ $r->costCenter->name ?? 'Sin C.C.' }}</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            <div class="flex flex-col space-y-1">
+                                                <span class="px-2 w-fit inline-flex text-[10px] leading-5 font-black uppercase rounded-full 
+                                                    {{ $r->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
+                                                    {{ $r->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
+                                                    {{ $r->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
+                                                    {{ $r->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
+                                                    {{ $r->status === 'pendiente_pago' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
+                                                    {{ $r->status === 'borrador' ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' : '' }}
+                                                    {{ !in_array($r->status, ['aprobado', 'rechazado', 'requiere_correccion', 'pendiente', 'pendiente_pago', 'borrador']) ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
+                                                ">
+                                                    @if($r->status === 'aprobado') Pagado 
+                                                    @elseif($r->status === 'pendiente') {{ $r->currentStep->name ?? 'En Proceso' }}
+                                                    @elseif($r->status === 'pendiente_pago') Cuentas por Pagar
+                                                    @elseif($r->status === 'requiere_correccion') Corregir
+                                                    @else {{ ucfirst(str_replace('_', ' ', $r->status)) }} @endif
+                                                </span>
+                                                <span class="text-[10px] text-gray-400 font-medium italic">
+                                                    @if($r->status === 'pendiente' && $r->currentStep) 
+                                                        En: {{ $r->currentStep->user->name ?? 'Por asignar' }}
+                                                    @elseif($r->status === 'pendiente_pago')
+                                                        Listo para liquidación final
+                                                    @elseif($r->status === 'aprobado') 
+                                                        Finalizado
+                                                    @elseif($r->status === 'requiere_correccion')
+                                                        Esperando ajuste del solicitante
+                                                    @elseif($r->status === 'rechazado')
+                                                        Cancelado definitivamente
+                                                    @else
+                                                        {{ str_replace('_', ' ', $r->status) }}
+                                                    @endif
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                            @php
+                                                $user = Auth::user();
+                                                $canApproveCurr = $r->canBeApprovedBy($user) && !in_array($r->status, ['aprobado', 'rechazado', 'borrador']);
                                             @endphp
 
-                                            @if($canApproveCurr)
-                                                <form action="{{ route('reimbursements.update', $r->id) }}" method="POST" class="inline">
-                                                    @csrf
-                                                    @method('PUT')
-                                                    <input type="hidden" name="status" value="aprobado">
-                                                    <button type="submit" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-600 ml-2">Aprobar</button>
-                                                </form>
-                                                <button type="button" x-data @click="$dispatch('open-rejection-modal', { url: '{{ route('reimbursements.update', $r->id) }}' })" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Rechazar</button>
+                                            @if($user->id === $r->user_id || $user->isAdmin() || $user->isAdminView() || $canApproveCurr)
+                                                <a href="{{ route('reimbursements.show', $r->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Ver</a>
+                                                
+                                                @if($canApproveCurr)
+                                                    <form action="{{ route('reimbursements.update', $r->id) }}" method="POST" class="inline">
+                                                        @csrf
+                                                        @method('PUT')
+                                                        <input type="hidden" name="status" value="aprobado">
+                                                        <button type="submit" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-600 ml-2">Aprobar</button>
+                                                    </form>
+                                                    <button type="button" x-data @click="$dispatch('open-rejection-modal', { url: '{{ route('reimbursements.update', $r->id) }}' })" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Rechazar</button>
+                                                @endif
+                                            @else
+                                                <span class="text-gray-400 italic text-xs">Consulta (Sin Permiso)</span>
                                             @endif
-                                        @else
-                                            <span class="text-gray-400 italic text-xs">Consulta (Sin Permiso)</span>
-                                        @endif
-                                    </td>
-                                </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                        @endif
+
+                        @if(isset($weeksPaginator))
+                            <div class="mt-8 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 sm:rounded-b-lg">
+                                {{ $weeksPaginator->links() }}
+                            </div>
+                        @elseif(!isset($weeklySummary) && $reimbursements instanceof \Illuminate\Pagination\AbstractPaginator)
+                            <div class="mt-8 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 sm:rounded-b-lg">
+                                {{ $reimbursements->links() }}
+                            </div>
+                        @endif
                     </div>
-                    <div class="mt-8 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 sm:rounded-b-lg">
-                        {{ $reimbursements->links() }}
-                    </div>
-                    
-                    </div> <!-- End of results-container -->
-                </div>
+                 </div>
             </div>
         </div>
     </div>
@@ -430,8 +558,8 @@
                                     Aprobación Masiva de Reembolsos
                                 </h3>
                                 <div class="mt-2">
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                                        Sube el archivo CSV exportado del sistema. El sistema buscará el <strong>Folio</strong> y el <strong>UUID</strong> para marcar los reembolsos como <strong>Pagados</strong> (Aprobación Final).
+                                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-4 bg-gray-50 dark:bg-gray-700/30 p-2 rounded-md">
+                                        Sube el archivo CSV exportado del sistema. El sistema buscará el <strong>Folio</strong>, y confirmará con el <strong>Monto (Total)</strong> o el <strong>UUID</strong> para validar tus tickets sin factura automáticamente y prepararlos para el Pago.
                                     </p>
                                     
                                     <div class="space-y-4">
@@ -550,19 +678,26 @@
             const form = document.getElementById('filter-form');
             const container = document.getElementById('results-container');
             
-            window.exportData = function() {
-                const fromDate = document.getElementById('from_date').value;
-                const toDate = document.getElementById('to_date').value;
+            window.exportData = function(weekValue = null) {
+                const fromDateEl = document.getElementById('from_date');
+                const toDateEl = document.getElementById('to_date');
+                const fromDate = fromDateEl ? fromDateEl.value : null;
+                const toDate = toDateEl ? toDateEl.value : null;
                 
-                /* 
-                if (!fromDate || !toDate) {
-                    alert('Por favor selecciona un rango de fechas (Desde y Hasta) para exportar. \n\nNota: La búsqueda incluye tanto la fecha de creación del reembolso como la fecha de expedición del XML.');
-                    return;
+                const params = new URLSearchParams(new FormData(form));
+                if (weekValue) {
+                    params.set('export_week', weekValue);
+                } else if (!(fromDate || toDate)) {
+                    // Check if there are week filters instead
+                    const fromWeek = document.getElementById('from_week')?.value;
+                    const toWeek = document.getElementById('to_week')?.value;
+                    if (!fromWeek && !toWeek) {
+                        alert('Por favor selecciona una semana o un rango de fechas válido.');
+                        return;
+                    }
                 }
-                */
                 
-                const params = new URLSearchParams(new FormData(form)).toString();
-                window.location.href = "{{ route('reimbursements.export') }}?" + params;
+                window.location.href = "{{ route('reimbursements.export') }}?" + params.toString();
             }
             
             // Function to handle fetching and updating
@@ -668,4 +803,253 @@
             attachSortListeners();
         });
     </script>
+    <!-- Bulk Main Action Modal logic moved into the component above -->
+
+    
+    <!-- Export Modal -->
+    <div x-data="{ open: false, selectedWeek: '' }" 
+         @open-export-modal.window="open = true" 
+         x-show="open" 
+         class="fixed z-50 inset-0 overflow-y-auto" 
+         style="display: none;">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="open = false" aria-hidden="true"></div>
+            <div class="inline-block bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full dark:bg-gray-800">
+                <div class="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+                            <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-2">Exportar Reembolsos</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Selecciona la semana fiscal que deseas exportar a Excel.</p>
+                            
+                            @php
+                                $exportWeeks = $availableWeeks;
+                            @endphp
+                            
+                            <select x-model="selectedWeek" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-green-500 focus:ring-green-500">
+                                <option value="">Selecciona una semana...</option>
+                                @foreach($exportWeeks as $ew)
+                                    <option value="{{ $ew }}">Semana {{ $ew }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse dark:bg-gray-900/50">
+                    <button type="button" @click="exportData(selectedWeek); open = false" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">Confirmar y Exportar</button>
+                    <button type="button" @click="open = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('bulkAuditIndex', () => ({
+                selectedIds: [],
+                openModal: false,
+                confirmed: false,
+                selectedAction: '',
+                selectAll: false,
+                
+                // Track metadata manually because DOM inputs can be detached during re-render
+                metadata: [],
+                
+                toggleAll() {
+                    if (this.selectAll) {
+                        this.selectedIds = [];
+                        this.metadata = [];
+                        document.querySelectorAll('.cc-group-checkbox').forEach(cb => {
+                            cb.checked = true;
+                            this.toggleGroupData(cb);
+                        });
+                    } else {
+                        document.querySelectorAll('.cc-group-checkbox').forEach(cb => cb.checked = false);
+                        this.selectedIds = [];
+                        this.metadata = [];
+                    }
+                },
+                
+                get selectedGroupCount() {
+                    return this.selectedIds.length;
+                },
+                
+                get totalAmount() {
+                    return this.metadata.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+                },
+                
+                get missingUuidCount() {
+                    return this.metadata.reduce((sum, item) => sum + parseInt(item.hasUuid || 0), 0);
+                },
+                
+                get mismatchCount() {
+                    return this.metadata.reduce((sum, item) => sum + parseInt(item.mismatch || 0), 0);
+                },
+                
+                get totalAlerts() {
+                    return this.missingUuidCount + this.mismatchCount;
+                },
+                
+                toggleGroupData(target) {
+                    const idsArr = JSON.parse(target.dataset.ids || "[]");
+                    const amount = parseFloat(target.dataset.amount || 0);
+                    const hasUuid = parseInt(target.dataset.hasUuid || 0);
+                    const mismatch = parseInt(target.dataset.mismatch || 0);
+                    
+                    if (target.checked) {
+                        idsArr.forEach(id => {
+                            if (!this.selectedIds.includes(String(id))) this.selectedIds.push(String(id));
+                        });
+                        this.metadata.push({ idsArr, amount, hasUuid, mismatch });
+                    } else {
+                        this.selectedIds = this.selectedIds.filter(id => !idsArr.map(String).includes(String(id)));
+                        this.metadata = this.metadata.filter(m => JSON.stringify(m.idsArr) !== JSON.stringify(idsArr));
+                    }
+                },
+                
+                formatMoney(amount) {
+                    return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                },
+
+                downloadCaratula() {
+                    const ids = this.selectedIds.join(',');
+                    window.location.href = `{{ route('reimbursements.download_caratula') }}?ids=${ids}`;
+                },
+                
+                init() {
+                    // Modal now handled inline with the partial.
+                }
+            }));
+        });
+    </script>
+    <!-- Caratula PDF Modal -->
+    <div x-data="{
+        open: false, week: '', cost_center_id: '', loading: false, progress: 0,
+        async startDownload(url) {
+            this.loading = true;
+            this.progress = 0;
+            let sim = 0;
+            // Simulate smooth progress (0→85%) while server generates the PDF
+            const ticker = setInterval(() => {
+                if (sim < 85) {
+                    // Easing: fast start, slows down as it approaches 85
+                    sim += (85 - sim) * 0.04;
+                    this.progress = Math.round(sim);
+                }
+            }, 100);
+            try {
+                const response = await fetch(url);
+                clearInterval(ticker);
+                if (!response.ok) throw new Error('Error al generar el PDF');
+                // Read the response (server already generated it, comes in fast)
+                const contentLength = response.headers.get('Content-Length');
+                const total = contentLength ? parseInt(contentLength) : 0;
+                const reader = response.body.getReader();
+                const chunks = [];
+                let received = 0;
+                while(true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    received += value.length;
+                    // Map download phase to 85→99%
+                    if (total) this.progress = Math.round(85 + ((received / total) * 14));
+                }
+                this.progress = 100;
+                const blob = new Blob(chunks, { type: 'application/pdf' });
+                const dlUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = dlUrl;
+                a.download = 'caratula.pdf';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(dlUrl), 1000);
+                setTimeout(() => { this.loading = false; this.open = false; }, 1500);
+            } catch(e) {
+                clearInterval(ticker);
+                this.loading = false;
+                console.error('Error generando caratula:', e);
+                alert('Ocurrió un error al generar la carátula. Intenta de nuevo.');
+            }
+        }
+    }" 
+         @open-caratula-pdf-modal.window="open = true" 
+         x-show="open" 
+         class="fixed z-50 inset-0 overflow-y-auto" 
+         style="display: none;">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="open = false" aria-hidden="true"></div>
+            <div class="inline-block bg-white dark:bg-gray-800 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full border border-gray-100 dark:border-gray-700">
+                <div class="p-8">
+                    <div class="flex items-center space-x-4 mb-6">
+                        <div class="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-black text-gray-900 dark:text-white tracking-tight leading-none">Generar Carátulas PDF</h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Consolidado de reembolsos y comprobantes.</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-5">
+                        <!-- Semana -->
+                        <div>
+                            <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Semana Fiscal</label>
+                            @php
+                                $pdfWeeks = $availableWeeks;
+                            @endphp
+                            <select x-model="week" class="w-full rounded-xl border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 text-sm font-bold">
+                                <option value="">Todas las semanas</option>
+                                @foreach($pdfWeeks as $pw)
+                                    <option value="{{ $pw }}">Semana {{ $pw }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <!-- Centro de Costos -->
+                        <div>
+                            <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Centro de Costos / Obra</label>
+                            @php
+                                $pdfCCs = \App\Models\CostCenter::orderBy('name')->get();
+                            @endphp
+                            <select x-model="cost_center_id" class="w-full rounded-xl border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 text-sm font-bold">
+                                <option value="">Todos los centros</option>
+                                @foreach($pdfCCs as $pcc)
+                                    <option value="{{ $pcc->id }}">{{ $pcc->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mt-8 flex flex-col space-y-3">
+                        <!-- Progress Bar (visible during loading) -->
+                        <div x-show="loading" class="w-full">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-black text-emerald-600 uppercase tracking-widest">Generando Carátula...</span>
+                                <span class="text-xs font-black text-gray-500" x-text="progress + '%'"></span>
+                            </div>
+                            <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                                <div class="bg-emerald-500 h-2.5 rounded-full transition-all duration-300 ease-out"
+                                     :style="`width: ${progress}%`"></div>
+                            </div>
+                            <p class="text-[10px] text-gray-400 mt-1.5 text-center">El popup se cerrará automáticamente al terminar.</p>
+                        </div>
+
+                        <button type="button" 
+                                x-show="!loading"
+                                @click="startDownload(`{{ route('reimbursements.download_caratula') }}?week=${week}&cost_center_id=${cost_center_id}&tab={{ request('tab', 'management') }}`)"
+                                class="w-full inline-flex justify-center items-center rounded-xl px-4 py-3 bg-emerald-600 text-sm font-black text-white uppercase tracking-widest hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100 dark:shadow-none">
+                            Descargar Carátula PDF
+                        </button>
+                        <button type="button" @click="open = false" :disabled="loading" class="text-xs font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-colors pb-2 disabled:opacity-40 disabled:cursor-not-allowed">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </x-app-layout>
