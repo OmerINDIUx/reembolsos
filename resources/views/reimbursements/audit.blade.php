@@ -973,8 +973,41 @@
                 
                 downloadCaratula() {
                     if (this.selectedIds.length === 0) return;
+
+                    Swal.fire({
+                        title: 'Generando Carátula...',
+                        html: '<p class="text-sm text-gray-500 mt-1">Preparando el PDF con los comprobantes seleccionados.<br>Esto puede tomar unos segundos.</p>',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        showConfirmButton: false,
+                        didOpen: () => Swal.showLoading(),
+                        customClass: { popup: 'rounded-2xl shadow-2xl border-none font-sans' }
+                    });
+
                     const ids = this.selectedIds.join(',');
-                    window.location.href = `{{ route('reimbursements.download_caratula') }}?ids=${ids}`;
+                    const tab = '{{ request('tab', 'management') }}';
+                    const url = '{{ route('reimbursements.download_caratula') }}?ids=' + ids + '&tab=' + tab;
+
+                    // Trigger download via a temporary anchor element
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'CARATULAS_SELECCIONADOS.pdf';
+                    a.style.display = 'none';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+
+                    // Give the browser time to start the download, then close the modal
+                    setTimeout(() => {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Carátula lista!',
+                            text: 'El PDF se está descargando.',
+                            timer: 2000,
+                            showConfirmButton: false,
+                            customClass: { popup: 'rounded-2xl shadow-2xl border-none font-sans' }
+                        });
+                    }, 1500);
                 },
 
                 init() {
