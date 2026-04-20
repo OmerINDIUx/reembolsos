@@ -177,19 +177,22 @@ class Reimbursement extends Model
      */
     public function canBeApprovedBy(User $user)
     {
-        if ($user->isAdmin()) return true;
+        $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
+        if ($allIdentities->contains(fn($identity) => $identity->isAdmin())) return true;
 
-        // NEW: Shared Funnel for Accounts Payable (CXP) and Treasury
+        // Shared Funnel for Accounts Payable (CXP) and Treasury
         if ($this->status === 'pendiente_pago') {
-            return $user->isCxp() || $user->isTreasury();
+            return $allIdentities->contains(fn($identity) => $identity->isCxp() || $identity->isTreasury());
         }
         
-        // Re-calculate currentStep if not loaded
         $currentStep = $this->currentStep;
-        
         if (!$currentStep) return false;
         
-        return $currentStep->user_id === $user->id;
+        // Direct assignment
+        if ($currentStep->user_id === $user->id) return true;
+
+        // Substitute check
+        return $user->substitutingFor()->where('original_user_id', $currentStep->user_id)->exists();
     }
 
     /**

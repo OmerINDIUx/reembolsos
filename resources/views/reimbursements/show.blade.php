@@ -587,7 +587,13 @@
                                                 <div class="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
                                                     <div>
                                                         <p class="text-sm text-gray-500 dark:text-gray-400">
-                                                            <span class="font-bold text-gray-900 dark:text-white">{{ $approval->user->name ?? 'Sistema' }}</span>
+                                                            <span class="font-bold text-gray-900 dark:text-white">
+                                                                @if($approval->substituted_user_id)
+                                                                    {{ $approval->user->name }} <span class="text-indigo-600 dark:text-indigo-400 text-[10px] uppercase font-black tracking-tighter mx-1">(En sustitución de {{ $approval->substitutedUser->name }})</span>
+                                                                @else
+                                                                    {{ $approval->user->name ?? 'Sistema' }}
+                                                                @endif
+                                                            </span>
                                                             {{ str_replace('_', ' ', $approval->action) }} en el paso 
                                                             <span class="font-medium text-indigo-600 dark:text-indigo-400">{{ $approval->step_name }}</span>
                                                             @if($approval->is_bulk)

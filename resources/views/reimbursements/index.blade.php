@@ -17,9 +17,11 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
-                    @php
+
+                                        @php
                         $user = Auth::user();
-                        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->hasPendingApprovals();
+                        $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
+                        $canManage = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isAdminView() || $identity->isCxp() || $identity->isTreasury() || $identity->isDireccion() || $identity->isDirector() || $identity->isControlObra() || $identity->isExecutiveDirector() || $identity->hasPendingApprovals());
                         $defaultTab = $canManage ? 'management' : 'active';
                     @endphp
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
@@ -474,6 +476,15 @@
                                                 <span class="text-[10px] text-gray-400 font-medium italic">
                                                     @if($r->status === 'pendiente' && $r->currentStep) 
                                                         En: {{ $r->currentStep->user->name ?? 'Por asignar' }}
+                                                        @php
+                                                            $isSubstituteApproval = false;
+                                                            if ($r->currentStep->user_id !== Auth::id()) {
+                                                                $isSubstituteApproval = Auth::user()->substitutingFor()->where('original_user_id', $r->currentStep->user_id)->exists();
+                                                            }
+                                                        @endphp
+                                                        @if($isSubstituteApproval)
+                                                            <span class="block mt-1 text-indigo-500 font-bold bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-[9px] w-fit">Sustituyendo a {{ $r->currentStep->user->name }}</span>
+                                                        @endif
                                                     @elseif($r->status === 'pendiente_pago')
                                                         Listo para liquidación final
                                                     @elseif($r->status === 'aprobado') 

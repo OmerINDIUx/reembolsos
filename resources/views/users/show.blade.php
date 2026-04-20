@@ -222,6 +222,117 @@
                     @endif
                 </div>
             </div>
+
+            <!-- Admin Section: Substitutes Management -->
+            @if(Auth::user()->isAdmin())
+            <div x-data="{ showModal: false }">
+                <div class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mt-8">
+                    <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-indigo-50/30 dark:bg-indigo-900/10">
+                        <div>
+                            <h3 class="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Gestión de Sustitutos</h3>
+                            <p class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Personas autorizadas para aprobar en nombre de {{ explode(' ', $user->name)[0] }}</p>
+                        </div>
+                        
+                        <button type="button" @click="showModal = true" class="inline-flex items-center px-3 py-1.5 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-indigo-700 transition-all shadow-md shadow-indigo-600/10">
+                            <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+                            Asignar Sustituto
+                        </button>
+                    </div>
+                    
+                    <div class="p-8">
+                        @if($user->substitutes->count() > 0)
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            @foreach($user->substitutes as $substitute)
+                            <div class="p-5 rounded-3xl border border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20 relative group">
+                                <div class="flex items-center gap-4 mb-4">
+                                    <div class="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-black">
+                                        {{ substr($substitute->user->name, 0, 1) }}
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <h4 class="text-sm font-black text-gray-900 dark:text-white truncate uppercase tracking-tight">{{ $substitute->user->name }}</h4>
+                                        <p class="text-[10px] font-bold text-gray-500 truncate">{{ $substitute->user->email }}</p>
+                                    </div>
+                                    <div class="flex flex-col gap-1">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter {{ $substitute->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500' }}">
+                                            {{ $substitute->is_active ? 'Activo' : 'Inactivo' }}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                                    <form action="{{ route('users.substitutes.toggle', [$user->id, $substitute->user_id]) }}" method="POST" class="flex-1">
+                                        @csrf
+                                        <button type="submit" class="w-full text-[10px] font-black uppercase tracking-widest py-2 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-800 transition-all">
+                                            {{ $substitute->is_active ? 'Desactivar' : 'Activar' }}
+                                        </button>
+                                    </form>
+                                    <form action="{{ route('users.substitutes.remove', [$user->id, $substitute->user_id]) }}" method="POST" onsubmit="return confirm('¿Eliminar esta sustitución?')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                            @endforeach
+                        </div>
+                        @else
+                        <div class="text-center py-10 bg-gray-50 dark:bg-gray-900/20 rounded-3xl border border-dashed border-gray-200 dark:border-gray-700">
+                            <svg class="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            <p class="text-xs font-black uppercase text-gray-400 tracking-widest">No hay sustitutos asignados</p>
+                            <p class="text-[10px] text-gray-500 mt-1 italic">Asigna a alguien para que pueda firmar en nombre de {{ $user->name }} durante su ausencia.</p>
+                        </div>
+                        @endif
+                    </div>
+                </div>
+
+                <!-- Modal for adding substitute -->
+                <div x-show="showModal" 
+                     class="fixed z-50 inset-0 overflow-y-auto" 
+                     style="display: none;">
+                    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
+                        <div class="fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm transition-opacity" @click="showModal = false"></div>
+                        
+                        <div class="inline-block bg-white dark:bg-gray-800 rounded-[2rem] text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full border border-gray-100 dark:border-gray-700">
+                            <form action="{{ route('users.substitutes.add', $user->id) }}" method="POST">
+                                @csrf
+                                <div class="px-8 pt-8 pb-6">
+                                    <h3 class="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter mb-2">Asignar Nuevo Sustituto</h3>
+                                    <p class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-6">Selecciona al usuario que tendrá facultades de aprobación.</p>
+                                    
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Usuario Autorizado</label>
+                                            <select name="substitute_id" class="w-full rounded-2xl border-gray-200 dark:border-gray-700 dark:bg-gray-900 text-sm font-bold p-4 focus:ring-indigo-500 focus:border-indigo-500" required>
+                                                <option value="">Seleccionar usuario...</option>
+                                                @foreach($allUsers as $u)
+                                                    <option value="{{ $u->id }}">{{ $u->name }} ({{ $u->email }})</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-2xl border border-indigo-100 dark:border-indigo-800">
+                                            <div class="flex gap-3">
+                                                <svg class="w-5 h-5 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                                <p class="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 leading-relaxed uppercase tracking-tight">El sustituto podrá ver y aprobar todas las solicitudes asignadas a {{ $user->name }} mientras el estado sea "Activo".</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="px-8 py-6 bg-gray-50 dark:bg-gray-900/50 flex flex-col sm:flex-row-reverse gap-3">
+                                    <button type="submit" class="w-full inline-flex justify-center items-center px-6 py-3 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 transition-all">
+                                        Confirmar Asignación
+                                    </button>
+                                    <button type="button" @click="showModal = false" class="w-full inline-flex justify-center items-center px-6 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @endif
             
         </div>
     </div>

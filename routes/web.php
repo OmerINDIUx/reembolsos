@@ -41,6 +41,11 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('role:admin,admin_view')->group(function() {
         Route::resource('users', UserController::class);
         Route::post('users/{user}/resend-invitation', [UserController::class, 'resendInvitation'])->name('users.resend_invitation');
+        
+        // Substitutes
+        Route::post('users/{user}/substitutes', [UserController::class, 'addSubstitute'])->name('users.substitutes.add');
+        Route::post('users/{user}/substitutes/{substitute_id}/toggle', [UserController::class, 'toggleSubstitute'])->name('users.substitutes.toggle');
+        Route::delete('users/{user}/substitutes/{substitute_id}', [UserController::class, 'removeSubstitute'])->name('users.substitutes.remove');
     });
 
     Route::middleware('role:admin,admin_view,director,control_obra,director_ejecutivo,accountant')->group(function() {
@@ -53,6 +58,7 @@ Route::middleware(['auth'])->group(function () {
     
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    // Notification actions
     Route::post('/notifications/mark-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark_all');
     Route::get('/notifications/{id}/read', [NotificationController::class, 'markAsRead'])->name('notifications.mark_read');
     

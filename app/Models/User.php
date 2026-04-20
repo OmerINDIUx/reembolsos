@@ -161,7 +161,18 @@ class User extends Authenticatable
     public function hasPendingApprovals()
     {
         return Reimbursement::whereHas('currentStep', function($q) {
-            $q->where('user_id', $this->id);
+            $q->where('user_id', $this->id)
+              ->orWhereIn('user_id', $this->substitutingFor()->pluck('original_user_id'));
         })->exists();
+    }
+
+    public function substitutes()
+    {
+        return $this->hasMany(UserSubstitute::class, 'original_user_id');
+    }
+
+    public function substitutingFor()
+    {
+        return $this->hasMany(UserSubstitute::class, 'user_id')->where('is_active', true);
     }
 }

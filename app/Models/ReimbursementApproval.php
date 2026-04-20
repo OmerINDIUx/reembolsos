@@ -16,6 +16,7 @@ class ReimbursementApproval extends Model
         'action',
         'comment',
         'is_bulk',
+        'substituted_user_id',
     ];
 
     public function reimbursement()
@@ -26,5 +27,10 @@ class ReimbursementApproval extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function substitutedUser()
+    {
+        return $this->belongsTo(User::class, 'substituted_user_id');
     }
 }

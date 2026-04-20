@@ -340,13 +340,35 @@
                                                 <div>
                                                     <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Ticket / Pruebas Adicionales</label>
                                                     <input type="file" :name="'items['+index+'][ticket_file]'" accept=".pdf,.jpg,.jpeg,.png,.txt" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-2 mb-4" :required="!item.ticketName" x-on:change="handleTicketChange($event, index)">
+                                                    <template x-if="item.ticketName">
+                                                        <div class="mt-1 flex items-center justify-between mb-4">
+                                                            <div class="flex items-center text-[10px] text-green-600 font-bold uppercase italic">
+                                                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>
+                                                                <span>Ticket Guardado</span>
+                                                            </div>
+                                                            <template x-if="item.draftId">
+                                                                <a :href="'/reimbursements/' + item.draftId + '/view-file/ticket'" target="_blank" class="text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest flex items-center bg-indigo-50 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100">
+                                                                    VER
+                                                                    <svg class="w-2 h-2 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                                                </a>
+                                                            </template>
+                                                        </div>
+                                                    </template>
 
                                                     <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Archivo de Respaldado (PDF/Imagen) *</label>
                                                     <input type="file" :name="'items['+index+'][pdf_file]'" accept=".pdf,image/*,.txt" class="block w-full text-xs text-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :required="!hasInvoice && !item.pdfName" x-on:change="handlePdfChange($event, index)">
                                                     <template x-if="item.pdfName">
-                                                        <div class="mt-1 flex items-center text-[10px] text-green-600 font-bold uppercase italic">
-                                                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>
-                                                            <span x-text="item.pdfName"></span>
+                                                        <div class="mt-1 flex items-center justify-between">
+                                                            <div class="flex items-center text-[10px] text-green-600 font-bold uppercase italic">
+                                                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>
+                                                                <span x-text="item.pdfName"></span>
+                                                            </div>
+                                                            <template x-if="item.draftId">
+                                                                <a :href="'/reimbursements/' + item.draftId + '/view-file/pdf'" target="_blank" class="text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest flex items-center bg-indigo-50 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100">
+                                                                    VER
+                                                                    <svg class="w-2 h-2 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                                                </a>
+                                                            </template>
                                                         </div>
                                                     </template>
                                                 </div>
@@ -1053,6 +1075,9 @@
 
                     if (this.hasInvoice) {
                         this.validateFiles(index);
+                    } else {
+                        // In manual mode, we should also trigger an auto-save when a PDF is uploaded
+                        this.saveDraft(true);
                     }
 
                     this.calculateTotalFileSize();

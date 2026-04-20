@@ -28,7 +28,8 @@ class ReimbursementController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->hasPendingApprovals();
+        $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
+        $canManage = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isAdminView() || $identity->isCxp() || $identity->isTreasury() || $identity->isDireccion() || $identity->isDirector() || $identity->isControlObra() || $identity->isExecutiveDirector() || $identity->hasPendingApprovals());
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
         $globalSearch = $request->input('global_search');
         
@@ -144,7 +145,7 @@ class ReimbursementController extends Controller
     }
 
     /**
-     * Display the Auditoría de Reembolsos as a standalone page.
+     * Display the AuditorÃƒÂ­a de Reembolsos as a standalone page.
      */
     public function audit(Request $request)
     {
@@ -462,8 +463,8 @@ class ReimbursementController extends Controller
         }
 
         $request->validate($rules, [
-            'items.*.total.max' => 'No se pueden hacer reembolsos mayores a $2,000 MXN sin factura. Comunícate con tu director.',
-            'items.*.fecha.before_or_equal' => 'La fecha de emisión no puede ser una fecha futura.',
+            'items.*.total.max' => 'No se pueden hacer reembolsos mayores a $2,000 MXN sin factura. ComunÃƒÂ­cate con tu director.',
+            'items.*.fecha.before_or_equal' => 'La fecha de emisiÃƒÂ³n no puede ser una fecha futura.',
             'items.*.subtotal.lte' => 'El subtotal no puede ser mayor al total del comprobante.',
         ]);
 
@@ -520,7 +521,7 @@ class ReimbursementController extends Controller
 
             // AUTO-APPROVAL: If creator is the approver, advance
             while ($firstStep && $firstStep->user_id === $user->id) {
-                $autoNote .= "\n[AUTO-APROBACIÓN: " . $firstStep->name . "]";
+                $autoNote .= "\n[AUTO-APROBACIÃƒâ€œN: " . $firstStep->name . "]";
                 $this->mapApprovalData($firstStep->order, $user->id, $approvalData);
                 
                 $nextStep = $costCenter->approvalSteps()->where('order', '>', $firstStep->order)->orderBy('order', 'asc')->first();
@@ -550,21 +551,22 @@ class ReimbursementController extends Controller
 
                 // Permissions and Limits Check
                 if (!$this->canCreateReimbursement($user, $type, $costCenterId, $travelEventId)) {
-                    throw new \Exception("No tienes permiso para registrar este tipo de reembolso en este Centro de Costos o ya has alcanzado tu límite de 1 reembolso activo.");
+                    throw new \Exception("No tienes permiso para registrar este tipo de reembolso en este Centro de Costos o ya has alcanzado tu lÃƒÂ­mite de 1 reembolso activo.");
                 }
 
                 $xmlData = null;
                 $uuid = null;
                 $xmlPath = null;
-                $pdfFile = $item['pdf_file'] ?? null;
+                $pdfFile = $request->file("items.{$index}.pdf_file") ?? ($item['pdf_file'] ?? null);
                 $validationData = null;
 
                 if ($hasInvoice) {
-                    if (isset($item['xml_file']) && $item['xml_file'] instanceof \Illuminate\Http\UploadedFile) {
-                        $xmlContent = file_get_contents($item['xml_file']->getRealPath());
+                    $xmlFile = $request->file("items.{$index}.xml_file") ?? ($item['xml_file'] ?? null);
+                    if ($xmlFile && $xmlFile instanceof \Illuminate\Http\UploadedFile) {
+                        $xmlContent = file_get_contents($xmlFile->getRealPath());
                         $xmlData = $this->extractXmlData($xmlContent);
                         $uuid = $xmlData['uuid'];
-                        $xmlPath = $item['xml_file']->store('xmls');
+                        $xmlPath = $xmlFile->store('xmls');
                     } else {
                         // Fallback if resuming draft without re-uploading XML
                         $draftId = $item['draft_id'] ?? null;
@@ -586,12 +588,12 @@ class ReimbursementController extends Controller
                     // Check for duplicate in DB or current batch
                     $existing = Reimbursement::where('uuid', $uuid)->first();
                     if ($existing && $existing->status !== 'borrador') {
-                        $errors[] = "Ítem #" . ($index + 1) . ": El CFDI con UUID {$uuid} ya está registrado.";
+                        $errors[] = "ÃƒÂtem #" . ($index + 1) . ": El CFDI con UUID {$uuid} ya estÃƒÂ¡ registrado.";
                         $failedCount++;
                         continue;
                     }
                     if (in_array($uuid, $processedUuids)) {
-                        $errors[] = "Ítem #" . ($index + 1) . ": El CFDI con UUID {$uuid} está duplicado en esta carga.";
+                        $errors[] = "ÃƒÂtem #" . ($index + 1) . ": El CFDI con UUID {$uuid} estÃƒÂ¡ duplicado en esta carga.";
                         $failedCount++;
                         continue;
                     }
@@ -627,7 +629,7 @@ class ReimbursementController extends Controller
                 }
 
                 $pdfPath = $pdfFile ? $pdfFile->store('pdfs') : ($existingDraft ? $existingDraft->pdf_path : null);
-                $ticketFile = $item['ticket_file'] ?? null;
+                $ticketFile = $request->file("items.{$index}.ticket_file") ?? ($item['ticket_file'] ?? null);
                 $ticketPath = $ticketFile ? $ticketFile->store('tickets') : ($existingDraft ? $existingDraft->ticket_path : null);
 
                 $finalObs = ($item['observaciones'] ?? "") . $autoNote;
@@ -672,7 +674,7 @@ class ReimbursementController extends Controller
 
                 // FINAL SAFETY CHECK
                 if ($hasInvoice && empty($reimbursementData['uuid'])) {
-                     throw new \Exception("Faltan datos críticos del XML. Por favor sube el archivo nuevamente.");
+                     throw new \Exception("Faltan datos crÃƒÂ­ticos del XML. Por favor sube el archivo nuevamente.");
                 }
 
                 if ($existingDraft) {
@@ -691,7 +693,7 @@ class ReimbursementController extends Controller
                 $createdReimbursements[] = $reimbursement;
                 $createdCount++;
             } catch (\Exception $e) {
-                $errors[] = "Ítem #" . ($index + 1) . ": Error al procesar - " . $e->getMessage();
+                $errors[] = "ÃƒÂtem #" . ($index + 1) . ": Error al procesar - " . $e->getMessage();
                 $failedCount++;
                 Log::error("Bulk store error: " . $e->getMessage());
                 continue;
@@ -701,7 +703,7 @@ class ReimbursementController extends Controller
         // Notify NEXT person in line
         if ($createdCount > 0 && $costCenter && $initialStatus !== 'en_evento') {
             $targetUser = null;
-            $notifMsg = "Se cargaron {$createdCount} reembolsos. Revísalos en tu listado de reembolsos.";
+            $notifMsg = "Se cargaron {$createdCount} reembolsos. RevÃƒÂ­salos en tu listado de reembolsos.";
 
             if ($initialStatus === 'aprobado_ejecutivo') {
                 // To CXP
@@ -767,18 +769,18 @@ class ReimbursementController extends Controller
                 if ($reimbursement->xml_path && Storage::exists($reimbursement->xml_path)) {
                     $xmlContent = Storage::get($reimbursement->xml_path);
                 } else {
-                    return response()->json(['error' => 'No se encontró un archivo XML en el borrador especificado.'], 422);
+                    return response()->json(['error' => 'No se encontrÃƒÂ³ un archivo XML en el borrador especificado.'], 422);
                 }
             }
 
             if (!$xmlContent) {
-                return response()->json(['error' => 'No se proporcionó un archivo XML válido.'], 422);
+                return response()->json(['error' => 'No se proporcionÃƒÂ³ un archivo XML vÃƒÂ¡lido.'], 422);
             }
 
             $data = $this->extractXmlData($xmlContent);
 
             if (empty($data['uuid'])) {
-                return response()->json(['error' => 'No se encontró un UUID válido en el XML provided.'], 422);
+                return response()->json(['error' => 'No se encontrÃƒÂ³ un UUID vÃƒÂ¡lido en el XML provided.'], 422);
             }
 
             // Ignore self if draft_id is provided
@@ -856,7 +858,7 @@ class ReimbursementController extends Controller
             return [
                 'uuid_match' => $uuidFound,
                 'total_match' => $totalFound,
-                'message' => $uuidFound ? 'Validación exitosa.' : 'Advertencia de UUID.',
+                'message' => $uuidFound ? 'ValidaciÃƒÂ³n exitosa.' : 'Advertencia de UUID.',
             ];
         } catch (\Exception $e) {
             return ['error' => 'Lectura de PDF fallida: ' . $e->getMessage()];
@@ -981,11 +983,12 @@ class ReimbursementController extends Controller
 
             // Duplicity check
             if (Reimbursement::where('uuid', $request->uuid)->exists()) {
-                return back()->withInput()->with('error', 'Atención: Este CFDI (UUID: ' . $request->uuid . ') ya se encuentra registrado en el sistema.');
+                return back()->withInput()->with('error', 'AtenciÃƒÂ³n: Este CFDI (UUID: ' . $request->uuid . ') ya se encuentra registrado en el sistema.');
             }
         }
         // But the previous prompts imply "Viaje" is a container.
         // Let's adjust validation for XML/PDF to be nullable if type is viaje
+        
         
 
 
@@ -1008,7 +1011,7 @@ class ReimbursementController extends Controller
 
         // Permissions and Limits Check
         if (!$this->canCreateReimbursement($user, $request->type, $effectiveCostCenterId, $request->travel_event_id)) {
-            return back()->withInput()->with('error', 'No tienes permiso para registrar este tipo de reembolso en este Centro de Costos o ya has alcanzado tu límite de 1 reembolso activo.');
+            return back()->withInput()->with('error', 'No tienes permiso para registrar este tipo de reembolso en este Centro de Costos o ya has alcanzado tu lÃƒÂ­mite de 1 reembolso activo.');
         }
 
         if ($costCenter && ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector())) {
@@ -1036,7 +1039,7 @@ class ReimbursementController extends Controller
             $approvalData = [];
             
             while ($firstStep && $firstStep->user_id === $user->id) {
-                $autoNote .= "\n[AUTO-APROBACIÓN: " . $firstStep->name . "]";
+                $autoNote .= "\n[AUTO-APROBACIÃƒâ€œN: " . $firstStep->name . "]";
                 $this->mapApprovalData($firstStep->order, $user->id, $approvalData);
                 
                 $nextStep = $costCenter->approvalSteps()->where('order', '>', $firstStep->order)->orderBy('order', 'asc')->first();
@@ -1143,7 +1146,7 @@ class ReimbursementController extends Controller
                 'user_id' => $user->id,
                 'step_name' => 'Solicitante',
                 'action' => 'submitted',
-                'comment' => 'Solicitud enviada para aprobación.'
+                'comment' => 'Solicitud enviada para aprobaciÃƒÂ³n.'
             ]);
         }
 
@@ -1212,46 +1215,73 @@ class ReimbursementController extends Controller
     {
         $user = Auth::user();
 
-        // Admin, AdminView & Owner always see
+        // 1. Admin, AdminView & Owner always see
         if ($user->isAdmin() || $user->isAdminView() || $user->id === $reimbursement->user_id) {
             return view('reimbursements.show', compact('reimbursement'));
         }
 
-        // Strict Sequential Visibility
+        // 2. Identify all identities this user can act as (themselves + active substitutes)
+        $substitutedUsers = $user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter();
+        $allIdentities = collect([$user])->concat($substitutedUsers);
+
         $cc = $reimbursement->costCenter;
         $status = $reimbursement->status;
-
         $canSee = false;
-        if ($user->isDirector() && $cc->director_id === $user->id) {
-            // Directors see everything once submitted (Level 1)
-            $canSee = true; 
-        } elseif ($user->isControlObra() && $cc->control_obra_id === $user->id) {
-            // Level 2 sees if it reached them once (even if currently in correction/rejected)
-            // They see if status != pendiente OR if there's any record of moving past N1
-            $canSee = $reimbursement->approved_by_director_at !== null || !in_array($status, ['pendiente', 'requiere_correccion']);
-        } elseif ($user->isExecutiveDirector() && $cc->director_ejecutivo_id === $user->id) {
-            // Level 3 sees if it reached them once
-            $canSee = $reimbursement->approved_by_control_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director']);
-        } elseif ($user->isCxp()) {
-            // CXP sees if it reached them once
-            $canSee = $reimbursement->approved_by_executive_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control']);
-        } elseif ($user->isDireccion()) {
-            // Dirección sees if it reached them once
-            $canSee = $reimbursement->approved_by_cxp_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo']);
-        } elseif ($user->isTreasury()) {
-            // Treasury sees if it reached them once
-            $canSee = $reimbursement->approved_by_direccion_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp']);
+
+        foreach ($allIdentities as $identity) {
+            // Admin/AdminView check for the identity
+            if ($identity->isAdmin() || $identity->isAdminView()) {
+                $canSee = true;
+                break;
+            }
+
+            // Sequential Visibility Logic for this identity
+            if ($identity->isDirector() && $cc && $cc->director_id === $identity->id) {
+                // Directors see everything once submitted (Level 1)
+                $canSee = true; 
+                break;
+            } elseif ($identity->isControlObra() && $cc && $cc->control_obra_id === $identity->id) {
+                // Level 2 sees if it reached them once
+                if ($reimbursement->approved_by_director_at !== null || !in_array($status, ['pendiente', 'requiere_correccion'])) {
+                    $canSee = true;
+                    break;
+                }
+            } elseif ($identity->isExecutiveDirector() && $cc && $cc->director_ejecutivo_id === $identity->id) {
+                // Level 3 sees if it reached them once
+                if ($reimbursement->approved_by_control_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director'])) {
+                    $canSee = true;
+                    break;
+                }
+            } elseif ($identity->isCxp()) {
+                // CXP sees if it reached them once
+                if ($reimbursement->approved_by_executive_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control'])) {
+                    $canSee = true;
+                    break;
+                }
+            } elseif ($identity->isDireccion()) {
+                // DirecciÃ³n sees if it reached them once
+                if ($reimbursement->approved_by_cxp_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo'])) {
+                    $canSee = true;
+                    break;
+                }
+            } elseif ($identity->isTreasury()) {
+                // Treasury sees if it reached them once
+                if ($reimbursement->approved_by_direccion_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp'])) {
+                    $canSee = true;
+                    break;
+                }
+            }
         }
 
-        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isDireccion() || $user->isTreasury() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector();
-
-        if (!$canSee && $canManage) {
-            // Allow basic technical sheet view for management roles even if not in the direct approval line
-            $canSee = true;
+        // 3. Fallback: If identity checks failed, check if the user is currently assigned to the step
+        if (!$canSee && $reimbursement->current_step_id) {
+            if ($reimbursement->canBeApprovedBy($user)) {
+                $canSee = true;
+            }
         }
 
         if (!$canSee) {
-            abort(403, 'Aún no tienes permiso para ver este reembolso. Está en una etapa anterior de aprobación.');
+            abort(403, 'AÃºn no tienes permiso para ver este reembolso. EstÃ¡ en una etapa anterior de aprobaciÃ³n.');
         }
 
         $reimbursement->load([
@@ -1280,7 +1310,6 @@ class ReimbursementController extends Controller
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
         // Authorization Check: Admin or the user assigned to the current step
         $canApprove = $reimbursement->canBeApprovedBy($user);
         
@@ -1354,13 +1383,13 @@ class ReimbursementController extends Controller
                         $validationData = [
                             'uuid_match' => $uuidFound,
                             'total_match' => $totalFound,
-                            'message' => $uuidFound ? 'UUID encontrado en PDF (Corrección).' : 'Advertencia: UUID NO encontrado en PDF (Corrección).',
+                            'message' => $uuidFound ? 'UUID encontrado en PDF (CorrecciÃƒÂ³n).' : 'Advertencia: UUID NO encontrado en PDF (CorrecciÃƒÂ³n).',
                         ];
                         
                         $data['validation_data'] = $validationData;
                     } catch (\Exception $e) {
                         $validationData = is_array($reimbursement->validation_data) ? $reimbursement->validation_data : [];
-                        $validationData['error'] = 'No se pudo leer el PDF corregido: ' . $e->getMessage();
+                        $validationData['error'] = 'No se pudo leer the PDF corregido: ' . $e->getMessage();
                         $data['validation_data'] = $validationData;
                     }
                 }
@@ -1375,7 +1404,7 @@ class ReimbursementController extends Controller
             if ($reimbursement->approved_by_direccion_id !== null) {
                 $data['status'] = 'aprobado_direccion'; // Back to Treasury
             } elseif ($reimbursement->approved_by_cxp_id !== null) {
-                $data['status'] = 'aprobado_cxp'; // Back to Dirección
+                $data['status'] = 'aprobado_cxp'; // Back to DirecciÃƒÂ³n
             } elseif ($reimbursement->approved_by_executive_id !== null) {
                 $data['status'] = 'aprobado_ejecutivo'; // Back to CXP
             } elseif ($reimbursement->approved_by_control_id !== null) {
@@ -1395,13 +1424,13 @@ class ReimbursementController extends Controller
             $data = [];
 
             if (!$reimbursement->canBeApprovedBy($user)) {
-                return back()->with('error', 'No tienes permiso para realizar esta acción en este momento.');
+                return back()->with('error', 'No tienes permiso para realizar esta acciÃƒÂ³n en este momento.');
             }
 
             if ($request->status === 'rechazado' || $request->status === 'requiere_correccion') {
                  // Append rejection/correction reason
                  $currentObs = $reimbursement->observaciones;
-                 $prefix = ($request->status === 'requiere_correccion') ? "REQUIERE CORRECCIÓN" : "RECHAZADO";
+                 $prefix = ($request->status === 'requiere_correccion') ? "REQUIERE CORRECCIÃƒâ€œN" : "RECHAZADO";
                  $newObs = $prefix . " por " . $user->name . ": " . $request->rejection_reason;
                  if ($request->rejection_comment) {
                      $newObs .= " - " . $request->rejection_comment;
@@ -1466,7 +1495,7 @@ class ReimbursementController extends Controller
         $owner = $reimbursement->user;
         
         if ($currentStatus === 'pendiente') {
-            // Notificar al siguiente en la línea
+            // Notificar al siguiente en la lÃƒÂ­nea
             $nextApprover = $reimbursement->currentStep->user ?? null;
             if ($nextApprover) {
                 NotificationBatchService::add($nextApprover, $reimbursement);
@@ -1497,7 +1526,7 @@ class ReimbursementController extends Controller
             }
         }
 
-        return back()->with('success', 'Actualización guardada con éxito.');
+        return back()->with('success', 'ActualizaciÃƒÂ³n guardada con ÃƒÂ©xito.');
     }
 
     public function validatePdfCorrection(Request $request, Reimbursement $reimbursement)
@@ -1642,24 +1671,24 @@ class ReimbursementController extends Controller
                 'Emisor',
                 'Tipo de Solicitud',
                 'Centro de Costos',
-                'Categoría',
+                'CategorÃƒÂ­a',
                 'Semana',
                 'Receptor',
                 'Beneficiario del Pago',
                 'Banco',
                 'Cuenta CLABE',
-                'Fecha Expedición XML',
-                'Fecha Creación Reembolso',
-                'Método de Pago',
+                'Fecha ExpediciÃƒÂ³n XML',
+                'Fecha CreaciÃƒÂ³n Reembolso',
+                'MÃƒÂ©todo de Pago',
                 'Forma de Pago',
                 'Uso CFDI',
-                'CP Expedición',
-                'Régimen Fiscal Emisor',
+                'CP ExpediciÃƒÂ³n',
+                'RÃƒÂ©gimen Fiscal Emisor',
                 'Total',
                 'Estatus',
                 'Aprobaciones',
-                'Validación XML vs PDF (UUID)',
-                'Validación XML vs PDF (Monto)'
+                'ValidaciÃƒÂ³n XML vs PDF (UUID)',
+                'ValidaciÃƒÂ³n XML vs PDF (Monto)'
             ]);
 
             foreach ($reimbursements as $r) {
@@ -1687,14 +1716,14 @@ class ReimbursementController extends Controller
                     $approvals[] = "Dir. Ejecutivo: Pendiente";
                 }
 
-                // Subdirección
+                // SubdirecciÃƒÂ³n
                 if ($r->approved_by_cxp_at) {
-                    $approvals[] = "Subdirección: " . ($r->cxpApprover->name ?? 'N/A') . " (" . $r->approved_by_cxp_at->format('d/m/Y H:i') . ")";
+                    $approvals[] = "SubdirecciÃƒÂ³n: " . ($r->cxpApprover->name ?? 'N/A') . " (" . $r->approved_by_cxp_at->format('d/m/Y H:i') . ")";
                 }
 
-                // Dirección
+                // DirecciÃƒÂ³n
                 if ($r->approved_by_direccion_at) {
-                    $approvals[] = "Dirección: " . ($r->direccionApprover->name ?? 'N/A') . " (" . $r->approved_by_direccion_at->format('d/m/Y H:i') . ")";
+                    $approvals[] = "DirecciÃƒÂ³n: " . ($r->direccionApprover->name ?? 'N/A') . " (" . $r->approved_by_direccion_at->format('d/m/Y H:i') . ")";
                 }
 
                 // Cuentas por Pagar
@@ -1854,7 +1883,7 @@ class ReimbursementController extends Controller
 
         // Check password
         if (!\Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
-            return back()->with('error', 'Contraseña incorrecta.');
+            return back()->with('error', 'ContraseÃƒÂ±a incorrecta.');
         }
 
         $processed = 0;
@@ -1966,9 +1995,9 @@ class ReimbursementController extends Controller
 
         Log::info("BULK_AUDIT_ACTION_END: Processed={$processed} Failed={$failed}");
         
-        $msg = "Se procesaron $processed trámites con éxito.";
+        $msg = "Se procesaron $processed trÃƒÂ¡mites con ÃƒÂ©xito.";
         if ($failed > 0) {
-            $msg .= " No se pudieron procesar $failed trámites por falta de permisos o estado inválido.";
+            $msg .= " No se pudieron procesar $failed trÃƒÂ¡mites por falta de permisos o estado invÃƒÂ¡lido.";
         }
         
         return back()->with('success', $msg);
@@ -2005,7 +2034,7 @@ class ReimbursementController extends Controller
         
         if (!$header) {
             fclose($handle);
-            return back()->with('error', 'El archivo CSV está vacío o no se puede leer.');
+            return back()->with('error', 'El archivo CSV estÃƒÂ¡ vacÃƒÂ­o o no se puede leer.');
         }
 
         // Find Folio, UUID, Total columns dynamically
@@ -2044,7 +2073,7 @@ class ReimbursementController extends Controller
             }
 
             if ($reimbursement) {
-                // Validación estricta: UUID exacto O Monto exacto (si no hay código XML)
+                // ValidaciÃƒÂ³n estricta: UUID exacto O Monto exacto (si no hay cÃƒÂ³digo XML)
                 $isValid = false;
                 if ($uuid && $uuid !== 'N/A' && $uuid !== 'SIN UUID') {
                     if ($reimbursement->uuid === $uuid) {
@@ -2073,7 +2102,7 @@ class ReimbursementController extends Controller
                 // 2. Check if rejected
                 if ($reimbursement->status === 'rechazado') {
                     $failed++;
-                    $errors['invalid_status'][] = "Folio $folio: Está marcado como rechazado.";
+                    $errors['invalid_status'][] = "Folio $folio: EstÃƒÂ¡ marcado como rechazado.";
                     continue;
                 }
 
@@ -2083,7 +2112,7 @@ class ReimbursementController extends Controller
                 if (!$user->isAdmin() && !in_array($reimbursement->status, $paymentFunnel)) {
                     $failed++;
                     $statusLabel = ucwords(str_replace('_', ' ', $reimbursement->status));
-                    $errors['invalid_status'][] = "Folio $folio: El estatus '$statusLabel' no está en el embudo de Cuentas por Pagar (requiere ser 'pendiente_pago').";
+                    $errors['invalid_status'][] = "Folio $folio: El estatus '$statusLabel' no estÃƒÂ¡ en el embudo de Cuentas por Pagar (requiere ser 'pendiente_pago').";
                     continue;
                 }
 
@@ -2100,7 +2129,7 @@ class ReimbursementController extends Controller
                     'user_id' => $user->id,
                     'step_name' => 'Cuentas por Pagar (Masivo)',
                     'action' => 'aprobado',
-                    'comment' => 'Aprobación Masiva por CSV',
+                    'comment' => 'AprobaciÃƒÂ³n Masiva por CSV',
                     'is_bulk' => true
                 ]);
 
@@ -2139,7 +2168,7 @@ class ReimbursementController extends Controller
             'estacionamientos y casetas',
             'hospedajes',
             'comidas',
-            'papelería y articulos de oficina',
+            'papelerÃƒÂ­a y articulos de oficina',
             'herramientas y refacciones',
             'materiales diversos',
             'diversos',
@@ -2149,18 +2178,18 @@ class ReimbursementController extends Controller
             'sueldos de obra',
             'renta local',
             'agua',
-            'envios y paquetería',
+            'envios y paqueterÃƒÂ­a',
             'medicinas y doctor',
             'viaticos',
             'renta de maquinaria y transporte',
             'mantenimiento y servicios de equipo y transporte',
-            'supervisión',
+            'supervisiÃƒÂ³n',
             'fletes y acarreo',
             'luz',
-            'deducibles autos dañados',
+            'deducibles autos daÃƒÂ±ados',
             'vigilancia',
             'mantenimiento de oficina',
-            'reparación y mantenimiento de equipo de oficina',
+            'reparaciÃƒÂ³n y mantenimiento de equipo de oficina',
             'utensilios auxiliares para trabajo',
             'telefonia y radio',
         ];
@@ -2318,7 +2347,7 @@ class ReimbursementController extends Controller
         $reimbursements = $query->with(['payee', 'costCenter', 'files', 'children', 'children.files'])->get();
 
         if ($reimbursements->isEmpty()) {
-            return back()->with('error', 'No se encontraron reembolsos para generar la carátula.');
+            return back()->with('error', 'No se encontraron reembolsos para generar la carÃƒÂ¡tula.');
         }
 
         // Group by Payee and Cost Center
@@ -2448,7 +2477,7 @@ class ReimbursementController extends Controller
                     $pdf->Cell(0, 10, 'ARCHIVO PDF NO COMPATIBLE PARA UNIR (PDF v1.5+)', 0, 1, 'C');
                     $pdf->SetFont('Arial', '', 10);
                     $pdf->SetTextColor(100, 100, 100);
-                    $pdf->MultiCell(0, 10, "\nReferencia: " . mb_convert_encoding($itemTitle, 'ISO-8859-1', 'UTF-8') . "\n\nEste archivo utiliza una técnica de compresión no soportada por el motor gratuito de PDF.\nPor favor, descargue el anexo individualmente si es necesario.", 0, 'C');
+                    $pdf->MultiCell(0, 10, "\nReferencia: " . mb_convert_encoding($itemTitle, 'ISO-8859-1', 'UTF-8') . "\n\nEste archivo utiliza una tÃƒÂ©cnica de compresiÃƒÂ³n no soportada por el motor gratuito de PDF.\nPor favor, descargue el anexo individualmente si es necesario.", 0, 'C');
                 }
             } else {
                 $this->addImageToPdf($pdf, $path, $itemTitle);
@@ -2491,7 +2520,7 @@ class ReimbursementController extends Controller
                         $pdf->Cell(0, 10, 'ANEXO PDF NO COMPATIBLE PARA UNIR (PDF v1.5+)', 0, 1, 'C');
                         $pdf->SetFont('Arial', '', 10);
                         $pdf->SetTextColor(100, 100, 100);
-                        $pdf->MultiCell(0, 10, "\nReferencia: " . mb_convert_encoding($extraTitle, 'ISO-8859-1', 'UTF-8') . "\n\nEste archivo utiliza una técnica de compresión no soportada por el motor gratuito de PDF.\nPor favor, descargue el anexo individualmente si es necesario.", 0, 'C');
+                        $pdf->MultiCell(0, 10, "\nReferencia: " . mb_convert_encoding($extraTitle, 'ISO-8859-1', 'UTF-8') . "\n\nEste archivo utiliza una tÃƒÂ©cnica de compresiÃƒÂ³n no soportada por el motor gratuito de PDF.\nPor favor, descargue el anexo individualmente si es necesario.", 0, 'C');
                     }
                 } else {
                     $this->addImageToPdf($pdf, $path, $extraTitle);
@@ -2603,17 +2632,17 @@ class ReimbursementController extends Controller
             }
             
             // Create a text file with verification info
-            $info = "Información del Reembolso\n";
+            $info = "InformaciÃƒÂ³n del Reembolso\n";
             $info .= "Folio: " . ($reimbursement->folio ?? 'N/A') . "\n";
             $info .= "UUID: " . ($reimbursement->uuid ?? 'N/A') . "\n";
             $info .= "Tipo: " . $reimbursement->type . "\n";
             $info .= "Fecha Descarga: " . now()->toDateTimeString() . "\n";
             
-            // Simple verification logic (naïve) - check if files exist
+            // Simple verification logic (naÃƒÂ¯ve) - check if files exist
             $xmlExists = $reimbursement->xml_path && Storage::exists($reimbursement->xml_path) ? 'SI' : 'NO';
             $pdfExists = $reimbursement->pdf_path && Storage::exists($reimbursement->pdf_path) ? 'SI' : 'NO';
             
-            $info .= "\nVerificación de Archivos:\n";
+            $info .= "\nVerificaciÃƒÂ³n de Archivos:\n";
             $info .= "XML Presente: $xmlExists\n";
             $info .= "PDF Presente: $pdfExists\n";
             
@@ -2633,7 +2662,7 @@ class ReimbursementController extends Controller
     public function validateStoredFiles(Reimbursement $reimbursement)
     {
         if (!$reimbursement->xml_path || !Storage::exists($reimbursement->xml_path)) {
-            return back()->with('error', 'No se encontró el archivo XML para validar.');
+            return back()->with('error', 'No se encontrÃƒÂ³ el archivo XML para validar.');
         }
 
         try {
@@ -2664,7 +2693,7 @@ class ReimbursementController extends Controller
                     $pdfValidation = [
                         'uuid_match' => $uuidFound,
                         'total_match' => $totalFound,
-                        'message' => $uuidFound ? 'Validación Manual: UUID encontrado.' : 'Validación Manual: UUID NO encontrado.',
+                        'message' => $uuidFound ? 'ValidaciÃƒÂ³n Manual: UUID encontrado.' : 'ValidaciÃƒÂ³n Manual: UUID NO encontrado.',
                     ];
                 } catch (\Exception $e) {
                     $pdfValidation = ['error' => 'Error al leer PDF: ' . $e->getMessage()];
@@ -2677,10 +2706,10 @@ class ReimbursementController extends Controller
             $reimbursement->validation_data = $pdfValidation;
             $reimbursement->save();
 
-            return back()->with('success', 'Validación completada y guardada.');
+            return back()->with('success', 'ValidaciÃƒÂ³n completada y guardada.');
 
         } catch (\Exception $e) {
-            return back()->with('error', 'Error durante la validación: ' . $e->getMessage());
+            return back()->with('error', 'Error durante la validaciÃƒÂ³n: ' . $e->getMessage());
         }
     }
 
@@ -2714,12 +2743,21 @@ class ReimbursementController extends Controller
         // We do this BEFORE any early returns to ensure the movement is ALWAYS recorded in history.
         $stepAtActionTime = $reimbursement->currentStep;
         
+        $substitutedUserId = null;
+        if ($stepAtActionTime && $stepAtActionTime->user_id !== $user->id && !$user->isAdmin()) {
+             // Check if user is indeed a substitute
+             if ($user->substitutingFor()->where('original_user_id', $stepAtActionTime->user_id)->exists()) {
+                 $substitutedUserId = $stepAtActionTime->user_id;
+             }
+        }
+
         $reimbursement->approvals()->create([
             'user_id' => $user->id,
             'step_name' => $stepAtActionTime->name ?? ($reimbursement->status === 'pendiente_pago' ? 'Cuentas por Pagar' : 'Proceso'),
             'action' => 'aprobado',
-            'comment' => $isBulk ? 'Aprobación Masiva' : 'Aprobación Manual',
-            'is_bulk' => $isBulk
+            'comment' => $isBulk ? 'AprobaciÃƒÂ³n Masiva' : 'AprobaciÃƒÂ³n Manual',
+            'is_bulk' => $isBulk,
+            'substituted_user_id' => $substitutedUserId,
         ]);
 
         // 2. If it was in the CXP final funnel or already finished, this action finalizes the entire document
@@ -2784,7 +2822,7 @@ class ReimbursementController extends Controller
                     'user_id' => $nextStep->user_id,
                     'step_name' => $nextStep->name,
                     'action' => 'aprobado',
-                    'comment' => 'Auto-aprobado por aprobación previa en otro nivel',
+                    'comment' => 'Auto-aprobado por aprobaciÃƒÂ³n previa en otro nivel',
                     'is_bulk' => $isBulk
                 ]);
                 
@@ -2826,15 +2864,6 @@ class ReimbursementController extends Controller
             $user = Auth::user();
             $items = $request->input('items', []);
             $draftIds = [];
-
-            // If it's a 'viaje' type, it's a single record form
-            if ($request->input('type') === 'viaje') {
-                $items = [ $request->all() ]; // Wrap as a single item for uniform processing
-                if ($request->input('draft_id')) {
-                    $items[0]['draft_id'] = $request->input('draft_id');
-                }
-            }
-
             $travelEventId = $request->input('travel_event_id');
             $travelEvent = $travelEventId ? \App\Models\TravelEvent::find($travelEventId) : null;
             $requestCostCenterId = $travelEvent ? $travelEvent->cost_center_id : $request->input('cost_center_id');
@@ -2850,7 +2879,7 @@ class ReimbursementController extends Controller
                         'cost_center_id' => $requestCostCenterId,
                         'travel_event_id' => $travelEventId,
                         'week' => $request->input('week'),
-                        'title' => $request->input('title') ?: ($travelEvent ? $travelEvent->name : ($itemData['nombre_emisor'] ?? 'Sin Título')),
+                        'title' => $request->input('title') ?: ($travelEvent ? $travelEvent->name : ($itemData['nombre_emisor'] ?? 'Sin TÃƒÂ­tulo')),
                         'user_id' => $user->id,
                         'payee_id' => $payeeId,
                         'status' => 'borrador',
@@ -3032,7 +3061,8 @@ class ReimbursementController extends Controller
                 // DYNAMIC VISIBILITY: User sees it if they are the assigned approver OR if they are CXP and status is pending payment
                 $query->where(function($q) use ($user) {
                     $q->whereHas('currentStep', function($sq) use ($user) {
-                        $sq->where('user_id', $user->id);
+                        $sq->where('user_id', $user->id)
+                          ->orWhereIn('user_id', $user->substitutingFor()->pluck('original_user_id'));
                     });
                     
                     if ($user->isCxp() || $user->isTreasury()) {

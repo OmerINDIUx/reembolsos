@@ -96,7 +96,7 @@ class UserController extends Controller
     public function show(Request $request, User $user)
     {
         $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
-        $user->load(['director', 'subordinates', 'costCenters']);
+        $user->load(['director', 'subordinates', 'costCenters', 'substitutes.user']);
 
         // 1. Personal Spending Stats
         $pendingQuery = $user->reimbursements()->applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
@@ -148,12 +148,61 @@ class UserController extends Controller
             ->get();
 
         // 6. Approval Task Stats (if they are an approver)
-        // This is complex as it depends on current_step_id pointing to a step they are assigned to
         $pendingApprovalsCount = \App\Models\Reimbursement::whereHas('currentStep', function($q) use ($user) {
             $q->where('user_id', $user->id);
         })->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->count();
 
-        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount', 'periods'));
+        // 7. Substitutes
+        $allUsers = User::where('id', '!=', $user->id)->orderBy('name')->get();
+
+        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount', 'periods', 'allUsers'));
+    }
+
+    /**
+     * Add a substitute for the user.
+     */
+    public function addSubstitute(Request $request, User $user)
+    {
+        $request->validate([
+            'substitute_id' => 'required|exists:users,id|different:' . $user->id,
+        ]);
+
+        \App\Models\UserSubstitute::updateOrCreate(
+            [
+                'original_user_id' => $user->id,
+                'user_id' => $request->substitute_id
+            ],
+            ['is_active' => true]
+        );
+
+        return back()->with('success', 'Sustituto asignado correctamente.');
+    }
+
+    /**
+     * Toggle substitute status.
+     */
+    public function toggleSubstitute(User $user, $substituteId)
+    {
+        $sub = \App\Models\UserSubstitute::where('original_user_id', $user->id)
+            ->where('user_id', $substituteId)
+            ->firstOrFail();
+            
+        $sub->is_active = !$sub->is_active;
+        $sub->save();
+
+        return back()->with('success', 'Estado de la sustitución actualizado.');
+    }
+
+    /**
+     * Remove a substitute.
+     */
+    public function removeSubstitute(User $user, $substituteId)
+    {
+        \App\Models\UserSubstitute::where('original_user_id', $user->id)
+            ->where('user_id', $substituteId)
+            ->delete();
+
+        return back()->with('success', 'Sustitución eliminada.');
     }
 
     /**
