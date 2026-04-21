@@ -293,8 +293,21 @@
                                     <div class="flex flex-col">
                                         <div class="flex items-center space-x-2 mb-0.5">
                                             <span class="text-[9px] font-black uppercase tracking-widest text-indigo-500 italic">{{ $compositeId }}</span>
+                                            @php
+                                                $isSubstituteApproval = false;
+                                                $currStepUserId = $r->currentStep->user_id ?? null;
+                                                if ($r->status === 'pendiente' && $currStepUserId && $currStepUserId !== Auth::id()) {
+                                                    $isSubstituteApproval = Auth::user()->substitutingFor()->where('original_user_id', $currStepUserId)->exists();
+                                                }
+                                            @endphp
+                                            @if($isSubstituteApproval)
+                                                <span class="px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 rounded text-[7px] font-black uppercase tracking-widest border border-purple-200 dark:border-purple-800">Sustituyendo a {{ $r->currentStep->user->name ?? 'Usuario' }}</span>
+                                            @endif
                                         </div>
                                         <span class="text-sm font-black text-gray-700 dark:text-gray-300">{{ $r->nombre_emisor ?: 'S/N' }}</span>
+                                        <div class="flex items-center space-x-1 mt-0.5">
+                                            <span class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-800">De: {{ $r->user->name ?? 'N/A' }}</span>
+                                        </div>
                                         <div class="flex items-center space-x-1 mt-0.5">
                                             <span class="text-[8px] font-black text-gray-400 uppercase tracking-tighter">{{ $r->fecha ? $r->fecha->format('d/m/Y') : 'S/F' }}</span>
                                             <span class="text-gray-300 mx-1">|</span>
@@ -332,11 +345,7 @@
                                         </div>
                                     </div>
 
-                                    {{-- Solicitante --}}
-                                    <div class="hidden lg:flex flex-col items-center max-w-[100px]">
-                                        <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Solicitante</span>
-                                        <span class="text-[10px] font-bold text-gray-600 dark:text-gray-400 uppercase truncate w-full text-center">{{ $r->user->name ?? 'N/A' }}</span>
-                                    </div>
+
 
                                     {{-- Monto --}}
                                     <div class="text-right">
@@ -546,6 +555,9 @@
                                                 <div>
                                                     <span class="text-[9px] font-black uppercase tracking-widest text-indigo-500 group-hover/type:text-indigo-400 mb-0.5 block italic">{{ $batchId }}</span>
                                                     <span class="text-sm font-black text-gray-700 dark:text-gray-300">{{ ucfirst(str_replace('_', ' ', $type)) }}</span>
+                                                    <div class="flex items-center space-x-1 mt-0.5">
+                                                        <span class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-800">Resp: {{ $mainSolicitor['name'] ?? 'Varios' }}</span>
+                                                    </div>
                                                 </div>
                                             </div>
 
@@ -563,10 +575,6 @@
                                                             <span class="text-[8px] font-black text-gray-400 uppercase tracking-tight">Tickets</span>
                                                         </div>
                                                     </div>
-                                                </div>
-                                                <div class="hidden sm:flex flex-col items-center max-w-[120px]">
-                                                    <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Responsable</span>
-                                                    <span class="text-[10px] font-bold text-gray-600 dark:text-gray-400 truncate w-full text-center">{{ $mainSolicitor['name'] ?? 'Varios' }}</span>
                                                 </div>
                                                 <div class="text-right">
                                                     <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Total Lote</span>

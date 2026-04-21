@@ -37,8 +37,12 @@ class ReimbursementController extends Controller
             ->where('status', '!=', 'borrador')
             ->orderBy('created_at', 'desc');
 
-        // TRACKER LOGIC: Global search bypasses tab scoping for management roles
+        // TRACKER LOGIC: Global search bypasses tab scoping for management roles but respects general visibility
         if ($globalSearch && $canManage) {
+            if (!$user->isAdmin() && !$user->isAdminView()) {
+                $this->applyGeneralVisibilityScope($query, $user);
+            }
+            
             $query->where(function($q) use ($globalSearch) {
                 $q->where('folio', 'like', "%{$globalSearch}%")
                   ->orWhere('uuid', 'like', "%{$globalSearch}%");
@@ -1428,10 +1432,18 @@ class ReimbursementController extends Controller
             }
 
             if ($request->status === 'rechazado' || $request->status === 'requiere_correccion') {
+                 // Check if substitute
+                 $substituteText = '';
+                 if ($reimbursement->currentStep && $reimbursement->currentStep->user_id !== $user->id && !$user->isAdmin()) {
+                     if ($user->substitutingFor()->where('original_user_id', $reimbursement->currentStep->user_id)->exists()) {
+                         $substituteText = " (en sustitución de " . ($reimbursement->currentStep->user->name ?? '') . ")";
+                     }
+                 }
+
                  // Append rejection/correction reason
                  $currentObs = $reimbursement->observaciones;
-                 $prefix = ($request->status === 'requiere_correccion') ? "REQUIERE CORRECCIÃƒâ€œN" : "RECHAZADO";
-                 $newObs = $prefix . " por " . $user->name . ": " . $request->rejection_reason;
+                 $prefix = ($request->status === 'requiere_correccion') ? "REQUIERE CORRECCIÃ“N" : "RECHAZADO";
+                 $newObs = $prefix . " por " . $user->name . $substituteText . ": " . $request->rejection_reason;
                  if ($request->rejection_comment) {
                      $newObs .= " - " . $request->rejection_comment;
                  }
@@ -1478,11 +1490,19 @@ class ReimbursementController extends Controller
                 'comment' => $request->user_correction_comment
             ]);
         } elseif (isset($data['status']) && ($data['status'] === 'rechazado' || $data['status'] === 'requiere_correccion')) {
+            $substitutedUserId = null;
+            if ($reimbursement->currentStep && $reimbursement->currentStep->user_id !== $user->id && !$user->isAdmin()) {
+                 if ($user->substitutingFor()->where('original_user_id', $reimbursement->currentStep->user_id)->exists()) {
+                     $substitutedUserId = $reimbursement->currentStep->user_id;
+                 }
+            }
+
             $reimbursement->approvals()->create([
                 'user_id' => $user->id,
                 'step_name' => $reimbursement->currentStep->name ?? 'Revision',
                 'action' => $data['status'],
-                'comment' => ($request->rejection_reason ?? '') . ($request->rejection_comment ? " - " . $request->rejection_comment : "")
+                'comment' => ($request->rejection_reason ?? '') . ($request->rejection_comment ? " - " . $request->rejection_comment : ""),
+                'substituted_user_id' => $substitutedUserId
             ]);
         } elseif ($request->status === 'aprobado' && !isset($data['error'])) {
             // Check for Auto-Approvals for non-consecutive or consecutive levels
@@ -1903,14 +1923,26 @@ class ReimbursementController extends Controller
 
             $data = [];
 
+            $isSubstitute = false;
+            $substitutedName = '';
+            $substitutedUserId = null;
+            if ($reimbursement->currentStep && $reimbursement->currentStep->user_id !== $user->id && !$user->isAdmin()) {
+                 if ($user->substitutingFor()->where('original_user_id', $reimbursement->currentStep->user_id)->exists()) {
+                     $isSubstitute = true;
+                     $substitutedUserId = $reimbursement->currentStep->user_id;
+                     $substitutedName = $reimbursement->currentStep->user->name ?? '';
+                 }
+            }
+            $substituteText = $isSubstitute ? " (en sustitución de " . $substitutedName . ")" : "";
+
             if ($request->action === 'rechazado') {
                  $currentObs = $reimbursement->observaciones;
-                 $newObs = "[MASIVO] RECHAZADO por " . $user->name . " (Rechazo Masivo) el " . now()->format('d/m/Y H:i') . ": " . $request->rejection_reason;
+                 $newObs = "[MASIVO] RECHAZADO por " . $user->name . $substituteText . " (Rechazo Masivo) el " . now()->format('d/m/Y H:i') . ": " . $request->rejection_reason;
                  $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
                  $data['status'] = 'rechazado';
             } else {
                  $currentObs = $reimbursement->observaciones;
-                 $newObs = "[MASIVO] APROBADO masivamente por " . $user->name . " el " . now()->format('d/m/Y H:i');
+                 $newObs = "[MASIVO] APROBADO masivamente por " . $user->name . $substituteText . " el " . now()->format('d/m/Y H:i');
                  $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
                  // Action === 'aprobado'
                  // Legacy state mapping
@@ -1973,7 +2005,8 @@ class ReimbursementController extends Controller
                     'step_name' => $reimbursement->currentStep->name ?? 'Auditoria',
                     'action' => 'rechazado',
                     'comment' => $request->rejection_reason,
-                    'is_bulk' => true
+                    'is_bulk' => true,
+                    'substituted_user_id' => $substitutedUserId ?? null
                 ]);
                 
                 // Notify owner of rejection
@@ -3052,24 +3085,23 @@ class ReimbursementController extends Controller
             // Strictly Personal: Finished
             $query->where('user_id', $user->id)
                   ->whereIn('status', ['aprobado', 'rechazado']);
-
-        } elseif ($tab === 'management') {
-            // Approvals & Oversight for designated roles
-            if ($user->isAdmin() || $user->isAdminView()) {
-                $query->whereNotIn('status', ['aprobado', 'rechazado', 'en_evento', 'borrador']);
-            } else {
-                // DYNAMIC VISIBILITY: User sees it if they are the assigned approver OR if they are CXP and status is pending payment
-                $query->where(function($q) use ($user) {
-                    $q->whereHas('currentStep', function($sq) use ($user) {
-                        $sq->where('user_id', $user->id)
-                          ->orWhereIn('user_id', $user->substitutingFor()->pluck('original_user_id'));
-                    });
-                    
-                    if ($user->isCxp() || $user->isTreasury()) {
-                        $q->orWhere('status', 'pendiente_pago');
-                    }
+        } elseif ($tab === 'management' || $tab === 'audit' || $tab === 'weekly_summary') {
+            // Approvals & Oversight: Restricted to CURRENT Workflow Responsibility + Substitutes
+            $query->where(function($q) use ($user) {
+                // Workflow Responsibility: Only if it's actually in a pending approval stage
+                $q->where(function($sq) use ($user) {
+                    $sq->whereNotIn('status', ['pendiente_pago', 'aprobado', 'rechazado'])
+                       ->whereHas('currentStep', function($ssq) use ($user) {
+                            $ssq->where('user_id', $user->id)
+                                ->orWhereIn('user_id', $user->substitutingFor()->pluck('original_user_id'));
+                       });
                 });
-            }
+
+                // Special Roles: CXP/Treasury see what's pending payment (their turn)
+                if ($user->isCxp() || $user->isTreasury()) {
+                    $q->orWhere('status', 'pendiente_pago');
+                }
+            });
 
         } elseif ($tab === 'global_history') {
             // History for elevated roles or personal history
@@ -3089,5 +3121,57 @@ class ReimbursementController extends Controller
             // DEFAULT FALLBACK: Personal Scope (mostly for weekly_summary if needed)
             $query->where('user_id', $user->id);
         }
+    }
+
+    /**
+     * Helper to apply general visibility scoping to a query (matching show logic).
+     */
+    private function applyGeneralVisibilityScope($query, $user)
+    {
+        $query->where(function($q) use ($user) {
+            // 1. Owner
+            $q->where('user_id', $user->id);
+
+            // 2. Current Approver (including substitutes) - Only if in approval phase
+            $q->orWhere(function($sq) use ($user) {
+                $sq->whereNotIn('status', ['pendiente_pago', 'aprobado', 'rechazado', 'borrador'])
+                   ->whereHas('currentStep', function($ssq) use ($user) {
+                        $ssq->where('user_id', $user->id)
+                            ->orWhereIn('user_id', $user->substitutingFor()->pluck('original_user_id'));
+                   });
+            });
+
+            // 3. CC Roles (Director sees everything in CC, Others see if it reached them)
+            $q->orWhereHas('costCenter', function($cq) use ($user) {
+                $cq->where('director_id', $user->id);
+            });
+
+            $q->orWhere(function($sub) use ($user) {
+                $sub->whereHas('costCenter', fn($cq) => $cq->where('control_obra_id', $user->id))
+                    ->where(function($rq) {
+                        $rq->whereNotNull('approved_by_director_at')
+                           ->orWhereNotIn('status', ['pendiente', 'requiere_correccion']);
+                    });
+            });
+
+            $q->orWhere(function($sub) use ($user) {
+                $sub->whereHas('costCenter', fn($cq) => $cq->where('director_ejecutivo_id', $user->id))
+                    ->where(function($rq) {
+                        $rq->whereNotNull('approved_by_control_at')
+                           ->orWhereNotIn('status', ['pendiente', 'requiere_correccion', 'aprobado_director']);
+                    });
+            });
+
+            // 4. Centralized Roles (CXP, Treasury, Direccion) - Matching Sequential Logic
+            if ($user->isCxp()) {
+                $q->orWhereNotIn('status', ['pendiente', 'requiere_correccion', 'borrador', 'aprobado_director', 'aprobado_control']);
+            }
+            if ($user->isDireccion()) {
+                $q->orWhereNotIn('status', ['pendiente', 'requiere_correccion', 'borrador', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo']);
+            }
+            if ($user->isTreasury()) {
+                $q->orWhereNotIn('status', ['pendiente', 'requiere_correccion', 'borrador', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp']);
+            }
+        });
     }
 }

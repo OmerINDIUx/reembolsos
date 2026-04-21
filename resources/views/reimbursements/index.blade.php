@@ -215,7 +215,9 @@
                     <div id="results-container">
                         @if($isGroupedView)
                             @php
-                                $groupedByWeek = $reimbursements->groupBy('week');
+                                $groupedByUser = $reimbursements->groupBy(function($item) {
+                                    return $item->user->name ?? 'Sin Usuario';
+                                });
                             @endphp
 
                             <div class="space-y-6">
@@ -242,49 +244,52 @@
                                     </div>
                                 </div>
                                 @endif
-                                @forelse($groupedByWeek as $week => $weekItems)
+                                @forelse($groupedByUser as $userName => $userItems)
                                     <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                                        {{-- Header Semana --}}
+                                        {{-- Header Responsable --}}
                                         <div class="bg-indigo-50/50 dark:bg-indigo-900/20 px-8 py-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
                                             <div class="flex items-center space-x-4">
                                                 <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-none">
-                                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                                                 </div>
                                                 <div>
-                                                    <h3 class="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest italic">Semana Fiscal</h3>
-                                                    <p class="text-xl font-black text-gray-900 dark:text-white leading-none mt-1">{{ $week }}</p>
+                                                    <h3 class="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest italic">Responsable</h3>
+                                                    <p class="text-xl font-black text-gray-900 dark:text-white leading-none mt-1">{{ $userName }}</p>
                                                 </div>
                                             </div>
                                             <div class="text-right">
-                                                <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Semana</h3>
-                                                <p class="text-2xl font-black text-indigo-700 dark:text-indigo-400 leading-none mt-1">${{ number_format($weekItems->sum('total'), 2) }}</p>
+                                                <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Pendiente</h3>
+                                                <p class="text-2xl font-black text-indigo-700 dark:text-indigo-400 leading-none mt-1">${{ number_format($userItems->sum('total'), 2) }}</p>
                                             </div>
                                         </div>
 
-                                        {{-- Lista de Centros de Costos --}}
+                                        {{-- Lista de Lotes (Semana + CC) --}}
                                         <div class="p-4 space-y-2">
                                             @php
-                                                $groupedByCC = $weekItems->groupBy(function($item) {
-                                                    return $item->costCenter->name ?? 'Sin Centro de Costos';
+                                                $groupedByBatch = $userItems->groupBy(function($item) {
+                                                    $ccName = $item->costCenter->name ?? 'Sin Centro de Costos';
+                                                    return 'Semana ' . $item->week . ' - ' . $ccName;
                                                 });
                                             @endphp
-                                            @foreach($groupedByCC as $ccName => $ccItems)
+                                            @foreach($groupedByBatch as $batchName => $batchItems)
                                                 @php
-                                                    $cc = $ccItems->first()->costCenter;
+                                                    $first = $batchItems->first();
+                                                    $week = $first->week;
+                                                    $ccName = $first->costCenter->name ?? 'Sin Centro de Costos';
+                                                    $cc = $first->costCenter;
                                                     $internalId = ($cc->abbreviation ?? 'SCC') . '-' . $week;
-                                                    $invoiceCount = $ccItems->whereNotNull('uuid')->count();
-                                                    $ticketCount = $ccItems->whereNull('uuid')->count();
-                                                    $userCount = $ccItems->pluck('user_id')->unique()->count();
+                                                    $invoiceCount = $batchItems->whereNotNull('uuid')->count();
+                                                    $ticketCount = $batchItems->whereNull('uuid')->count();
                                                     
                                                     $mismatchCount = 0;
-                                                    foreach($ccItems as $rcr) {
+                                                    foreach($batchItems as $rcr) {
                                                         $val = $rcr->validation_data ?? [];
                                                         if (!($val['uuid_match'] ?? true) || !($val['total_match'] ?? true)) {
                                                             $mismatchCount++;
                                                         }
                                                     }
-                                                    $idsJson = json_encode($ccItems->pluck('id'));
-                                                    $totalAmount = $ccItems->sum('total');
+                                                    $idsJson = json_encode($batchItems->pluck('id'));
+                                                    $totalAmount = $batchItems->sum('total');
                                                 @endphp
                                                 <a href="{{ route('reimbursements.audit', ['week' => $week, 'cc' => $ccName, 'tab' => $tab]) }}" 
                                                    class="flex flex-col md:flex-row items-start md:items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/30 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-md transition-all group no-underline space-y-3 md:space-y-0">
@@ -302,7 +307,7 @@
                                                         @endif
                                                         <div class="flex flex-col">
                                                             <span class="text-[10px] font-black text-indigo-500 uppercase tracking-widest italic opacity-70">{{ $internalId }}</span>
-                                                            <span class="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{{ $ccName }}</span>
+                                                            <span class="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{{ $batchName }}</span>
                                                         </div>
                                                     </div>
                                                     
@@ -315,13 +320,9 @@
                                                             <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Tickets</span>
                                                             <span class="text-sm font-black text-gray-900 dark:text-white">{{ $ticketCount }}</span>
                                                         </div>
-                                                        <div class="flex flex-col items-center">
-                                                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Solicitantes</span>
-                                                            <span class="text-sm font-black text-gray-900 dark:text-white">{{ $userCount }}</span>
-                                                        </div>
                                                         <div class="text-right ml-4">
                                                             <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest block">Total</span>
-                                                            <span class="text-lg font-black text-gray-900 dark:text-white">${{ number_format($ccItems->sum('total'), 2) }}</span>
+                                                            <span class="text-lg font-black text-gray-900 dark:text-white">${{ number_format($totalAmount, 2) }}</span>
                                                         </div>
                                                         <div class="p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 group-hover:bg-indigo-600 transition-colors">
                                                             <svg class="w-4 h-4 text-gray-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
