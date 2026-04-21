@@ -111,6 +111,13 @@ class CostCenterController extends Controller
      */
     public function show(Request $request, CostCenter $costCenter)
     {
+        if (!$request->filled('period_type')) {
+            $request->merge([
+                'period_type' => 'month',
+                'period_month' => now()->format('Y-m')
+            ]);
+        }
+
         $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
         $costCenter->load(['director', 'controlObra', 'directorEjecutivo', 'accountant', 'direccion', 'tesoreria', 'beneficiary', 'approvalSteps.user']);
 

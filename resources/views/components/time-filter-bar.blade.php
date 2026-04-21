@@ -1,22 +1,25 @@
 @props(['action', 'periods'])
 
 @php
-    $hasFilter = request('period_week') || request('period_month') || request('period_quarter') || request('period_year');
+    $hasFilter = request('period_week') || request('period_month') || request('period_quarter') || request('period_year') || request('period_type') == 'all';
     
     $summaryText = 'Sin filtros aplicados';
     if ($hasFilter) {
-        if (request('period_type', 'week') == 'week' && request('period_week')) {
+        $type = request('period_type', 'month');
+        if ($type == 'week' && request('period_week')) {
             $summaryText = "Semana " . request('period_week');
-        } elseif (request('period_type') == 'month' && request('period_month')) {
+        } elseif ($type == 'month' && request('period_month')) {
             try {
                 $summaryText = \Carbon\Carbon::parse(request('period_month'))->locale('es')->isoFormat('MMMM YYYY');
             } catch (\Exception $e) {
                 $summaryText = "Mes seleccionado";
             }
-        } elseif (request('period_type') == 'quarter' && request('period_quarter')) {
+        } elseif ($type == 'quarter' && request('period_quarter')) {
             $summaryText = "Trimestre " . request('period_quarter');
-        } elseif (request('period_type') == 'year' && request('period_year')) {
+        } elseif ($type == 'year' && request('period_year')) {
             $summaryText = "Año " . request('period_year');
+        } elseif ($type == 'all') {
+            $summaryText = "Todo el Historial";
         }
     }
 @endphp
@@ -73,10 +76,11 @@
                 <label class="block text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] mb-3 ml-1">Estructura Temporal</label>
                 <div class="relative group">
                     <select name="period_type" x-model="periodType" class="w-full bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl py-3.5 px-5 text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all appearance-none cursor-pointer">
-                        <option value="week">Semanas (Folio Fiscal)</option>
                         <option value="month">Mes Específico</option>
+                        <option value="week">Semanas (Folio Fiscal)</option>
                         <option value="quarter">Trimestre Histórico</option>
                         <option value="year">Año Completo</option>
+                        <option value="all">Todo el Historial</option>
                     </select>
                     <div class="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-500">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"></path></svg>

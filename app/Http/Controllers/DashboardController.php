@@ -14,6 +14,13 @@ class DashboardController extends Controller
 {
     public function index(Request $request)
     {
+        if (!$request->filled('period_type')) {
+            $request->merge([
+                'period_type' => 'month',
+                'period_month' => now()->format('Y-m')
+            ]);
+        }
+
         $user = Auth::user();
         $periods = Reimbursement::getAvailableTimePeriods();
 

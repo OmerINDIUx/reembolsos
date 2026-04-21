@@ -27,10 +27,10 @@
                     <x-nav-link :href="route('cost_centers.index')" :active="request()->routeIs('cost_centers.*')">
                         {{ __('Centro de Costos') }}
                     </x-nav-link>
-                    @endif
                     <x-nav-link :href="route('travel_events.index')" :active="request()->routeIs('travel_events.*')">
                         {{ __('Viajes y Eventos') }}
                     </x-nav-link>
+                    @endif
                 </div>
             </div>
 
@@ -167,10 +167,10 @@
             <x-responsive-nav-link :href="route('cost_centers.index')" :active="request()->routeIs('cost_centers.*')">
                 {{ __('Centro de Costos') }}
             </x-responsive-nav-link>
-            @endif
             <x-responsive-nav-link :href="route('travel_events.index')" :active="request()->routeIs('travel_events.*')">
                 {{ __('Viajes y Eventos') }}
             </x-responsive-nav-link>
+            @endif
         </div>
 
         <!-- Responsive Settings Options -->

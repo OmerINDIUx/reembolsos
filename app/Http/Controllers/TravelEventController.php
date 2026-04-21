@@ -89,6 +89,13 @@ class TravelEventController extends Controller
      */
     public function show(Request $request, TravelEvent $travelEvent)
     {
+        if (!$request->filled('period_type')) {
+            $request->merge([
+                'period_type' => 'month',
+                'period_month' => now()->format('Y-m')
+            ]);
+        }
+
         $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
         $travelEvent->load(['user', 'director', 'costCenter', 'participants']);
         
