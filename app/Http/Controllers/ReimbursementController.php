@@ -3048,7 +3048,7 @@ class ReimbursementController extends Controller
 
         // Special types (Fondo Fijo, Comida, Viaje) are restricted to marked users
         if (in_array($type, ['fondo_fijo', 'comida', 'viaje'])) {
-            return $isMarked || $user->isCxp() || $user->isTreasury() || $user->isAdminView() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->isDireccion();
+            return $isMarked || $user->isCxp() || $user->isAdminView() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->isDireccion();
         }
 
         // Standard reimbursement: unmarked users can create as many as needed
