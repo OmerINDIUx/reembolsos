@@ -1295,13 +1295,13 @@ class ReimbursementController extends Controller
                         $canSee = true;
                         break;
                     }
-                } elseif ($identity->isDirección()) {
+                } elseif ($identity->isDireccion()) {
                     if ($reimbursement->approved_by_cxp_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo'])) {
                         $canSee = true;
                         break;
                     }
                 } elseif ($identity->isTreasury()) {
-                    if ($reimbursement->approved_by_dirección_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp'])) {
+                    if ($reimbursement->approved_by_direccion_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp'])) {
                         $canSee = true;
                         break;
                     }

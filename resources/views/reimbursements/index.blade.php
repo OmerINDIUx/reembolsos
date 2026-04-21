@@ -207,18 +207,49 @@
                         $tab = request('tab', $defaultTab);
                         $isGroupedView = ($tab === 'management' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history' || $tab === 'audit');
                     @endphp
+
                     <div x-data="bulkAuditIndex()" class="relative border-transparent">
                         {{-- Modal included here to ensure it is always in the same scope --}}
                         @include('reimbursements.partials.bulk-index-modal')
 
+                        <div id="results-container">
+                            @if($isGroupedView)
+                                @php
+                                    $user = Auth::user();
+                                    $substitutes = $user->substitutingFor()->with('originalUser')->get()->keyBy('original_user_id');
+                                    
+                                    $groupedData = [];
+                                    foreach($reimbursements as $item) {
+                                        $week = $item->week;
+                                        if ($tab === 'management' || $tab === 'weekly_summary') {
+                                            $targetUserId = $item->currentStep->user_id ?? null;
+                                        } else {
+                                            $targetUserId = $item->user_id;
+                                        }
 
-                    <div id="results-container">
-                        @if($isGroupedView)
-                            @php
-                                $groupedByUser = $reimbursements->groupBy(function($item) {
-                                    return $item->user->name ?? 'Sin Usuario';
-                                });
-                            @endphp
+                                        if ($targetUserId === $user->id) {
+                                            $ctx = ($tab === 'management' || $tab === 'weekly_summary') ? 'Mis Pendientes' : 'Mis Reembolsos';
+                                        } elseif ($substitutes->has($targetUserId)) {
+                                            $ctx = 'En sustitución de ' . ($substitutes[$targetUserId]->originalUser->name ?? 'Usuario');
+                                        } else {
+                                            if ($tab === 'management' || $tab === 'weekly_summary') {
+                                                $ctx = $item->currentStep->user->name ?? ($item->user->name ?? 'Sin Usuario');
+                                            } else {
+                                                $ctx = $item->user->name ?? 'Sin Usuario';
+                                            }
+                                        }
+                                        
+                                        $groupKey = $week . '|||' . $ctx;
+                                if (!isset($groupedData[$groupKey])) {
+                                    $groupedData[$groupKey] = [
+                                        'week' => $week,
+                                        'context' => $ctx,
+                                        'items' => collect()
+                                    ];
+                                }
+                                $groupedData[$groupKey]['items']->push($item);
+                                    }
+                                @endphp
 
                             <div class="space-y-6">
                                 @if($tab !== 'management')
@@ -244,21 +275,26 @@
                                     </div>
                                 </div>
                                 @endif
-                                @forelse($groupedByUser as $userName => $userItems)
+                                @forelse($groupedData as $groupKey => $group)
+                                    @php
+                                        $userName = $group['context'];
+                                        $userItems = $group['items'];
+                                        $week = $group['week'];
+                                    @endphp
                                     <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
                                         {{-- Header Responsable --}}
                                         <div class="bg-indigo-50/50 dark:bg-indigo-900/20 px-8 py-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
                                             <div class="flex items-center space-x-4">
                                                 <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-none">
-                                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                                                 </div>
                                                 <div>
-                                                    <h3 class="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest italic">Responsable</h3>
+                                                    <h3 class="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest italic">Semana {{ $week }}</h3>
                                                     <p class="text-xl font-black text-gray-900 dark:text-white leading-none mt-1">{{ $userName }}</p>
                                                 </div>
                                             </div>
                                             <div class="text-right">
-                                                <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Pendiente</h3>
+                                                <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total en Grupo</h3>
                                                 <p class="text-2xl font-black text-indigo-700 dark:text-indigo-400 leading-none mt-1">${{ number_format($userItems->sum('total'), 2) }}</p>
                                             </div>
                                         </div>
@@ -267,8 +303,7 @@
                                         <div class="p-4 space-y-2">
                                             @php
                                                 $groupedByBatch = $userItems->groupBy(function($item) {
-                                                    $ccName = $item->costCenter->name ?? 'Sin Centro de Costos';
-                                                    return 'Semana ' . $item->week . ' - ' . $ccName;
+                                                    return $item->costCenter->name ?? 'Sin Centro de Costos';
                                                 });
                                             @endphp
                                             @foreach($groupedByBatch as $batchName => $batchItems)
@@ -307,7 +342,7 @@
                                                         @endif
                                                         <div class="flex flex-col">
                                                             <span class="text-[10px] font-black text-indigo-500 uppercase tracking-widest italic opacity-70">{{ $internalId }}</span>
-                                                            <span class="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{{ $batchName }}</span>
+                                                            <span class="text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{{ $ccName }}</span>
                                                         </div>
                                                     </div>
                                                     
