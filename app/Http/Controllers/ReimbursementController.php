@@ -1150,7 +1150,7 @@ class ReimbursementController extends Controller
                 'user_id' => $user->id,
                 'step_name' => 'Solicitante',
                 'action' => 'submitted',
-                'comment' => 'Solicitud enviada para aprobaciÃƒÂ³n.'
+                'comment' => 'Solicitud enviada para aprobación.'
             ]);
         }
 
@@ -1232,60 +1232,85 @@ class ReimbursementController extends Controller
         $status = $reimbursement->status;
         $canSee = false;
 
-        foreach ($allIdentities as $identity) {
-            // Admin/AdminView check for the identity
-            if ($identity->isAdmin() || $identity->isAdminView()) {
-                $canSee = true;
-                break;
-            }
+        // 2. Identify all identities this user can act as (themselves + active substitutes)
+        $substitutedUsers = $user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter();
+        $allIdentities = collect([$user])->concat($substitutedUsers);
+        $identityIds = $allIdentities->pluck('id')->toArray();
 
-            // Sequential Visibility Logic for this identity
-            if ($identity->isDirector() && $cc && $cc->director_id === $identity->id) {
-                // Directors see everything once submitted (Level 1)
-                $canSee = true; 
-                break;
-            } elseif ($identity->isControlObra() && $cc && $cc->control_obra_id === $identity->id) {
-                // Level 2 sees if it reached them once
-                if ($reimbursement->approved_by_director_at !== null || !in_array($status, ['pendiente', 'requiere_correccion'])) {
-                    $canSee = true;
-                    break;
-                }
-            } elseif ($identity->isExecutiveDirector() && $cc && $cc->director_ejecutivo_id === $identity->id) {
-                // Level 3 sees if it reached them once
-                if ($reimbursement->approved_by_control_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director'])) {
-                    $canSee = true;
-                    break;
-                }
-            } elseif ($identity->isCxp()) {
-                // CXP sees if it reached them once
-                if ($reimbursement->approved_by_executive_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control'])) {
-                    $canSee = true;
-                    break;
-                }
-            } elseif ($identity->isDireccion()) {
-                // DirecciÃ³n sees if it reached them once
-                if ($reimbursement->approved_by_cxp_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo'])) {
-                    $canSee = true;
-                    break;
-                }
-            } elseif ($identity->isTreasury()) {
-                // Treasury sees if it reached them once
-                if ($reimbursement->approved_by_direccion_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp'])) {
-                    $canSee = true;
-                    break;
-                }
-            }
+        // 3. Historical check: If any of my identities has already approved or acted on this, I can see it.
+        $hasActed = $reimbursement->approvals()->whereIn('user_id', $identityIds)->exists();
+        if ($hasActed) {
+            $canSee = true;
         }
 
-        // 3. Fallback: If identity checks failed, check if the user is currently assigned to the step
-        if (!$canSee && $reimbursement->current_step_id) {
-            if ($reimbursement->canBeApprovedBy($user)) {
-                $canSee = true;
+        if (!$canSee) {
+            foreach ($allIdentities as $identity) {
+                // Admin/AdminView check for the identity
+                if ($identity->isAdmin() || $identity->isAdminView()) {
+                    $canSee = true;
+                    break;
+                }
+
+                // Dynamic/Sequential Visibility Logic for this identity
+                // If it's currently at their step, they can see it
+                if ($reimbursement->currentStep && $reimbursement->currentStep->user_id === $identity->id) {
+                    $canSee = true;
+                    break;
+                }
+
+                // If they are part of any step in the CC, and it has already passed previous steps
+                $mySteps = $cc ? $cc->approvalSteps()->where('user_id', $identity->id)->get() : collect();
+                foreach ($mySteps as $step) {
+                    // If it's a step they belong to, they can see it if it's already at or past it
+                    // But usually, handleDynamicApprovals advances the step.
+                    // If it reached a step > mine, I should still see it.
+                    if ($reimbursement->currentStep && $reimbursement->currentStep->order >= $step->order) {
+                        $canSee = true;
+                        break;
+                    }
+                    if ($reimbursement->status === 'aprobado' || $reimbursement->status === 'pendiente_pago') {
+                        $canSee = true;
+                        break;
+                    }
+                }
+                
+                if ($canSee) break;
+
+                // Legacy Fallbacks
+                if ($identity->isDirector() && $cc && $cc->director_id === $identity->id) {
+                    $canSee = true; 
+                    break;
+                } elseif ($identity->isControlObra() && $cc && $cc->control_obra_id === $identity->id) {
+                    if ($reimbursement->approved_by_director_at !== null || !in_array($status, ['pendiente', 'requiere_correccion'])) {
+                        $canSee = true;
+                        break;
+                    }
+                } elseif ($identity->isExecutiveDirector() && $cc && $cc->director_ejecutivo_id === $identity->id) {
+                    if ($reimbursement->approved_by_control_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director'])) {
+                        $canSee = true;
+                        break;
+                    }
+                } elseif ($identity->isCxp()) {
+                    if ($reimbursement->approved_by_executive_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control'])) {
+                        $canSee = true;
+                        break;
+                    }
+                } elseif ($identity->isDirección()) {
+                    if ($reimbursement->approved_by_cxp_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo'])) {
+                        $canSee = true;
+                        break;
+                    }
+                } elseif ($identity->isTreasury()) {
+                    if ($reimbursement->approved_by_dirección_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp'])) {
+                        $canSee = true;
+                        break;
+                    }
+                }
             }
         }
 
         if (!$canSee) {
-            abort(403, 'AÃºn no tienes permiso para ver este reembolso. EstÃ¡ en una etapa anterior de aprobaciÃ³n.');
+            abort(403, 'Aún no tienes permiso para ver este reembolso. Se encuentra en una etapa de aprobación fuera de tu alcance actual.');
         }
 
         $reimbursement->load([
@@ -1452,28 +1477,9 @@ class ReimbursementController extends Controller
             } elseif ($request->status === 'aprobado') {
                 // DYNAMIC APPROVAL LOGIC
                 if ($reimbursement->canBeApprovedBy($user)) {
-                    if ($reimbursement->status === 'pendiente_pago') {
-                        // Keep current status to pass to handleDynamicApprovals which finalizes it
-                        $data['status'] = 'aprobado'; 
-                    } else {
-                        $currentStep = $reimbursement->currentStep;
-                        // Record approval in legacy columns if possible (order 1-6)
-                        $this->mapApprovalData($currentStep->order ?? 1, $user->id, $data);
-                        
-                        // Find next step
-                        $nextStep = $reimbursement->costCenter->approvalSteps()
-                            ->where('order', '>', $currentStep->order ?? 0)
-                            ->orderBy('order', 'asc')
-                            ->first();
-                            
-                        if ($nextStep) {
-                            $data['current_step_id'] = $nextStep->id;
-                            $data['status'] = 'pendiente'; // Move forward in workflow
-                        } else {
-                            $data['current_step_id'] = null;
-                            $data['status'] = 'pendiente_pago'; // Move to Accounting funnel instead of final Paid
-                        }
-                    }
+                    // We don't advance the step here anymore. 
+                    // handleDynamicApprovals will handle the current action AND the movement to next steps.
+                    $data['status'] = $reimbursement->status; // Keep current status for now
                 }
             }
         }
@@ -1546,7 +1552,7 @@ class ReimbursementController extends Controller
             }
         }
 
-        return back()->with('success', 'ActualizaciÃƒÂ³n guardada con ÃƒÂ©xito.');
+        return back()->with('success', 'Actualización guardada con éxito.');
     }
 
     public function validatePdfCorrection(Request $request, Reimbursement $reimbursement)
@@ -2790,6 +2796,10 @@ class ReimbursementController extends Controller
             'substituted_user_id' => $substitutedUserId,
         ]);
 
+        // Record approval in legacy columns if possible (order 1-6) for old reports
+        $this->mapApprovalData($stepAtActionTime->order ?? 1, $user->id, $reimbursement);
+
+
         // 2. If it was in the CXP final funnel or already finished, this action finalizes the entire document
         $statusToCheck = $originalStatus ?? $reimbursement->status;
         if (in_array($statusToCheck, ['pendiente_pago', 'aprobado'])) {
@@ -2809,19 +2819,11 @@ class ReimbursementController extends Controller
 
         // 3. Loop forward to see if the next steps should be auto-approved
         // Rule: Auto-approve if the assigned user for NEXT step has ALREADY approved this document in any previous level
+        // OR if the current acting user is the one assigned to the next step.
+        $currentOrder = $stepAtActionTime->order ?? 0;
+
         while(true) {
-            // Refresh model to get latest current_step state
-            $reimbursement->refresh();
-
-            // SAFETY: If we are already approved or in payment pending, stop looping
-            if ($reimbursement->status === 'aprobado' || $reimbursement->status === 'pendiente_pago') {
-                break;
-            }
-
-            // Find next step
-            // If currentStep is null, we only allow searching from 0 if we are in a pending state without a step (brand new)
-            $currentOrder = $reimbursement->currentStep->order ?? 0;
-            
+            // Find next step based on the last processed order
             $nextStep = $reimbursement->costCenter->approvalSteps()
                 ->where('order', '>', $currentOrder)
                 ->orderBy('order', 'asc')
@@ -2836,27 +2838,30 @@ class ReimbursementController extends Controller
                 break;
             }
 
-            // Check if this user has already approved in the past
-            // We search for ANY "aprobado" action by this user for THIS reimbursement
+            // Check if this step should be auto-approved
             $hasAlreadyApproved = $reimbursement->approvals()
                 ->where('user_id', $nextStep->user_id)
                 ->where('action', 'aprobado')
                 ->exists();
-
-            if ($hasAlreadyApproved) {
-                // AUTO-APPROVE this step
+            
+            // Auto-approve if assigned user already approved OR if current user is the assigned user
+            if ($hasAlreadyApproved || $nextStep->user_id === $user->id) {
                 $reimbursement->update(['current_step_id' => $nextStep->id]);
                 
                 // Record audit for auto-approval
                 $reimbursement->approvals()->create([
-                    'user_id' => $nextStep->user_id,
+                    'user_id' => $user->id, // The one who triggered the chain
                     'step_name' => $nextStep->name,
                     'action' => 'aprobado',
-                    'comment' => 'Auto-aprobado por aprobación previa en otro nivel',
+                    'comment' => $hasAlreadyApproved ? 'Auto-aprobado por aprobación previa' : 'Auto-aprobado (usuario asignado)',
                     'is_bulk' => $isBulk
                 ]);
                 
-                // Continue loop to check the next next step
+                // Also update legacy columns for this auto-approved step
+                $this->mapApprovalData($nextStep->order, $user->id, $reimbursement);
+                $reimbursement->save();
+
+                $currentOrder = $nextStep->order;
                 continue;
             } else {
                 // Different user and hasn't approved yet. Stop and wait.
