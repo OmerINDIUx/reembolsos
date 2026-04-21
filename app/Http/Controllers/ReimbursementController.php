@@ -312,11 +312,6 @@ class ReimbursementController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
         
-
-        if ($user->isCxp() || $user->isTreasury() || $user->isAdminView()) {
-            abort(403, 'Tu rol no tiene permisos para crear reembolsos.');
-        }
-
         $type = $request->input('type');
         $hasInvoice = $request->input('has_invoice', '1') !== '0';
         $allowedTypes = ['reembolso', 'fondo_fijo', 'comida', 'viaje'];
@@ -391,7 +386,7 @@ class ReimbursementController extends Controller
 
                 // Special types (Fondo Fijo, Comida, Viaje) are restricted to marked users
                 if (in_array($type, ['fondo_fijo', 'comida', 'viaje'])) {
-                    return $isMarked;
+                    return $isMarked || $user->isCxp() || $user->isTreasury() || $user->isAdminView() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->isDireccion();
                 }
 
                 // Standard reimbursement: unmarked users can create as many as needed
@@ -432,11 +427,6 @@ class ReimbursementController extends Controller
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
-
-        if ($user->isCxp() || $user->isTreasury() || $user->isAdminView()) {
-            abort(403, 'Tu rol no tiene permisos para registrar reembolsos.');
-        }
-
 
         $rules = [
             'type' => 'required|in:reembolso,fondo_fijo,comida,viaje',
@@ -506,19 +496,6 @@ class ReimbursementController extends Controller
             $initialStatus = 'en_evento';
             $currentStepId = null;
         } elseif ($costCenter) {
-            // Ownership Validation: N1, N2, N3 can only register in their own cost centers
-            if ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
-                $isAuthorized = false;
-                if ($user->isDirector() && $costCenter->director_id === $user->id) $isAuthorized = true;
-                if ($user->isControlObra() && $costCenter->control_obra_id === $user->id) $isAuthorized = true;
-                if ($user->isExecutiveDirector() && $costCenter->director_ejecutivo_id === $user->id) $isAuthorized = true;
-
-                if (!$isAuthorized && !$user->isAdmin()) {
-                    abort(403, 'No tienes permiso para registrar gastos en este centro de costos.');
-                }
-            }
-
-            // DYNAMIC WORKFLOW: Initialize at the first step
             $firstStep = $costCenter->approvalSteps()->orderBy('order', 'asc')->first();
             $initialStatus = $firstStep ? 'pendiente' : 'aprobado';
             $currentStepId = $firstStep ? $firstStep->id : null;
@@ -1219,8 +1196,8 @@ class ReimbursementController extends Controller
     {
         $user = Auth::user();
 
-        // 1. Admin, AdminView & Owner always see
-        if ($user->isAdmin() || $user->isAdminView() || $user->id === $reimbursement->user_id) {
+        // 1. Admin, AdminView, Subdirección (N4), Dirección General (N5) & Owner always see
+        if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion') || $user->id === $reimbursement->user_id) {
             return view('reimbursements.show', compact('reimbursement'));
         }
 
@@ -1245,8 +1222,8 @@ class ReimbursementController extends Controller
 
         if (!$canSee) {
             foreach ($allIdentities as $identity) {
-                // Admin/AdminView check for the identity
-                if ($identity->isAdmin() || $identity->isAdminView()) {
+                // Admin/AdminView/Subdirección/DirecciónGeneral check for the identity
+                if ($identity->hasRole('admin', 'admin_view', 'accountant', 'direccion')) {
                     $canSee = true;
                     break;
                 }
@@ -3029,7 +3006,7 @@ class ReimbursementController extends Controller
 
     private function canCreateReimbursement(\App\Models\User $user, $type, $costCenterId, $travelEventId = null)
     {
-        if ($user->isAdmin()) {
+        if ($user->hasRole('admin', 'accountant', 'direccion')) {
             return true;
         }
 
@@ -3049,6 +3026,11 @@ class ReimbursementController extends Controller
         if ($authorizedUser) {
             $isAuthorized = true;
             $isMarked = $authorizedUser->pivot->can_do_special;
+        } else {
+            // Also allow if they are the approver of this cost center
+            if ($user->isDirector() && $cc->director_id === $user->id) $isAuthorized = true;
+            if ($user->isControlObra() && $cc->control_obra_id === $user->id) $isAuthorized = true;
+            if ($user->isExecutiveDirector() && $cc->director_ejecutivo_id === $user->id) $isAuthorized = true;
         }
 
         // 2. Inherited Authorization via active Travel Event
@@ -3066,7 +3048,7 @@ class ReimbursementController extends Controller
 
         // Special types (Fondo Fijo, Comida, Viaje) are restricted to marked users
         if (in_array($type, ['fondo_fijo', 'comida', 'viaje'])) {
-            return (bool)$isMarked;
+            return $isMarked || $user->isCxp() || $user->isTreasury() || $user->isAdminView() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->isDireccion();
         }
 
         // Standard reimbursement: unmarked users can create as many as needed
@@ -3083,7 +3065,7 @@ class ReimbursementController extends Controller
 
         if ($tab === 'active') {
             // Personal & Substituted: Pending
-            if ($user->isAdmin() || $user->isAdminView()) {
+            if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion')) {
                 $query->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
             } else {
                 $query->whereIn('user_id', $identityIds)
@@ -3092,16 +3074,15 @@ class ReimbursementController extends Controller
 
         } elseif ($tab === 'history') {
             // Personal & Substituted: Finished
-            if ($user->isAdmin() || $user->isAdminView()) {
+            if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion')) {
                 $query->whereIn('status', ['aprobado', 'rechazado']);
             } else {
                 $query->whereIn('user_id', $identityIds)
                       ->whereIn('status', ['aprobado', 'rechazado']);
             }
-        } elseif ($tab === 'management' || $tab === 'audit' || $tab === 'weekly_summary') {
             // Approvals & Oversight
-            if ($user->isAdmin() || $user->isAdminView()) {
-                // Admin sees EVERYTHING that is in a pending flow
+            if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion')) {
+                // Admin/Subdirección/DirecciónGeneral sees EVERYTHING that is in a pending flow
                 $query->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
             } else {
                 $query->where(function($q) use ($user, $identityIds) {
@@ -3122,10 +3103,10 @@ class ReimbursementController extends Controller
 
         } elseif ($tab === 'global_history') {
             // History for elevated roles or personal history (including substituted)
-            if ($user->isAdmin() || $user->isAdminView()) {
-                // Admin sees EVERYTHING in history
+            if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion')) {
+                // Elevated roles see EVERYTHING in history
                 $query->whereNotIn('status', ['borrador']);
-            } elseif ($user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
+            } elseif ($user->isTreasury() || $user->isCxp()) {
                 $query->whereIn('status', ['aprobado', 'rechazado']);
             } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
                 $query->whereHas('costCenter', function($q) use ($user) {
@@ -3148,8 +3129,8 @@ class ReimbursementController extends Controller
      */
     private function applyGeneralVisibilityScope($query, $user)
     {
-        // Admin sees EVERYTHING
-        if ($user->isAdmin() || $user->isAdminView()) {
+        // Admin/Subdirección/DirecciónGeneral sees EVERYTHING
+        if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion')) {
             return;
         }
 

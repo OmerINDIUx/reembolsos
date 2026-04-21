@@ -38,7 +38,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('reimbursements/parse-xml', [ReimbursementController::class, 'parseCfdi'])->name('reimbursements.parse');
     Route::post('reimbursements/auto-save', [ReimbursementController::class, 'autoStore'])->name('reimbursements.auto_save');
 
-    Route::middleware('role:admin,admin_view')->group(function() {
+    Route::middleware('role:admin,admin_view,director_ejecutivo,accountant,direccion')->group(function() {
         Route::resource('users', UserController::class);
         Route::post('users/{user}/resend-invitation', [UserController::class, 'resendInvitation'])->name('users.resend_invitation');
         
@@ -48,10 +48,13 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('users/{user}/substitutes/{substitute_id}', [UserController::class, 'removeSubstitute'])->name('users.substitutes.remove');
     });
 
-    Route::middleware('role:admin,admin_view,director,control_obra,director_ejecutivo,accountant')->group(function() {
+    Route::middleware('role:admin,admin_view,director,control_obra,director_ejecutivo,accountant,direccion')->group(function() {
         Route::resource('cost_centers', CostCenterController::class);
         Route::patch('cost_centers/{cost_center}/toggle-status', [CostCenterController::class, 'toggleStatus'])->name('cost_centers.toggle_status');
         Route::post('cost_centers/{cost_center}/renew-budget', [CostCenterController::class, 'renewBudget'])->name('cost_centers.renew_budget');
+    });
+
+    Route::middleware('role:admin,admin_view,director,control_obra,director_ejecutivo,accountant,direccion')->group(function() {
         Route::resource('travel_events', \App\Http\Controllers\TravelEventController::class);
         Route::post('travel_events/{travel_event}/close', [\App\Http\Controllers\TravelEventController::class, 'closeEvent'])->name('travel_events.close');
     });

@@ -18,15 +18,17 @@
                     <x-nav-link :href="route('reimbursements.index')" :active="request()->routeIs('reimbursements.*')">
                         {{ __('Reembolsos') }}
                     </x-nav-link>
-                    @if(Auth::user()->role === 'admin' || Auth::user()->role === 'admin_view')
+                    @if(Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'accountant', 'direccion'))
                     <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                         {{ __('Usuarios') }}
                     </x-nav-link>
                     @endif
-                    @if(Auth::user()->role === 'admin' || Auth::user()->role === 'admin_view' || Auth::user()->role === 'director' || Auth::user()->role === 'control_obra' || Auth::user()->role === 'director_ejecutivo' || Auth::user()->role === 'accountant')
+                    @if(Auth::user()->hasRole('admin', 'admin_view', 'director', 'control_obra', 'director_ejecutivo', 'accountant', 'direccion'))
                     <x-nav-link :href="route('cost_centers.index')" :active="request()->routeIs('cost_centers.*')">
                         {{ __('Centro de Costos') }}
                     </x-nav-link>
+                    @endif
+                    @if(Auth::user()->hasRole('admin', 'admin_view', 'director', 'control_obra', 'director_ejecutivo', 'accountant', 'direccion'))
                     <x-nav-link :href="route('travel_events.index')" :active="request()->routeIs('travel_events.*')">
                         {{ __('Viajes y Eventos') }}
                     </x-nav-link>
@@ -158,15 +160,17 @@
             <x-responsive-nav-link :href="route('reimbursements.index')" :active="request()->routeIs('reimbursements.*')">
                 {{ __('Reembolsos') }}
             </x-responsive-nav-link>
-            @if(Auth::user()->role === 'admin' || Auth::user()->role === 'admin_view')
+            @if(Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'accountant', 'direccion'))
             <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                 {{ __('Usuarios') }}
             </x-responsive-nav-link>
             @endif
-            @if(Auth::user()->role === 'admin' || Auth::user()->role === 'admin_view' || Auth::user()->role === 'director' || Auth::user()->role === 'control_obra' || Auth::user()->role === 'director_ejecutivo' || Auth::user()->role === 'accountant')
+            @if(Auth::user()->hasRole('admin', 'admin_view', 'director', 'control_obra', 'director_ejecutivo', 'accountant', 'direccion'))
             <x-responsive-nav-link :href="route('cost_centers.index')" :active="request()->routeIs('cost_centers.*')">
                 {{ __('Centro de Costos') }}
             </x-responsive-nav-link>
+            @endif
+            @if(Auth::user()->hasRole('admin', 'admin_view', 'director', 'control_obra', 'director_ejecutivo', 'accountant', 'direccion'))
             <x-responsive-nav-link :href="route('travel_events.index')" :active="request()->routeIs('travel_events.*')">
                 {{ __('Viajes y Eventos') }}
             </x-responsive-nav-link>

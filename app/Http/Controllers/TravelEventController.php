@@ -177,7 +177,7 @@ class TravelEventController extends Controller
     public function closeEvent(TravelEvent $travelEvent)
     {
         // Solo el director del evento o admin
-        if (!Auth::user()->isAdmin() && Auth::id() !== $travelEvent->director_id) {
+        if (!Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'accountant', 'direccion') && Auth::id() !== $travelEvent->director_id) {
             abort(403, 'No tienes permiso para cerrar este evento.');
         }
 

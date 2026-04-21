@@ -85,7 +85,7 @@
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Usuario</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Correo</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Rol</th>
-                                    @if(Auth::user()->isAdmin())
+                                    @if(Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'direccion'))
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estatus</th>
                                     @endif
 
@@ -127,7 +127,7 @@
                                             @endif
                                         </span>
                                     </td>
-                                    @if(Auth::user()->isAdmin())
+                                    @if(Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'direccion'))
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">
                                         @if($user->invitation_token)
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">

@@ -11,7 +11,7 @@
                 <div class="p-6 text-gray-900 dark:text-gray-100">
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
                         <h3 class="text-lg font-medium">Panel de Control de Reembolsos por Centro de Costos</h3>
-                        @if(Auth::user()->isAdmin())
+                        @if(Auth::user()->hasRole('admin', 'director_ejecutivo', 'direccion'))
                         <a href="{{ route('cost_centers.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
                             Nuevo Centro de Costos
                         </a>
@@ -89,7 +89,7 @@
                                     <th scope="col" class="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Monto Ejecutado vs Presupuesto</th>
                                     <th scope="col" class="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Progreso / Análisis</th>
                                     <th scope="col" class="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Flujo de Aprobación</th>
-                                    @if(Auth::user()->isAdmin() || Auth::user()->isAdminView())
+                                    @if(Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'direccion'))
                                     <th scope="col" class="relative px-6 py-3 text-right"></th>
                                     @endif
                                 </tr>
@@ -195,10 +195,10 @@
                                             <span class="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Niveles de Flujo</span>
                                         </div>
                                     </td>
-                                    @if(Auth::user()->isAdmin() || Auth::user()->isAdminView())
+                                    @if(Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'direccion'))
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-xs font-semibold uppercase tracking-widest">
                                         <div class="flex justify-end items-center space-x-4">
-                                            @if(Auth::user()->isAdmin())
+                                            @if(Auth::user()->hasRole('admin', 'director_ejecutivo', 'direccion'))
                                                 @if($cc->is_active)
                                                     <a href="{{ route('cost_centers.edit', $cc->id) }}" class="text-indigo-600 hover:text-indigo-900 transition-colors">
                                                         Editar
