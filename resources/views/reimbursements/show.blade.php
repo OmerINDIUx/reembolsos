@@ -120,7 +120,8 @@
                             $statusClasses = $statusColors[$reimbursement->status] ?? 'text-gray-600 bg-gray-50 ring-gray-500/10';
                             
                             $statusLabel = match($reimbursement->status) {
-                                'aprobado' => 'PAGADO / FINALIZADO',
+                                'aprobado' => 'CUENTAS POR PAGAR',
+                                'pendiente_pago' => 'CUENTAS POR PAGAR',
                                 'rechazado' => 'RECHAZADO',
                                 'requiere_correccion' => 'REQUIERE CORRECCIÓN',
                                 'borrador' => 'BORRADOR',
@@ -588,13 +589,21 @@
                                                     <div>
                                                         <p class="text-sm text-gray-500 dark:text-gray-400">
                                                             <span class="font-bold text-gray-900 dark:text-white">
+                                                                @if($approval->action === 'aprobado')
+                                                                    Aprobado por: 
+                                                                @elseif($approval->action === 'rechazado')
+                                                                    Rechazado por:
+                                                                @else
+                                                                    {{ ucfirst(str_replace('_', ' ', $approval->action)) }} por:
+                                                                @endif
+
                                                                 @if($approval->substituted_user_id)
-                                                                    {{ $approval->user->name }} <span class="text-indigo-600 dark:text-indigo-400 text-[10px] uppercase font-black tracking-tighter mx-1">(En sustitución de {{ $approval->substitutedUser->name }})</span>
+                                                                    {{ $approval->user->name }} <span class="text-indigo-600 dark:text-indigo-400 text-[10px] uppercase font-black tracking-tighter mx-1">a nombre de {{ $approval->substitutedUser->name }}</span>
                                                                 @else
                                                                     {{ $approval->user->name ?? 'Sistema' }}
                                                                 @endif
                                                             </span>
-                                                            {{ str_replace('_', ' ', $approval->action) }} en el paso 
+                                                            en el paso 
                                                             <span class="font-medium text-indigo-600 dark:text-indigo-400">{{ $approval->step_name }}</span>
                                                             @if($approval->is_bulk)
                                                                 <span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-[4px] text-[8px] font-black bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 uppercase tracking-tighter">

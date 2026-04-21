@@ -468,7 +468,7 @@
                                                     {{ $r->status === 'borrador' ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' : '' }}
                                                     {{ !in_array($r->status, ['aprobado', 'rechazado', 'requiere_correccion', 'pendiente', 'pendiente_pago', 'borrador']) ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
                                                 ">
-                                                    @if($r->status === 'aprobado') Pagado 
+                                                    @if($r->status === 'aprobado') Cuentas por Pagar 
                                                     @elseif($r->status === 'pendiente') {{ $r->currentStep->name ?? 'En Proceso' }}
                                                     @elseif($r->status === 'pendiente_pago') Cuentas por Pagar
                                                     @elseif($r->status === 'requiere_correccion') Corregir
@@ -479,17 +479,17 @@
                                                         En: {{ $r->currentStep->user->name ?? 'Por asignar' }}
                                                         @php
                                                             $isSubstituteApproval = false;
-                                                            if ($r->currentStep->user_id !== Auth::id()) {
-                                                                $isSubstituteApproval = Auth::user()->substitutingFor()->where('original_user_id', $r->currentStep->user_id)->exists();
+                                                            if ($r->currentStep && $r->currentStep->user_id !== Auth::id()) {
+                                                                $isSubstituteApproval = Auth::user()->substitutingFor()->where('original_user_id', $r->currentStep->user_id)->exists() || Auth::user()->isAdmin();
                                                             }
                                                         @endphp
                                                         @if($isSubstituteApproval)
-                                                            <span class="block mt-1 text-indigo-500 font-bold bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-[9px] w-fit">Sustituyendo a {{ $r->currentStep->user->name }}</span>
+                                                            <span class="block mt-1 text-indigo-500 font-bold bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-[9px] w-fit">A nombre de {{ $r->currentStep->user->name }}</span>
                                                         @endif
                                                     @elseif($r->status === 'pendiente_pago')
                                                         Listo para liquidación final
                                                     @elseif($r->status === 'aprobado') 
-                                                        Finalizado
+                                                        Cuentas por Pagar
                                                     @elseif($r->status === 'requiere_correccion')
                                                         Esperando ajuste del solicitante
                                                     @elseif($r->status === 'rechazado')

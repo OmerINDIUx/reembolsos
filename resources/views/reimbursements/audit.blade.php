@@ -297,11 +297,11 @@
                                                 $isSubstituteApproval = false;
                                                 $currStepUserId = $r->currentStep->user_id ?? null;
                                                 if ($r->status === 'pendiente' && $currStepUserId && $currStepUserId !== Auth::id()) {
-                                                    $isSubstituteApproval = Auth::user()->substitutingFor()->where('original_user_id', $currStepUserId)->exists();
+                                                    $isSubstituteApproval = Auth::user()->substitutingFor()->where('original_user_id', $currStepUserId)->exists() || Auth::user()->isAdmin();
                                                 }
                                             @endphp
                                             @if($isSubstituteApproval)
-                                                <span class="px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 rounded text-[7px] font-black uppercase tracking-widest border border-purple-200 dark:border-purple-800">Sustituyendo a {{ $r->currentStep->user->name ?? 'Usuario' }}</span>
+                                                <span class="px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 rounded text-[7px] font-black uppercase tracking-widest border border-purple-200 dark:border-purple-800">A nombre de {{ $r->currentStep->user->name ?? 'Usuario' }}</span>
                                             @endif
                                         </div>
                                         <span class="text-sm font-black text-gray-700 dark:text-gray-300">{{ $r->nombre_emisor ?: 'S/N' }}</span>

@@ -1479,6 +1479,7 @@ class ReimbursementController extends Controller
         }
 
         $originalStatus = $reimbursement->status;
+        $stepAtActionTime = $reimbursement->currentStep;
         $reimbursement->update($data);
 
         // RECORD INITIAL AUDIT LOG (for the direct action taken by the user)
@@ -1491,22 +1492,21 @@ class ReimbursementController extends Controller
             ]);
         } elseif (isset($data['status']) && ($data['status'] === 'rechazado' || $data['status'] === 'requiere_correccion')) {
             $substitutedUserId = null;
-            if ($reimbursement->currentStep && $reimbursement->currentStep->user_id !== $user->id && !$user->isAdmin()) {
-                 if ($user->substitutingFor()->where('original_user_id', $reimbursement->currentStep->user_id)->exists()) {
-                     $substitutedUserId = $reimbursement->currentStep->user_id;
-                 }
+            $stepForAudit = $stepAtActionTime; // Use the step before update
+            if ($stepForAudit && $stepForAudit->user_id !== $user->id) {
+                 $substitutedUserId = $stepForAudit->user_id;
             }
 
             $reimbursement->approvals()->create([
                 'user_id' => $user->id,
-                'step_name' => $reimbursement->currentStep->name ?? 'Revision',
+                'step_name' => $stepForAudit->name ?? 'Revision',
                 'action' => $data['status'],
                 'comment' => ($request->rejection_reason ?? '') . ($request->rejection_comment ? " - " . $request->rejection_comment : ""),
                 'substituted_user_id' => $substitutedUserId
             ]);
         } elseif ($request->status === 'aprobado' && !isset($data['error'])) {
             // Check for Auto-Approvals for non-consecutive or consecutive levels
-            $this->handleDynamicApprovals($reimbursement, $user, false, $originalStatus);
+            $this->handleDynamicApprovals($reimbursement, $user, false, $originalStatus, $stepAtActionTime);
         }
 
         // DYNAMIC NOTIFICATIONS
@@ -2028,9 +2028,9 @@ class ReimbursementController extends Controller
 
         Log::info("BULK_AUDIT_ACTION_END: Processed={$processed} Failed={$failed}");
         
-        $msg = "Se procesaron $processed trÃƒÂ¡mites con ÃƒÂ©xito.";
+        $msg = "Se procesaron $processed trámites con éxito.";
         if ($failed > 0) {
-            $msg .= " No se pudieron procesar $failed trÃƒÂ¡mites por falta de permisos o estado invÃƒÂ¡lido.";
+            $msg .= " No se pudieron procesar $failed trámites por falta de permisos o estado inválido.";
         }
         
         return back()->with('success', $msg);
@@ -2067,7 +2067,7 @@ class ReimbursementController extends Controller
         
         if (!$header) {
             fclose($handle);
-            return back()->with('error', 'El archivo CSV estÃƒÂ¡ vacÃƒÂ­o o no se puede leer.');
+            return back()->with('error', 'El archivo CSV está vacío o no se puede leer.');
         }
 
         // Find Folio, UUID, Total columns dynamically
@@ -2106,7 +2106,7 @@ class ReimbursementController extends Controller
             }
 
             if ($reimbursement) {
-                // ValidaciÃƒÂ³n estricta: UUID exacto O Monto exacto (si no hay cÃƒÂ³digo XML)
+                // Validación estricta: UUID exacto O Monto exacto (si no hay código XML)
                 $isValid = false;
                 if ($uuid && $uuid !== 'N/A' && $uuid !== 'SIN UUID') {
                     if ($reimbursement->uuid === $uuid) {
@@ -2135,7 +2135,7 @@ class ReimbursementController extends Controller
                 // 2. Check if rejected
                 if ($reimbursement->status === 'rechazado') {
                     $failed++;
-                    $errors['invalid_status'][] = "Folio $folio: EstÃƒÂ¡ marcado como rechazado.";
+                    $errors['invalid_status'][] = "Folio $folio: Está marcado como rechazado.";
                     continue;
                 }
 
@@ -2145,7 +2145,7 @@ class ReimbursementController extends Controller
                 if (!$user->isAdmin() && !in_array($reimbursement->status, $paymentFunnel)) {
                     $failed++;
                     $statusLabel = ucwords(str_replace('_', ' ', $reimbursement->status));
-                    $errors['invalid_status'][] = "Folio $folio: El estatus '$statusLabel' no estÃƒÂ¡ en el embudo de Cuentas por Pagar (requiere ser 'pendiente_pago').";
+                    $errors['invalid_status'][] = "Folio $folio: El estatus '$statusLabel' no está en el embudo de Cuentas por Pagar (requiere ser 'pendiente_pago').";
                     continue;
                 }
 
@@ -2162,7 +2162,7 @@ class ReimbursementController extends Controller
                     'user_id' => $user->id,
                     'step_name' => 'Cuentas por Pagar (Masivo)',
                     'action' => 'aprobado',
-                    'comment' => 'AprobaciÃƒÂ³n Masiva por CSV',
+                    'comment' => 'Aprobación Masiva por CSV',
                     'is_bulk' => true
                 ]);
 
@@ -2201,7 +2201,7 @@ class ReimbursementController extends Controller
             'estacionamientos y casetas',
             'hospedajes',
             'comidas',
-            'papelerÃƒÂ­a y articulos de oficina',
+            'papelería y articulos de oficina',
             'herramientas y refacciones',
             'materiales diversos',
             'diversos',
@@ -2211,18 +2211,18 @@ class ReimbursementController extends Controller
             'sueldos de obra',
             'renta local',
             'agua',
-            'envios y paqueterÃƒÂ­a',
+            'envios y paquetería',
             'medicinas y doctor',
             'viaticos',
             'renta de maquinaria y transporte',
             'mantenimiento y servicios de equipo y transporte',
-            'supervisiÃƒÂ³n',
+            'supervisión',
             'fletes y acarreo',
             'luz',
-            'deducibles autos daÃƒÂ±ados',
+            'deducibles autos dañados',
             'vigilancia',
             'mantenimiento de oficina',
-            'reparaciÃƒÂ³n y mantenimiento de equipo de oficina',
+            'reparación y mantenimiento de equipo de oficina',
             'utensilios auxiliares para trabajo',
             'telefonia y radio',
         ];
@@ -2380,7 +2380,7 @@ class ReimbursementController extends Controller
         $reimbursements = $query->with(['payee', 'costCenter', 'files', 'children', 'children.files'])->get();
 
         if ($reimbursements->isEmpty()) {
-            return back()->with('error', 'No se encontraron reembolsos para generar la carÃƒÂ¡tula.');
+            return back()->with('error', 'No se encontraron reembolsos para generar la carátula.');
         }
 
         // Group by Payee and Cost Center
@@ -2769,26 +2769,23 @@ class ReimbursementController extends Controller
     /**
      * Recursive/Iterative logic to handle auto-approvals based on historical or current user identity.
      */
-    private function handleDynamicApprovals(\App\Models\Reimbursement $reimbursement, $user, $isBulk = false, $originalStatus = null)
+    private function handleDynamicApprovals(\App\Models\Reimbursement $reimbursement, $user, $isBulk = false, $originalStatus = null, $stepAtActionTime = null)
     {
         // 1. Record the approval for the STEP the user is technically in right now
-        // This is the "Manual" approval that triggered the chain. 
-        // We do this BEFORE any early returns to ensure the movement is ALWAYS recorded in history.
-        $stepAtActionTime = $reimbursement->currentStep;
+        // If not provided, we try to guess it from the current model state (less reliable if already advanced)
+        $stepAtActionTime = $stepAtActionTime ?? $reimbursement->currentStep;
         
         $substitutedUserId = null;
-        if ($stepAtActionTime && $stepAtActionTime->user_id !== $user->id && !$user->isAdmin()) {
-             // Check if user is indeed a substitute
-             if ($user->substitutingFor()->where('original_user_id', $stepAtActionTime->user_id)->exists()) {
-                 $substitutedUserId = $stepAtActionTime->user_id;
-             }
+        if ($stepAtActionTime && $stepAtActionTime->user_id !== $user->id) {
+             // Record if acting on behalf of someone else (either official substitute or Admin)
+             $substitutedUserId = $stepAtActionTime->user_id;
         }
 
         $reimbursement->approvals()->create([
             'user_id' => $user->id,
             'step_name' => $stepAtActionTime->name ?? ($reimbursement->status === 'pendiente_pago' ? 'Cuentas por Pagar' : 'Proceso'),
             'action' => 'aprobado',
-            'comment' => $isBulk ? 'AprobaciÃƒÂ³n Masiva' : 'AprobaciÃƒÂ³n Manual',
+            'comment' => $isBulk ? 'Aprobación Masiva' : 'Aprobación Manual',
             'is_bulk' => $isBulk,
             'substituted_user_id' => $substitutedUserId,
         ]);
@@ -2855,7 +2852,7 @@ class ReimbursementController extends Controller
                     'user_id' => $nextStep->user_id,
                     'step_name' => $nextStep->name,
                     'action' => 'aprobado',
-                    'comment' => 'Auto-aprobado por aprobaciÃƒÂ³n previa en otro nivel',
+                    'comment' => 'Auto-aprobado por aprobación previa en otro nivel',
                     'is_bulk' => $isBulk
                 ]);
                 
@@ -3076,36 +3073,54 @@ class ReimbursementController extends Controller
      */
     private function applyTabScope($query, $tab, $user)
     {
+        // Get all identities (the user themselves + anyone they are substituting for)
+        $identityIds = $user->substitutingFor()->pluck('original_user_id')->push($user->id)->unique();
+
         if ($tab === 'active') {
-            // Strictly Personal: Pending
-            $query->where('user_id', $user->id)
-                  ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
+            // Personal & Substituted: Pending
+            if ($user->isAdmin() || $user->isAdminView()) {
+                $query->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
+            } else {
+                $query->whereIn('user_id', $identityIds)
+                      ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
+            }
 
         } elseif ($tab === 'history') {
-            // Strictly Personal: Finished
-            $query->where('user_id', $user->id)
-                  ->whereIn('status', ['aprobado', 'rechazado']);
+            // Personal & Substituted: Finished
+            if ($user->isAdmin() || $user->isAdminView()) {
+                $query->whereIn('status', ['aprobado', 'rechazado']);
+            } else {
+                $query->whereIn('user_id', $identityIds)
+                      ->whereIn('status', ['aprobado', 'rechazado']);
+            }
         } elseif ($tab === 'management' || $tab === 'audit' || $tab === 'weekly_summary') {
-            // Approvals & Oversight: Restricted to CURRENT Workflow Responsibility + Substitutes
-            $query->where(function($q) use ($user) {
-                // Workflow Responsibility: Only if it's actually in a pending approval stage
-                $q->where(function($sq) use ($user) {
-                    $sq->whereNotIn('status', ['pendiente_pago', 'aprobado', 'rechazado'])
-                       ->whereHas('currentStep', function($ssq) use ($user) {
-                            $ssq->where('user_id', $user->id)
-                                ->orWhereIn('user_id', $user->substitutingFor()->pluck('original_user_id'));
-                       });
-                });
+            // Approvals & Oversight
+            if ($user->isAdmin() || $user->isAdminView()) {
+                // Admin sees EVERYTHING that is in a pending flow
+                $query->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
+            } else {
+                $query->where(function($q) use ($user, $identityIds) {
+                    // Workflow Responsibility: Only if it's actually in a pending approval stage
+                    $q->where(function($sq) use ($identityIds) {
+                        $sq->whereNotIn('status', ['pendiente_pago', 'aprobado', 'rechazado'])
+                           ->whereHas('currentStep', function($ssq) use ($identityIds) {
+                                $ssq->whereIn('user_id', $identityIds);
+                           });
+                    });
 
-                // Special Roles: CXP/Treasury see what's pending payment (their turn)
-                if ($user->isCxp() || $user->isTreasury()) {
-                    $q->orWhere('status', 'pendiente_pago');
-                }
-            });
+                    // Special Roles: CXP/Treasury see what's pending payment (their turn)
+                    if ($user->isCxp() || $user->isTreasury()) {
+                        $q->orWhere('status', 'pendiente_pago');
+                    }
+                });
+            }
 
         } elseif ($tab === 'global_history') {
-            // History for elevated roles or personal history
-            if ($user->isAdmin() || $user->isAdminView() || $user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
+            // History for elevated roles or personal history (including substituted)
+            if ($user->isAdmin() || $user->isAdminView()) {
+                // Admin sees EVERYTHING in history
+                $query->whereNotIn('status', ['borrador']);
+            } elseif ($user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
                 $query->whereIn('status', ['aprobado', 'rechazado']);
             } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
                 $query->whereHas('costCenter', function($q) use ($user) {
@@ -3114,12 +3129,12 @@ class ReimbursementController extends Controller
                     if ($user->isExecutiveDirector()) $q->where('director_ejecutivo_id', $user->id);
                 })->whereIn('status', ['aprobado', 'rechazado']);
             } else {
-                $query->where('user_id', $user->id)
+                $query->whereIn('user_id', $identityIds)
                       ->whereIn('status', ['aprobado', 'rechazado']);
             }
         } else {
-            // DEFAULT FALLBACK: Personal Scope (mostly for weekly_summary if needed)
-            $query->where('user_id', $user->id);
+            // DEFAULT FALLBACK: Personal Scope (including substituted)
+            $query->whereIn('user_id', $identityIds);
         }
     }
 
@@ -3128,16 +3143,23 @@ class ReimbursementController extends Controller
      */
     private function applyGeneralVisibilityScope($query, $user)
     {
-        $query->where(function($q) use ($user) {
-            // 1. Owner
-            $q->where('user_id', $user->id);
+        // Admin sees EVERYTHING
+        if ($user->isAdmin() || $user->isAdminView()) {
+            return;
+        }
+
+        // Get all identities (the user themselves + anyone they are substituting for)
+        $identityIds = $user->substitutingFor()->pluck('original_user_id')->push($user->id)->unique();
+
+        $query->where(function($q) use ($user, $identityIds) {
+            // 1. Owner or Substituted Owner
+            $q->whereIn('user_id', $identityIds);
 
             // 2. Current Approver (including substitutes) - Only if in approval phase
-            $q->orWhere(function($sq) use ($user) {
+            $q->orWhere(function($sq) use ($identityIds) {
                 $sq->whereNotIn('status', ['pendiente_pago', 'aprobado', 'rechazado', 'borrador'])
-                   ->whereHas('currentStep', function($ssq) use ($user) {
-                        $ssq->where('user_id', $user->id)
-                            ->orWhereIn('user_id', $user->substitutingFor()->pluck('original_user_id'));
+                   ->whereHas('currentStep', function($ssq) use ($identityIds) {
+                        $ssq->whereIn('user_id', $identityIds);
                    });
             });
 
