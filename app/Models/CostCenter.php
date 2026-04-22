@@ -19,6 +19,7 @@ class CostCenter extends Model
         'direccion_id',
         'tesoreria_id',
         'description',
+        'menfis_email',
         'budget',
         'beneficiary_id',
         'is_active',

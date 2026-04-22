@@ -36,9 +36,15 @@
                             </div>
                         </div>
 
-                        <div class="mb-4">
-                            <label for="description" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Descripción (Opcional)</label>
-                            <textarea name="description" id="description" rows="2" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium py-3">{{ $costCenter->description }}</textarea>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div>
+                                <label for="menfis_email" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Correo de Menfis (Opcional)</label>
+                                <input type="email" name="menfis_email" id="menfis_email" value="{{ $costCenter->menfis_email }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3" placeholder="correo@ejemplo.com">
+                            </div>
+                            <div>
+                                <label for="description" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Descripción (Opcional)</label>
+                                <input type="text" name="description" id="description" value="{{ $costCenter->description }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium py-3">
+                            </div>
                         </div>
 
                         <!-- Dynamic Steps with Alpine.js -->

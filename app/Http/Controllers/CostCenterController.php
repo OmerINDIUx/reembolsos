@@ -239,6 +239,8 @@ class CostCenterController extends Controller
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.user_id' => ['required', 'exists:users,id'],
             'steps.*.name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'menfis_email' => ['nullable', 'email', 'max:255'],
             'allowed_users' => ['nullable', 'array'],
             'allowed_users.*.user_id' => ['required', 'exists:users,id'],
             'allowed_users.*.can_do_special' => ['nullable'],
@@ -248,6 +250,7 @@ class CostCenterController extends Controller
             'name' => $request->name,
             'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
             'description' => $request->description,
+            'menfis_email' => $request->menfis_email,
             'budget' => $request->budget,
             'beneficiary_id' => $request->beneficiary_id,
         ]);
@@ -311,6 +314,8 @@ class CostCenterController extends Controller
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.user_id' => ['required', 'exists:users,id'],
             'steps.*.name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'menfis_email' => ['nullable', 'email', 'max:255'],
             'allowed_users' => ['nullable', 'array'],
             'allowed_users.*.user_id' => ['required', 'exists:users,id'],
             'allowed_users.*.can_do_special' => ['nullable'],
@@ -332,6 +337,7 @@ class CostCenterController extends Controller
                 'name' => $request->name,
                 'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
                 'description' => $request->description,
+                'menfis_email' => $request->menfis_email,
                 'budget' => $request->budget,
                 'beneficiary_id' => $request->beneficiary_id,
             ]);

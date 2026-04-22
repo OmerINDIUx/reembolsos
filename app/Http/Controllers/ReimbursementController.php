@@ -18,6 +18,8 @@ use Smalot\PdfParser\Parser;
 use App\Services\NotificationBatchService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use setasign\Fpdi\Fpdi;
+use App\Mail\MenfisInvoiceMail;
+use Illuminate\Support\Facades\Mail;
 
 class ReimbursementController extends Controller
 {
@@ -550,6 +552,7 @@ class ReimbursementController extends Controller
                         $xmlData = $this->extractXmlData($xmlContent);
                         $uuid = $xmlData['uuid'];
                         $xmlPath = $xmlFile->store('xmls');
+                        $originalXmlName = $xmlFile->getClientOriginalName();
                     } else {
                         // Fallback if resuming draft without re-uploading XML
                         $draftId = $item['draft_id'] ?? null;
@@ -560,6 +563,7 @@ class ReimbursementController extends Controller
                                 $xmlData = $this->extractXmlData($xmlContent);
                                 $uuid = $xmlData['uuid'];
                                 $xmlPath = $existingDraft->xml_path;
+                                $originalXmlName = $existingDraft->original_xml_name;
                             } else {
                                 throw new \Exception("XML es requerido.");
                             }
@@ -612,6 +616,12 @@ class ReimbursementController extends Controller
                 }
 
                 $pdfPath = $pdfFile ? $pdfFile->store('pdfs') : ($existingDraft ? $existingDraft->pdf_path : null);
+                $originalPdfName = $pdfFile ? $pdfFile->getClientOriginalName() : ($existingDraft ? $existingDraft->original_pdf_name : null);
+                
+                if (!isset($originalXmlName) && $existingDraft) {
+                    $originalXmlName = $existingDraft->original_xml_name;
+                }
+
                 $ticketFile = $request->file("items.{$index}.ticket_file") ?? ($item['ticket_file'] ?? null);
                 $ticketPath = $ticketFile ? $ticketFile->store('tickets') : ($existingDraft ? $existingDraft->ticket_path : null);
 
@@ -638,7 +648,9 @@ class ReimbursementController extends Controller
                     'moneda' => !empty($xmlData['moneda']) ? $xmlData['moneda'] : ($existingDraft ? $existingDraft->moneda : 'MXN'),
                     'tipo_comprobante' => !empty($xmlData['tipo_comprobante']) ? $xmlData['tipo_comprobante'] : ($existingDraft ? $existingDraft->tipo_comprobante : null),
                     'xml_path' => $xmlPath,
+                    'original_xml_name' => $originalXmlName ?? null,
                     'pdf_path' => $pdfPath,
+                    'original_pdf_name' => $originalPdfName ?? null,
                     'ticket_path' => $ticketPath,
                     'status' => $initialStatus,
                     'current_step_id' => $currentStepId,
@@ -666,6 +678,9 @@ class ReimbursementController extends Controller
                 } else {
                     $reimbursement = Reimbursement::create($reimbursementData);
                 }
+
+                // Send email to Menfis if configured
+                $this->sendMenfisEmail($reimbursement);
 
                 $prefix = strtoupper(substr($type, 0, 3));
                 if (!str_starts_with($reimbursement->folio, $prefix . '-')) {
@@ -1370,6 +1385,7 @@ class ReimbursementController extends Controller
             if ($request->hasFile('pdf_file')) {
                 if ($reimbursement->pdf_path) Storage::delete($reimbursement->pdf_path);
                 $data['pdf_path'] = $request->file('pdf_file')->store('pdfs');
+                $data['original_pdf_name'] = $request->file('pdf_file')->getClientOriginalName();
                 
                 // Re-validate PDF against XML Data
                 if (!empty($reimbursement->uuid)) {
@@ -1529,6 +1545,10 @@ class ReimbursementController extends Controller
             if ($owner) {
                 NotificationBatchService::add($owner, $reimbursement);
             }
+        }
+
+        if ($isOwnerCorrecting && $request->has('is_resubmission') && $request->hasFile('pdf_file')) {
+            $this->sendMenfisEmail($reimbursement);
         }
 
         return back()->with('success', 'Actualización guardada con éxito.');
@@ -2930,11 +2950,13 @@ class ReimbursementController extends Controller
                     if ($request->hasFile("items.{$index}.xml_file") && $request->file("items.{$index}.xml_file")->isValid()) {
                         if ($request->file("items.{$index}.xml_file")->getSize() <= $maxSize) {
                             $data['xml_path'] = $request->file("items.{$index}.xml_file")->store('reimbursements/xmls/drafts');
+                            $data['original_xml_name'] = $request->file("items.{$index}.xml_file")->getClientOriginalName();
                         }
                     }
                     if ($request->hasFile("items.{$index}.pdf_file") && $request->file("items.{$index}.pdf_file")->isValid()) {
                         if ($request->file("items.{$index}.pdf_file")->getSize() <= $maxSize) {
                             $data['pdf_path'] = $request->file("items.{$index}.pdf_file")->store('reimbursements/pdfs/drafts');
+                            $data['original_pdf_name'] = $request->file("items.{$index}.pdf_file")->getClientOriginalName();
                         }
                     }
                     if ($request->hasFile("items.{$index}.ticket_file") && $request->file("items.{$index}.ticket_file")->isValid()) {
@@ -3194,5 +3216,15 @@ class ReimbursementController extends Controller
                 $q->orWhereNotIn('status', ['pendiente', 'requiere_correccion', 'borrador', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp']);
             }
         });
+    }
+    protected function sendMenfisEmail(Reimbursement $reimbursement)
+    {
+        if ($reimbursement->costCenter && $reimbursement->costCenter->menfis_email) {
+            try {
+                \Illuminate\Support\Facades\Mail::to($reimbursement->costCenter->menfis_email)->send(new \App\Mail\MenfisInvoiceMail($reimbursement));
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error("Error sending Menfis email for reimbursement {$reimbursement->id}: " . $e->getMessage());
+            }
+        }
     }
 }

@@ -20,7 +20,10 @@
                 </h2>
                 <p class="text-sm text-gray-500 dark:text-gray-400 font-medium italic">
                     Código: <span class="font-bold text-indigo-600 dark:text-indigo-400 mr-4">{{ $costCenter->code }}</span>
-                    Beneficiario: <span class="font-bold text-gray-900 dark:text-white uppercase not-italic">{{ $costCenter->beneficiary->name ?? 'No asignado' }}</span>
+                    Beneficiario: <span class="font-bold text-gray-900 dark:text-white uppercase not-italic mr-4">{{ $costCenter->beneficiary->name ?? 'No asignado' }}</span>
+                    @if($costCenter->menfis_email)
+                        Menfis: <span class="font-bold text-emerald-600 dark:text-emerald-400 not-italic lowercase">{{ $costCenter->menfis_email }}</span>
+                    @endif
                 </p>
             </div>
             
