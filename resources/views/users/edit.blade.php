@@ -40,19 +40,16 @@
                         </div>
 
                         <div class="mb-4">
-                            <label for="role" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Rol</label>
-                            <select name="role" id="role" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                <option value="user" {{ $user->role === 'user' ? 'selected' : '' }}>Usuario</option>
-                                <option value="director" {{ $user->role === 'director' ? 'selected' : '' }}>Director</option>
-                                <option value="control_obra" {{ $user->role === 'control_obra' ? 'selected' : '' }}>Control de Obra</option>
-                                <option value="director_ejecutivo" {{ $user->role === 'director_ejecutivo' ? 'selected' : '' }}>Director Ejecutivo</option>
-                                <option value="accountant" {{ $user->role === 'accountant' ? 'selected' : '' }}>Subdirección</option>
-                                <option value="direccion" {{ $user->role === 'direccion' ? 'selected' : '' }}>Dirección General</option>
-                                <option value="tesoreria" {{ $user->role === 'tesoreria' ? 'selected' : '' }}>Cuentas por Pagar</option>
-                                <option value="admin" {{ $user->role === 'admin' ? 'selected' : '' }}>Administrador</option>
-                                <option value="admin_view" {{ $user->role === 'admin_view' ? 'selected' : '' }}>Administrador (Solo Lectura)</option>
+                            <label for="profile_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Perfil (Permisos)</label>
+                            <select name="profile_id" id="profile_id" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">Seleccione un perfil...</option>
+                                @foreach($profiles as $profile)
+                                    <option value="{{ $profile->id }}" {{ (old('profile_id', $user->profile_id) == $profile->id) ? 'selected' : '' }}>
+                                        {{ $profile->display_name }}
+                                    </option>
+                                @endforeach
                             </select>
-                            @error('role') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                            @error('profile_id') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">

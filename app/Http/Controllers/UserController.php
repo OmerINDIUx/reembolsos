@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 use App\Mail\UserInvitation;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
+use App\Models\Profile;
 
 class UserController extends Controller
 {
@@ -51,7 +52,8 @@ class UserController extends Controller
     public function create()
     {
         $directors = User::whereIn('role', ['admin', 'director'])->get();
-        return view('users.create', compact('directors'));
+        $profiles = Profile::orderBy('display_name')->get();
+        return view('users.create', compact('directors', 'profiles'));
     }
 
     /**
@@ -71,16 +73,19 @@ class UserController extends Controller
                     }
                 },
             ],
-            'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo,direccion'],
+            'role' => ['nullable', 'string'],
+            'profile_id' => ['required', 'exists:profiles,id'],
         ]);
 
+        $profile = Profile::find($request->profile_id);
         $token = Str::random(64);
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => null, // Password will be set via invitation
-            'role' => $request->role,
+            'role' => $profile->name, // Keep role in sync for legacy compatibility
+            'profile_id' => $request->profile_id,
             'invitation_token' => $token,
             'invitation_sent_at' => now(),
         ]);
@@ -211,7 +216,8 @@ class UserController extends Controller
     public function edit(User $user)
     {
         $directors = User::whereIn('role', ['admin', 'director'])->where('id', '!=', $user->id)->get();
-        return view('users.edit', compact('user', 'directors'));
+        $profiles = Profile::orderBy('display_name')->get();
+        return view('users.edit', compact('user', 'directors', 'profiles'));
     }
 
     /**
@@ -231,15 +237,19 @@ class UserController extends Controller
                     }
                 },
             ],
-            'role' => ['required', 'in:admin,admin_view,director,accountant,user,tesoreria,control_obra,director_ejecutivo,direccion'],
+            'role' => ['nullable', 'string'],
+            'profile_id' => ['required', 'exists:profiles,id'],
             'bank_name' => ['nullable', 'string', 'max:255'],
             'clabe' => ['nullable', 'string', 'size:18', 'regex:/^[0-9]+$/'],
         ]);
 
+        $profile = Profile::find($request->profile_id);
+
         $data = [
             'name' => $request->name,
             'email' => $request->email,
-            'role' => $request->role,
+            'role' => $profile->name, // Keep role in sync
+            'profile_id' => $request->profile_id,
             'bank_name' => $request->bank_name,
             'clabe' => $request->clabe,
         ];

@@ -27,11 +27,13 @@
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
                         <h3 class="text-lg font-medium">Listado de Reembolsos</h3>
                         <div class="flex space-x-2">
-                            @if($user->isAdmin() || $user->isTreasury() || $user->isCxp())
+                            @if($user->canPerform('reimbursements.export'))
                             <button type="button" x-data @click="$dispatch('open-caratula-pdf-modal')" class="inline-flex items-center px-4 py-2 bg-emerald-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-emerald-500 focus:bg-emerald-700 active:bg-emerald-900 transition ease-in-out duration-150">
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                 Descargar Carátulas (PDF)
                             </button>
+                            @endif
+                            @if($user->canPerform('reimbursements.bulk_approve'))
                             <button type="button" x-data @click="$dispatch('open-bulk-approval-modal')" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
                                 Aprobación Masiva (CSV)
                             </button>
@@ -192,7 +194,7 @@
                                     Filtrar
                                 </button>
                                 
-                                @if(Auth::user()->isCxp() || Auth::user()->isTreasury() || Auth::user()->isAdmin())
+                                @if(Auth::user()->canPerform('reimbursements.export'))
                                 <div class="ml-2 pl-2 border-l border-gray-300 dark:border-gray-600 flex items-center">
                                     <button type="button" x-data @click="$dispatch('open-export-modal')" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
                                         Exportar

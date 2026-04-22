@@ -779,68 +779,67 @@
                                 @endif
                         @endif
                         
-                        @if($reimbursement->type === 'viaje')
-                            @foreach($reimbursement->children as $child)
-                                this.addItem({
-                                    draftId: @json($child->id),
-                                    fileName: @json($child->xml_path ? "Factura: " . ($child->folio ?: (substr($child->uuid, 0, 8) ?: 'Cargada')) : ""),
-                                    pdfName: @json($child->pdf_path ? "PDF Guardado" : ""),
-                                    ticketName: @json($child->ticket_path ? "Ticket/Prueba Guardado" : ""),
-                                    xmlParsed: {{ $child->xml_path ? 'true' : 'false' }},
-                                    data: {
-                                        uuid: @json($child->uuid),
-                                        folio: @json($child->folio),
-                                        rfc_emisor: @json($child->rfc_emisor),
-                                        nombre_emisor: @json($child->nombre_emisor),
-                                        rfc_receptor: @json($child->rfc_receptor),
-                                        nombre_receptor: @json($child->nombre_receptor),
-                                        fecha: @json($child->fecha ? $child->fecha->format("Y-m-d") : ""),
-                                        total: {{ $child->total ?: 0 }},
-                                        subtotal: {{ $child->subtotal ?: 0 }},
-                                        impuestos: {{ $child->impuestos ?: 0 }},
-                                        moneda: @json($child->moneda ?: "MXN"),
-                                        metodo_pago: @json($child->metodo_pago),
-                                        forma_pago: @json($child->forma_pago),
-                                        uso_cfdi: @json($child->uso_cfdi),
-                                        lugar_expedicion: @json($child->lugar_expedicion),
-                                        regimen_fiscal_emisor: @json($child->regimen_fiscal_emisor),
-                                        category: @json($child->category),
-                                        pdf_validation: @json($child->validation_data),
-                                        observaciones: @json($child->observaciones)
-                                    }
-                                });
-                            @endforeach
-                            if (this.items.length === 0) this.addItem();
-                        @else
+                        // Initialize parent item (main draft)
+                        this.addItem({
+                            draftId: @json($reimbursement->id),
+                            fileName: @json($reimbursement->xml_path ? "Factura: " . ($reimbursement->folio ?: (substr($reimbursement->uuid, 0, 8) ?: 'Cargada')) : ""),
+                            pdfName: @json($reimbursement->pdf_path ? "PDF Guardado" : ""),
+                            ticketName: @json($reimbursement->ticket_path ? "Ticket/Prueba Guardado" : ""),
+                            xmlParsed: {{ $reimbursement->xml_path ? 'true' : 'false' }},
+                            data: {
+                                uuid: @json($reimbursement->uuid),
+                                folio: @json($reimbursement->folio),
+                                rfc_emisor: @json($reimbursement->rfc_emisor),
+                                nombre_emisor: @json($reimbursement->nombre_emisor),
+                                rfc_receptor: @json($reimbursement->rfc_receptor),
+                                nombre_receptor: @json($reimbursement->nombre_receptor),
+                                fecha: @json($reimbursement->fecha ? $reimbursement->fecha->format("Y-m-d") : ""),
+                                total: {{ $reimbursement->total ?: 0 }},
+                                subtotal: {{ $reimbursement->subtotal ?: 0 }},
+                                impuestos: {{ $reimbursement->impuestos ?: 0 }},
+                                moneda: @json($reimbursement->moneda ?: "MXN"),
+                                metodo_pago: @json($reimbursement->metodo_pago),
+                                forma_pago: @json($reimbursement->forma_pago),
+                                uso_cfdi: @json($reimbursement->uso_cfdi),
+                                lugar_expedicion: @json($reimbursement->lugar_expedicion),
+                                regimen_fiscal_emisor: @json($reimbursement->regimen_fiscal_emisor),
+                                category: @json($reimbursement->category),
+                                pdf_validation: @json($reimbursement->validation_data),
+                                observaciones: @json($reimbursement->observaciones)
+                            }
+                        });
+
+                        // Initialize children items if they exist
+                        @foreach($reimbursement->children as $child)
                             this.addItem({
-                                draftId: @json($reimbursement->id),
-                                fileName: @json($reimbursement->xml_path ? "Factura: " . ($reimbursement->folio ?: (substr($reimbursement->uuid, 0, 8) ?: 'Cargada')) : ""),
-                                pdfName: @json($reimbursement->pdf_path ? "PDF Guardado" : ""),
-                                ticketName: @json($reimbursement->ticket_path ? "Ticket/Prueba Guardado" : ""),
-                                xmlParsed: {{ $reimbursement->xml_path ? 'true' : 'false' }},
+                                draftId: @json($child->id),
+                                fileName: @json($child->xml_path ? "Factura: " . ($child->folio ?: (substr($child->uuid, 0, 8) ?: 'Cargada')) : ""),
+                                pdfName: @json($child->pdf_path ? "PDF Guardado" : ""),
+                                ticketName: @json($child->ticket_path ? "Ticket/Prueba Guardado" : ""),
+                                xmlParsed: {{ $child->xml_path ? 'true' : 'false' }},
                                 data: {
-                                    uuid: @json($reimbursement->uuid),
-                                    folio: @json($reimbursement->folio),
-                                    rfc_emisor: @json($reimbursement->rfc_emisor),
-                                    nombre_emisor: @json($reimbursement->nombre_emisor),
-                                    rfc_receptor: @json($reimbursement->rfc_receptor),
-                                    nombre_receptor: @json($reimbursement->nombre_receptor),
-                                    fecha: @json($reimbursement->fecha ? $reimbursement->fecha->format("Y-m-d") : ""),
-                                    total: {{ $reimbursement->total ?: 0 }},
-                                    subtotal: {{ $reimbursement->subtotal ?: 0 }},
-                                    impuestos: {{ $reimbursement->impuestos ?: 0 }},
-                                    moneda: @json($reimbursement->moneda ?: "MXN"),
-                                    metodo_pago: @json($reimbursement->metodo_pago),
-                                    forma_pago: @json($reimbursement->forma_pago),
-                                    uso_cfdi: @json($reimbursement->uso_cfdi),
-                                    lugar_expedicion: @json($reimbursement->lugar_expedicion),
-                                    regimen_fiscal_emisor: @json($reimbursement->regimen_fiscal_emisor),
-                                    category: @json($reimbursement->category),
-                                    pdf_validation: @json($reimbursement->validation_data),
-                                    observaciones: @json($reimbursement->observaciones)
+                                    uuid: @json($child->uuid),
+                                    folio: @json($child->folio),
+                                    rfc_emisor: @json($child->rfc_emisor),
+                                    nombre_emisor: @json($child->nombre_emisor),
+                                    rfc_receptor: @json($child->rfc_receptor),
+                                    nombre_receptor: @json($child->nombre_receptor),
+                                    fecha: @json($child->fecha ? $child->fecha->format("Y-m-d") : ""),
+                                    total: {{ $child->total ?: 0 }},
+                                    subtotal: {{ $child->subtotal ?: 0 }},
+                                    impuestos: {{ $child->impuestos ?: 0 }},
+                                    moneda: @json($child->moneda ?: "MXN"),
+                                    metodo_pago: @json($child->metodo_pago),
+                                    forma_pago: @json($child->forma_pago),
+                                    uso_cfdi: @json($child->uso_cfdi),
+                                    lugar_expedicion: @json($child->lugar_expedicion),
+                                    regimen_fiscal_emisor: @json($child->regimen_fiscal_emisor),
+                                    category: @json($child->category),
+                                    pdf_validation: @json($child->validation_data),
+                                    observaciones: @json($child->observaciones)
                                 }
                             });
-                        @endif
+                        @endforeach
                     @else
                         this.addItem(); 
                     @endif

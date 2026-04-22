@@ -1,0 +1,15 @@
+{
+    "id": 10,
+    "name": "prueba_luise",
+    "email": "prueba_luise@example.com",
+    "bank_name": "nu",
+    "clabe": "123456789098765432",
+    "role": "direccion",
+    "profile_id": 7,
+    "director_id": null,
+    "email_verified_at": null,
+    "invitation_token": null,
+    "invitation_sent_at": null,
+    "created_at": "2026-04-21T23:20:52.000000Z",
+    "updated_at": "2026-04-22T17:44:08.000000Z"
+}

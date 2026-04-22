@@ -27,6 +27,7 @@ class User extends Authenticatable
         'invitation_sent_at',
         'bank_name',
         'clabe',
+        'profile_id',
     ];
 
     public function isRegistered()
@@ -174,5 +175,24 @@ class User extends Authenticatable
     public function substitutingFor()
     {
         return $this->hasMany(UserSubstitute::class, 'user_id')->where('is_active', true);
+    }
+
+    public function profile()
+    {
+        return $this->belongsTo(Profile::class);
+    }
+
+    public function canPerform($permission)
+    {
+        // Admins always have all permissions
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        if (!$this->profile) {
+            return false;
+        }
+
+        return $this->profile->hasPermission($permission);
     }
 }

@@ -29,19 +29,16 @@
                         </div>
 
                         <div class="mb-4">
-                            <label for="role" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Rol</label>
-                            <select name="role" id="role" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                <option value="user">Usuario (Solicitante)</option>
-                                <option value="director">Director (Nivel 1)</option>
-                                <option value="control_obra">Control de Obra (Nivel 2)</option>
-                                <option value="director_ejecutivo">Director Ejecutivo (Nivel 3)</option>
-                                <option value="accountant">Subdirección (Nivel 4)</option>
-                                <option value="direccion">Dirección General (Nivel 5)</option>
-                                <option value="tesoreria">Cuentas por Pagar (Nivel 6 - Pago)</option>
-                                <option value="admin">Administrador</option>
-                                <option value="admin_view">Administrador (Solo Lectura)</option>
+                            <label for="profile_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Perfil (Permisos)</label>
+                            <select name="profile_id" id="profile_id" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">Seleccione un perfil...</option>
+                                @foreach($profiles as $profile)
+                                    <option value="{{ $profile->id }}" {{ old('profile_id') == $profile->id ? 'selected' : '' }}>
+                                        {{ $profile->display_name }}
+                                    </option>
+                                @endforeach
                             </select>
-                            @error('role') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                            @error('profile_id') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                         </div>
 
 

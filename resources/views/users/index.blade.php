@@ -108,23 +108,9 @@
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                         {{ $user->email }}
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                            {{ $user->role === 'admin' ? 'bg-purple-100 text-purple-800' : '' }}
-                                            {{ $user->role === 'admin_view' ? 'bg-gray-100 text-gray-800 border-2 border-dashed border-gray-300' : '' }}
-                                            {{ $user->role === 'director' ? 'bg-blue-100 text-blue-800' : '' }}
-                                            {{ $user->role === 'accountant' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : '' }}
-                                            {{ $user->role === 'direccion' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300' : '' }}
-                                            {{ $user->role === 'tesoreria' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300' : '' }}
-                                            {{ $user->role === 'user' ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' : '' }}"
-                                        >
-                                            @if($user->role === 'accountant') Subdirección 
-                                            @elseif($user->role === 'direccion') Dirección General
-                                            @elseif($user->role === 'tesoreria') Cuentas por Pagar 
-                                            @elseif($user->role === 'user') Usuario 
-                                            @elseif($user->role === 'admin_view') Admin (Lectura)
-                                            @else {{ ucfirst($user->role) }} 
-                                            @endif
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest {{ $user->role === 'admin' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' }}">
+                                            {{ $user->profile?->display_name ?: $user->role_name }}
                                         </span>
                                     </td>
                                     @if(Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'direccion'))

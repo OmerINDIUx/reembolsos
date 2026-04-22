@@ -318,6 +318,7 @@ class ReimbursementController extends Controller
 
         $drafts = Reimbursement::where('user_id', $user->id)
                                 ->where('status', 'borrador')
+                                ->whereNull('parent_id')
                                 ->latest()
                                 ->get();
 
@@ -329,7 +330,7 @@ class ReimbursementController extends Controller
                     })->orWhere('user_id', $user->id);
                 })->exists();
 
-            $isPrivilegedInCC = $user->isAdmin() || $user->authorizedCostCenters()->wherePivot('can_do_special', true)->exists();
+            $isPrivilegedInCC = $user->canPerform('reimbursements.create_special') || $user->authorizedCostCenters()->wherePivot('can_do_special', true)->exists();
             $isMarkedInAnyCC = $isPrivilegedInCC || $hasActiveTrip;
             
             return view('reimbursements.select_type', compact('drafts', 'isMarkedInAnyCC', 'hasActiveTrip', 'isPrivilegedInCC'));
@@ -382,15 +383,16 @@ class ReimbursementController extends Controller
 
             // Filter based on type and "one reimbursement" rule
             $costCenters = $costCenters->filter(function($cc) use ($user, $type) {
+                // Special types (Fondo Fijo, Comida, Viaje) are restricted to those with 'create_special' permission
+                // or if they have the specific legacy pivot flag '$cc->pivot->can_do_special' (for backward compatibility if needed, though we can just check the new permission).
                 $isMarked = $cc->pivot->can_do_special;
-
-                // Special types (Fondo Fijo, Comida, Viaje) are restricted to marked users
+                
                 if (in_array($type, ['fondo_fijo', 'comida', 'viaje'])) {
-                    return $isMarked || $user->isCxp() || $user->isTreasury() || $user->isAdminView() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->isDireccion();
+                    return $isMarked || $user->canPerform('reimbursements.create_special');
                 }
 
-                // Standard reimbursement: unmarked users can create as many as needed
-                return true;
+                // Standard reimbursement requires 'create' permission
+                return $user->canPerform('reimbursements.create');
             });
         }
         
@@ -2880,6 +2882,7 @@ class ReimbursementController extends Controller
             $travelEvent = $travelEventId ? \App\Models\TravelEvent::find($travelEventId) : null;
             $requestCostCenterId = $travelEvent ? $travelEvent->cost_center_id : $request->input('cost_center_id');
 
+            $mainId = null;
             foreach ($items as $index => $itemData) {
                 try {
                     $id = $itemData['draft_id'] ?? null;
@@ -2975,6 +2978,16 @@ class ReimbursementController extends Controller
                     if (!$reimbursement->folio) {
                         $prefix = strtoupper(substr($reimbursement->type, 0, 3)) ?: 'REE';
                         $reimbursement->folio = 'DRAFT-' . $prefix . '-' . str_pad($reimbursement->id, 5, '0', STR_PAD_LEFT);
+                        $reimbursement->save();
+                    }
+
+                    // Group items under the first created item
+                    if ($index === 0) {
+                        $mainId = $reimbursement->id;
+                        $reimbursement->parent_id = null;
+                        $reimbursement->save();
+                    } else {
+                        $reimbursement->parent_id = $mainId;
                         $reimbursement->save();
                     }
 
