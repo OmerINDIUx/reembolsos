@@ -120,8 +120,8 @@ class ReimbursementController extends Controller
             $weeksPaginator = $weeksQuery->reorder()
                 ->select('week')
                 ->groupBy('week')
-                ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
-                ->orderByRaw("SUBSTRING_INDEX(week, '-', 1) DESC")
+                ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', -1) AS UNSIGNED) DESC")
+                ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', 1) AS UNSIGNED) DESC")
                 ->paginate(5, ['*'], 'page')
                 ->withQueryString();
 
@@ -2914,11 +2914,29 @@ class ReimbursementController extends Controller
                         'cost_center_id' => $requestCostCenterId,
                         'travel_event_id' => $travelEventId,
                         'week' => $request->input('week'),
-                        'title' => $request->input('title') ?: ($travelEvent ? $travelEvent->name : ($itemData['nombre_emisor'] ?? 'Sin TÃƒÂ­tulo')),
+                        'title' => $request->input('title') ?: ($travelEvent ? $travelEvent->name : ($itemData['nombre_emisor'] ?? 'Sin Título')),
                         'user_id' => $user->id,
                         'payee_id' => $payeeId,
-                        'status' => 'borrador',
                     ];
+
+                    // Find existing to check status
+                    $reimbursement = null;
+                    if ($id) {
+                        $reimbursement = Reimbursement::where('user_id', $user->id)->find($id);
+                    } 
+                    
+                    if (!$reimbursement && isset($itemData['uuid'])) {
+                        $reimbursement = Reimbursement::where('user_id', $user->id)
+                                                    ->where('uuid', $itemData['uuid'])
+                                                    ->where('status', 'borrador')
+                                                    ->first();
+                    }
+
+                    // Only set status to 'borrador' if creating NEW or if existing IS ALREADY 'borrador'
+                    // This prevents overwriting a 'pendiente' status if a race condition occurs during submission
+                    if (!$reimbursement || $reimbursement->status === 'borrador') {
+                        $data['status'] = 'borrador';
+                    }
 
                     // Merge specific fields from the item
                     $fields = [
@@ -2976,19 +2994,6 @@ class ReimbursementController extends Controller
                         if ($request->hasFile('ticket_file') && $request->file('ticket_file')->isValid()) {
                             $data['ticket_path'] = $request->file('ticket_file')->store('reimbursements/tickets/drafts');
                         }
-                    }
-
-                    // FIND EXISTING: Prevent duplicate records by matching ID or UUID for the same user
-                    $reimbursement = null;
-                    if ($id) {
-                        $reimbursement = Reimbursement::where('user_id', $user->id)->find($id);
-                    } 
-                    
-                    if (!$reimbursement && isset($data['uuid'])) {
-                        $reimbursement = Reimbursement::where('user_id', $user->id)
-                                                    ->where('uuid', $data['uuid'])
-                                                    ->where('status', 'borrador')
-                                                    ->first();
                     }
 
                     if ($reimbursement) {
@@ -3111,7 +3116,7 @@ class ReimbursementController extends Controller
                 }
 
                 // 3. Admin / Elevated roles see EVERYTHING pending in the system
-                if ($user->isAdmin() || $user->isAdminView() || $user->isDireccion()) {
+                if ($user->isAdmin() || $user->isAdminView()) {
                     $q->orWhereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
                 }
             });
