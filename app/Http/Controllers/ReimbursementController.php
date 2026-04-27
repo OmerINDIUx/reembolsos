@@ -3098,52 +3098,44 @@ class ReimbursementController extends Controller
         // Get all identities (the user themselves + anyone they are substituting for)
         $identityIds = $user->substitutingFor()->pluck('original_user_id')->push($user->id)->unique();
 
-        if ($tab === 'active') {
-            // Personal & Substituted: Pending
-            if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion')) {
-                $query->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
-            } else {
-                $query->whereIn('user_id', $identityIds)
-                      ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
-            }
+        if ($tab === 'management') {
+            $query->where(function($q) use ($user, $identityIds) {
+                // 1. Current Approver (including substitutes)
+                $q->whereHas('currentStep', function($sq) use ($identityIds) {
+                    $sq->whereIn('user_id', $identityIds);
+                })->whereNotIn('status', ['aprobado', 'rechazado', 'borrador', 'pendiente_pago']);
+
+                // 2. CXP / Treasury Funnel (Pending Payment)
+                if ($user->isCxp() || $user->isTreasury()) {
+                    $q->orWhere('status', 'pendiente_pago');
+                }
+
+                // 3. Admin / Elevated roles see EVERYTHING pending in the system
+                if ($user->isAdmin() || $user->isAdminView() || $user->isDireccion()) {
+                    $q->orWhereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
+                }
+            });
+
+        } elseif ($tab === 'active') {
+            // Personal & Substituted: Pending (My items that are still in process)
+            $query->whereIn('user_id', $identityIds)
+                  ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
 
         } elseif ($tab === 'history') {
-            // Personal & Substituted: Finished
-            if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion')) {
-                $query->whereIn('status', ['aprobado', 'rechazado']);
-            } else {
-                $query->whereIn('user_id', $identityIds)
-                      ->whereIn('status', ['aprobado', 'rechazado']);
-            }
-            // Approvals & Oversight
-            if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion')) {
-                // Admin/Subdirección/DirecciónGeneral sees EVERYTHING that is in a pending flow
-                $query->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
-            } else {
-                $query->where(function($q) use ($user, $identityIds) {
-                    // Workflow Responsibility: Only if it's actually in a pending approval stage
-                    $q->where(function($sq) use ($identityIds) {
-                        $sq->whereNotIn('status', ['pendiente_pago', 'aprobado', 'rechazado'])
-                           ->whereHas('currentStep', function($ssq) use ($identityIds) {
-                                $ssq->whereIn('user_id', $identityIds);
-                           });
-                    });
-
-                    // Special Roles: CXP/Treasury see what's pending payment (their turn)
-                    if ($user->isCxp() || $user->isTreasury()) {
-                        $q->orWhere('status', 'pendiente_pago');
-                    }
-                });
-            }
+            // Personal & Substituted: Finished (My items that are already paid or rejected)
+            $query->whereIn('user_id', $identityIds)
+                  ->whereIn('status', ['aprobado', 'rechazado']);
 
         } elseif ($tab === 'global_history') {
-            // History for elevated roles or personal history (including substituted)
+            // History for elevated roles or oversight
             if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion')) {
-                // Elevated roles see EVERYTHING in history
+                // Elevated roles see EVERYTHING
                 $query->whereNotIn('status', ['borrador']);
             } elseif ($user->isTreasury() || $user->isCxp()) {
+                // CXP/Treasury see all finished items
                 $query->whereIn('status', ['aprobado', 'rechazado']);
             } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
+                // Directors see finished items in their Cost Centers
                 $query->whereHas('costCenter', function($q) use ($user) {
                     if ($user->isDirector()) $q->where('director_id', $user->id);
                     if ($user->isControlObra()) $q->where('control_obra_id', $user->id);
