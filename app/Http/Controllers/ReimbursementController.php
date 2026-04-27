@@ -321,7 +321,8 @@ class ReimbursementController extends Controller
         $drafts = Reimbursement::where('user_id', $user->id)
                                 ->where('status', 'borrador')
                                 ->whereNull('parent_id')
-                                ->latest()
+                                ->with('children')
+                                ->orderBy('updated_at', 'desc')
                                 ->get();
 
         if (!$type || !in_array($type, $allowedTypes)) {
@@ -2910,16 +2911,10 @@ class ReimbursementController extends Controller
                     $payeeId = $request->input('payee_id');
 
                     $data = [
-                        'type' => $request->input('type'),
-                        'cost_center_id' => $requestCostCenterId,
-                        'travel_event_id' => $travelEventId,
-                        'week' => $request->input('week'),
-                        'title' => $request->input('title') ?: ($travelEvent ? $travelEvent->name : ($itemData['nombre_emisor'] ?? 'Sin Título')),
                         'user_id' => $user->id,
-                        'payee_id' => $payeeId,
                     ];
 
-                    // Find existing to check status
+                    // Find existing to check status and preserve data
                     $reimbursement = null;
                     if ($id) {
                         $reimbursement = Reimbursement::where('user_id', $user->id)->find($id);
@@ -2932,8 +2927,24 @@ class ReimbursementController extends Controller
                                                     ->first();
                     }
 
+                    // PREVENT DATA LOSS: Only update global fields if they are NOT empty in the request
+                    // Or if we are creating a brand new record
+                    $globalFields = [
+                        'type' => $request->input('type'),
+                        'cost_center_id' => $requestCostCenterId,
+                        'travel_event_id' => $travelEventId,
+                        'week' => $request->input('week'),
+                        'title' => $request->input('title') ?: ($travelEvent ? $travelEvent->name : ($itemData['nombre_emisor'] ?? null)),
+                        'payee_id' => $payeeId,
+                    ];
+
+                    foreach ($globalFields as $key => $val) {
+                        if (!$reimbursement || ($val !== null && $val !== "" && $val !== "null")) {
+                            $data[$key] = $val;
+                        }
+                    }
+
                     // Only set status to 'borrador' if creating NEW or if existing IS ALREADY 'borrador'
-                    // This prevents overwriting a 'pendiente' status if a race condition occurs during submission
                     if (!$reimbursement || $reimbursement->status === 'borrador') {
                         $data['status'] = 'borrador';
                     }
