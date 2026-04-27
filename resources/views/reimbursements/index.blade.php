@@ -58,7 +58,7 @@
                             </li>
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'global_history'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'global_history' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="global-history-tab" type="button" role="tab" aria-controls="global_history" aria-selected="false">
-                                    {{ ($user->isAdmin() || $user->isAdminView()) ? 'Todos los Reembolsos (Global)' : 'Historial Global (Rechazados)' }}
+                                    Historial Global
                                 </a>
                             </li>
                             @endif
