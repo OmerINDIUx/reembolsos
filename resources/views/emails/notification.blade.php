@@ -6,8 +6,8 @@
     <p>{!! $bodyText !!}</p>
     
     @if(isset($actionUrl))
-        <div class="button-container">
-            <a href="{{ $actionUrl }}" class="button">{{ $actionText ?? 'Ver Detalle' }}</a>
+        <div class="button-container" style="margin: 45px 0; text-align: center;">
+            <a href="{{ $actionUrl }}" class="button" style="background-color: #2563eb; color: #ffffff !important; padding: 18px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px;">{{ $actionText ?? 'Ver Detalle' }}</a>
         </div>
     @endif
 

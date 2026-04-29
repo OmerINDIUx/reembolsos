@@ -32,11 +32,15 @@ class MicrosoftGraphTransport extends AbstractTransport
         $content = $html ?: $text;
 
         $attachments = [];
+        Log::info("MicrosoftGraphTransport: Procesando " . count($email->getAttachments()) . " adjuntos.");
         foreach ($email->getAttachments() as $attachment) {
             /** @var DataPart $attachment */
             $cid = $attachment->getContentId();
+            $filename = $attachment->getPreparedHeaders()->getHeaderParameter('Content-Disposition', 'filename') ?: $attachment->getFilename();
+            Log::info("- Adjunto encontrado: {$filename} (Inline: " . ($cid ? 'Sí' : 'No') . ")");
+            
             $attachments[] = [
-                'name' => $attachment->getPreparedHeaders()->getHeaderParameter('Content-Disposition', 'filename') ?: $attachment->getFilename(),
+                'name' => $filename,
                 'content' => $attachment->getBody(),
                 'contentType' => $attachment->getMediaType() . '/' . $attachment->getMediaSubtype(),
                 'isInline' => !empty($cid),
