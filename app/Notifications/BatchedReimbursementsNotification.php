@@ -43,7 +43,7 @@ class BatchedReimbursementsNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return ['mail', 'database'];
     }
 
     /**
@@ -55,7 +55,7 @@ class BatchedReimbursementsNotification extends Notification
             ->subject('Nuevas Notificaciones de Reembolso (Resumen)')
             ->view('emails.notification', [
                 'greeting' => 'Hola ' . $notifiable->name . ',',
-                'bodyText' => 'Has recibido <span class="highlight">' . $this->count . '</span> nuevas notificaciones de reembolso en la última hora. Aquí tienes el resumen de las solicitudes que requieren tu atención.',
+                'bodyText' => 'Has recibido <span class="highlight">' . $this->count . '</span> nuevas notificaciones de reembolso. Aquí tienes el resumen de las solicitudes que requieren tu atención.',
                 'actionUrl' => route('reimbursements.index', ['tab' => 'management']),
                 'actionText' => 'Ver Todo en el Sistema',
                 'details' => [
@@ -77,6 +77,8 @@ class BatchedReimbursementsNotification extends Notification
         return [
             'count' => $this->count,
             'total' => $this->totalAmount,
+            'message' => 'Has recibido ' . $this->count . ' nuevas notificaciones de reembolso.',
+            'type' => 'info'
         ];
     }
 }

@@ -12,10 +12,10 @@
     @endif
 
     @if(isset($details) && count($details) > 0)
-        <div class="details-box">
+        <div class="details-box" style="background-color: #f9f9f9; border-radius: 8px; padding: 25px; margin-top: 30px; border: 1px solid #eeeeee;">
             @foreach($details as $key => $value)
-                <div class="detail-item">
-                    <span class="detail-label">{{ $key }}:</span> {{ $value }}
+                <div class="detail-item" style="margin-bottom: 12px; font-size: 14px; color: #475569;">
+                    <strong class="detail-label" style="color: #1e293b; display: inline-block; width: 140px;">{{ $key }}:</strong> {{ $value }}
                 </div>
             @endforeach
         </div>
@@ -23,13 +23,13 @@
 
     @if(isset($breakdown) && count($breakdown) > 0)
         <div style="margin-top: 30px;">
-            <h2 style="font-size: 18px; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Desglose por Centro de Costos</h2>
+            <h2 style="font-size: 18px; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">Desglose por Centro de Costos</h2>
             <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
                 <thead>
                     <tr style="background-color: #f8fafc;">
-                        <th style="text-align: left; padding: 12px; border-bottom: 2px solid #e2e8f0; font-size: 13px; color: #64748b; text-transform: uppercase;">Centro de Costos</th>
-                        <th style="text-align: center; padding: 12px; border-bottom: 2px solid #e2e8f0; font-size: 13px; color: #64748b; text-transform: uppercase;">Cant.</th>
-                        <th style="text-align: right; padding: 12px; border-bottom: 2px solid #e2e8f0; font-size: 13px; color: #64748b; text-transform: uppercase;">Total</th>
+                        <th style="text-align: left; padding: 12px; border-bottom: 2px solid #e2e8f0; font-size: 13px; color: #64748b; text-transform: uppercase; font-weight: 600;">Centro de Costos</th>
+                        <th style="text-align: center; padding: 12px; border-bottom: 2px solid #e2e8f0; font-size: 13px; color: #64748b; text-transform: uppercase; font-weight: 600;">Cant.</th>
+                        <th style="text-align: right; padding: 12px; border-bottom: 2px solid #e2e8f0; font-size: 13px; color: #64748b; text-transform: uppercase; font-weight: 600;">Total</th>
                     </tr>
                 </thead>
                 <tbody>

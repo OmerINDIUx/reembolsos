@@ -3,6 +3,7 @@
 namespace App\Mail\Transport;
 
 use App\Services\GraphMailService;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mailer\Transport\AbstractTransport;
 use Symfony\Component\Mime\MessageConverter;
@@ -36,14 +37,23 @@ class MicrosoftGraphTransport extends AbstractTransport
         foreach ($email->getAttachments() as $attachment) {
             /** @var DataPart $attachment */
             $cid = $attachment->getContentId();
+            if ($cid) {
+                $cid = trim($cid, '<>'); // Quitar los < > que a veces pone Symfony
+            }
+            
             $filename = $attachment->getPreparedHeaders()->getHeaderParameter('Content-Disposition', 'filename') ?: $attachment->getFilename();
-            Log::info("- Adjunto encontrado: {$filename} (Inline: " . ($cid ? 'Sí' : 'No') . ")");
+            
+            // Solo marcar como inline si tiene CID y es una imagen
+            // Symfony getMediaType() devuelve solo 'image', 'application', etc.
+            $isInline = !empty($cid) && ($attachment->getMediaType() === 'image');
+
+            Log::info("- Adjunto procesado: {$filename} (CID: {$cid}, Inline: " . ($isInline ? 'Sí' : 'No') . ")");
             
             $attachments[] = [
                 'name' => $filename,
                 'content' => $attachment->getBody(),
                 'contentType' => $attachment->getMediaType() . '/' . $attachment->getMediaSubtype(),
-                'isInline' => !empty($cid),
+                'isInline' => $isInline,
                 'contentId' => $cid,
             ];
         }

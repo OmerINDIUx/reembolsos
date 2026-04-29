@@ -680,8 +680,10 @@ class ReimbursementController extends Controller
                     $reimbursement = Reimbursement::create($reimbursementData);
                 }
 
-                // Send email to Menfis if configured
-                $this->sendMenfisEmail($reimbursement);
+                // Send email to Menfis ONLY if it has an XML/UUID
+                if (!empty($reimbursement->uuid)) {
+                    $this->sendMenfisEmail($reimbursement);
+                }
 
                 $prefix = strtoupper(substr($type, 0, 3));
                 if (!str_starts_with($reimbursement->folio, $prefix . '-')) {
@@ -718,8 +720,14 @@ class ReimbursementController extends Controller
             } elseif ($initialStatus === 'aprobado_director') {
                 // To N2
                 $targetUser = $costCenter->controlObra;
+            } elseif ($initialStatus === 'pendiente' && $currentStepId) {
+                // FLUJO PERSONALIZADO: Notificar al usuario del paso actual
+                $step = \App\Models\ApprovalStep::find($currentStepId);
+                if ($step) {
+                    $targetUser = $step->user;
+                }
             } else {
-                // Standard case: To N1
+                // Fallback: To N1 director if no custom step
                 $targetUser = $costCenter->director;
             }
 
@@ -1548,9 +1556,12 @@ class ReimbursementController extends Controller
             }
         }
 
-        if ($isOwnerCorrecting && $request->has('is_resubmission') && $request->hasFile('pdf_file')) {
+        if ($isOwnerCorrecting && $request->has('is_resubmission') && $request->hasFile('pdf_file') && !empty($reimbursement->uuid)) {
             $this->sendMenfisEmail($reimbursement);
         }
+
+        // Flush all pending notification batches immediately after update/approval
+        \App\Services\NotificationBatchService::process();
 
         return back()->with('success', 'Actualización guardada con éxito.');
     }
@@ -2879,12 +2890,11 @@ class ReimbursementController extends Controller
             }
         }
         
-        // If the entire dynamic loop finished and it's 'aprobado' or 'pendiente_pago', notify the owner
-        if (in_array($reimbursement->status, ['aprobado', 'pendiente_pago', 'rechazado'])) {
-            $owner = $reimbursement->user;
-            if ($owner) {
-                \App\Services\NotificationBatchService::add($owner, $reimbursement);
-            }
+        // Notify the owner (requester) whenever a change happens (Approval/Rejection)
+        // This keeps them updated: "Your reimbursement was approved by X, now waiting for Y"
+        $owner = $reimbursement->user;
+        if ($owner) {
+            \App\Services\NotificationBatchService::add($owner, $reimbursement);
         }
     }
 
