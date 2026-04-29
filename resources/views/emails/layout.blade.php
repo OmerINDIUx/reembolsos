@@ -5,97 +5,91 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body {
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f8fafc;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background-color: #f4f4f4;
             margin: 0;
             padding: 0;
             -webkit-text-size-adjust: none;
         }
         .wrapper {
             width: 100%;
-            table-layout: fixed;
-            background-color: #f8fafc;
-            padding-bottom: 40px;
+            background-color: #f4f4f4;
+            padding: 30px 0;
         }
         .container {
             max-width: 600px;
             margin: 0 auto;
             background-color: #ffffff;
-            border-radius: 12px;
+            border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            margin-top: 40px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         .header {
-            background-color: #1e293b;
-            padding: 30px;
+            background-color: #eeeeee;
+            padding: 40px 20px;
             text-align: center;
+            border-bottom: 1px solid #e0e0e0;
         }
         .header img {
-            height: 50px;
+            height: 50px; /* Reducido a un tamaño discreto */
             width: auto;
         }
         .content {
-            padding: 40px;
-            color: #334155;
-            line-height: 1.6;
+            padding: 50px 60px; /* Mas margen para que no se vea pegado */
+            color: #333333;
+            line-height: 1.8;
+            font-size: 16px;
         }
         .content h1 {
-            color: #0f172a;
+            color: #1a1a1a;
             font-size: 24px;
-            font-weight: 700;
             margin-top: 0;
-            margin-bottom: 20px;
+            margin-bottom: 30px;
         }
         .button-container {
-            margin: 35px 0;
+            margin: 45px 0;
             text-align: center;
         }
         .button {
             background-color: #2563eb;
-            color: #ffffff !important;
-            padding: 14px 32px;
+            color: #ffffff !important; /* Letras en blanco */
+            padding: 18px 40px;
             text-decoration: none;
             border-radius: 8px;
-            font-weight: 600;
+            font-weight: bold;
             display: inline-block;
             font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         .footer {
-            padding: 30px;
+            padding: 30px 50px;
             text-align: center;
+            background-color: #ffffff;
+            border-top: 1px solid #f0f0f0;
         }
         .footer-text {
-            color: #94a3b8;
+            color: #999999;
             font-size: 12px;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
         .dev-by {
-            font-size: 10px;
-            font-weight: 700;
-            color: #cbd5e1;
+            font-size: 11px;
+            color: #aaaaaa;
+            margin-bottom: 10px;
             text-transform: uppercase;
-            letter-spacing: 0.1em;
-            margin-bottom: 8px;
+            letter-spacing: 1px;
         }
         .indilab-logo {
-            height: 40px;
+            height: 50px;
             width: auto;
-            opacity: 0.8;
         }
         .details-box {
-            background-color: #f1f5f9;
-            border-radius: 8px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
             padding: 20px;
-            margin-top: 25px;
-        }
-        .detail-item {
-            margin: 8px 0;
-            font-size: 14px;
-        }
-        .detail-label {
-            font-weight: 700;
-            color: #64748b;
+            margin-top: 20px;
+            border: 1px solid #eeeeee;
         }
     </style>
 </head>
@@ -104,9 +98,9 @@
         <div class="container">
             <div class="header">
                 @if(file_exists(public_path('images/indi.png')))
-                    <img src="{{ $message->embed(public_path('images/indi.png')) }}" alt="Grupo INDI">
+                    <img src="{{ $message->embed(public_path('images/indi.png')) }}" alt="Grupo INDI" height="30">
                 @else
-                    <h2 style="color: white; margin: 0;">{{ config('app.name') }}</h2>
+                    <h1 style="color: #2563eb; margin: 0;">GRUPO INDI</h1>
                 @endif
             </div>
             
@@ -118,14 +112,13 @@
                 <div class="footer-text">
                     &copy; {{ date('Y') }} {{ config('app.name') }}. Todos los derechos reservados.
                 </div>
+                
                 <div style="margin-top: 20px;">
                     <div class="dev-by">Desarrollado por:</div>
                     @if(file_exists(public_path('images/INDI Lab - Logo Emergencia.png')))
-                        <a href="https://indi-lab.com/" target="_blank">
-                            <img src="{{ $message->embed(public_path('images/INDI Lab - Logo Emergencia.png')) }}" alt="INDI Lab" class="indilab-logo">
-                        </a>
+                        <img src="{{ $message->embed(public_path('images/INDI Lab - Logo Emergencia.png')) }}" alt="INDI Lab" class="indilab-logo">
                     @else
-                        <div style="color: #94a3b8; font-weight: bold;">INDI LAB</div>
+                        <div style="color: #2563eb; font-weight: bold; font-size: 18px;">INDI LAB</div>
                     @endif
                 </div>
             </div>

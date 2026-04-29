@@ -44,7 +44,7 @@ class UserInvitation extends Mailable
     public function content(): Content
     {
         return new Content(
-            markdown: 'emails.user-invitation',
+            view: 'emails.user-invitation',
             with: [
                 'name' => $this->user->name,
                 'url' => $this->url,

@@ -69,6 +69,7 @@ class GraphMailService
         // Preparar destinatarios
         $toRecipients = [];
         $emails = is_array($to) ? $to : [$to];
+        Log::info("GraphMailService: Preparando envío para: " . implode(', ', $emails));
         foreach ($emails as $email) {
             $toRecipients[] = [
                 'emailAddress' => [

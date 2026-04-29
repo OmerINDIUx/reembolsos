@@ -15,7 +15,7 @@ echo "ID Cliente: " . env('GRAPH_CLIENT_ID') . "\n";
 echo "ID Inquilino: " . env('GRAPH_TENANT_ID') . "\n";
 echo "Enviando correo...\n";
 
-$targetEmail = 'bernardo@grupoindi.com'; 
+$targetEmail = ''; 
 
 try {
     $result = $mailService->send(

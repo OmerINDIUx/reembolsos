@@ -23,7 +23,7 @@ try {
     // Forzamos un token para la prueba
     $user->invitation_token = 'token-de-prueba-' . time();
 
-    Mail::to('bernardo@grupoindi.com')->send(new UserInvitation($user));
+    Mail::to([ 'omer.tenahua@grupoindi.com'])->send(new UserInvitation($user));
 
     echo "[OK] El sistema envió la invitación con el nuevo diseño. Revisa tu bandeja de entrada.\n";
 } catch (\Exception $e) {
