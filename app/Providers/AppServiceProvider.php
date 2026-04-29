@@ -3,6 +3,9 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\Transport\MicrosoftGraphTransport;
+use App\Services\GraphMailService;
 
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
@@ -28,5 +31,9 @@ class AppServiceProvider extends ServiceProvider
         if (app()->environment('production') || env('APP_ENV') === 'production') {
             URL::forceScheme('https');
         }
+
+        Mail::extend('microsoft_graph', function (array $config) {
+            return new MicrosoftGraphTransport(new GraphMailService());
+        });
     }
 }
