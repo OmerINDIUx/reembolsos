@@ -13,7 +13,7 @@ class RBACSeeder extends Seeder
     {
         // Define Modules and Permissions
         $modules = [
-            'reimbursements' => ['view', 'create', 'create_special', 'edit', 'delete', 'approve', 'bulk_approve', 'export'],
+            'reimbursements' => ['view', 'create', 'create_special', 'create_on_behalf', 'edit', 'delete', 'approve', 'bulk_approve', 'export'],
             'users' => ['view', 'create', 'edit', 'delete'],
             'cost_centers' => ['view', 'create', 'edit', 'delete'],
             'travel_events' => ['view', 'create', 'edit', 'delete', 'close'],
@@ -21,6 +21,19 @@ class RBACSeeder extends Seeder
         ];
 
         $allPermissions = [];
+        $descriptions = [
+            'view' => 'Permite visualizar los registros del módulo.',
+            'create' => 'Permite crear nuevos registros básicos.',
+            'create_special' => 'Permite registrar reembolsos de tipo Fondo Fijo y Viajes.',
+            'create_on_behalf' => 'Permite crear reembolsos a nombre de otros usuarios del mismo centro de costos.',
+            'edit' => 'Permite modificar registros existentes.',
+            'delete' => 'Permite eliminar registros del sistema.',
+            'approve' => 'Permite realizar aprobaciones en el flujo de trabajo.',
+            'bulk_approve' => 'Permite procesar aprobaciones masivas mediante archivos CSV.',
+            'export' => 'Permite exportar datos a formatos Excel/CSV.',
+            'close' => 'Permite dar por finalizados los eventos de viaje.',
+        ];
+
         foreach ($modules as $module => $actions) {
             foreach ($actions as $action) {
                 $permissionName = "{$module}.{$action}";
@@ -32,9 +45,11 @@ class RBACSeeder extends Seeder
                     $displayName = 'Aprobación Masiva (CSV)';
                 }
                 
+                $description = $descriptions[$action] ?? "Permite realizar la acción {$action} en el módulo {$module}.";
+
                 $allPermissions[$permissionName] = Permission::updateOrCreate(
                     ['name' => $permissionName],
-                    ['display_name' => $displayName, 'module' => $module]
+                    ['display_name' => $displayName, 'module' => $module, 'description' => $description]
                 );
             }
         }

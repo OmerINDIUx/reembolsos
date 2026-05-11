@@ -117,6 +117,36 @@
                             </div>
                         </div>
 
+                        <!-- On Behalf Selection -->
+                        @if(!empty($ccUserMapping))
+                        <div class="mt-8 pt-8 border-t border-gray-100 dark:border-gray-700 animate-fadeIn" x-show="type === 'reembolso' && selectedCostCenterId">
+                            <h4 class="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4">¿Registrar para otro usuario?</h4>
+                            <div class="bg-amber-50 dark:bg-amber-900/20 p-6 rounded-2xl border border-amber-100 dark:border-amber-800/50">
+                                <div class="flex items-start space-x-4">
+                                    <div class="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-[10px] font-black text-amber-600 uppercase tracking-widest leading-none mb-3">Propietario del Gasto</p>
+                                        <select name="user_id" x-on:change="updateOwner" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all py-3 px-4 text-sm font-bold">
+                                            <option value="{{ Auth::id() }}" data-clabe="{{ Auth::user()->clabe ? '**** ' . substr(Auth::user()->clabe, -4) : '' }}">A mi nombre ({{ Auth::user()->name }})</option>
+                                            <template x-for="colleague in filteredColleagues" :key="colleague.id">
+                                                <option :value="colleague.id" :data-clabe="colleague.clabe" x-text="'A nombre de: ' + colleague.name"></option>
+                                            </template>
+                                        </select>
+                                        
+                                        <div x-show="selectedOwnerId != '{{ Auth::id() }}' && !selectedOwnerClabe" class="mt-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl flex items-center space-x-3 text-red-600 dark:text-red-400">
+                                            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                            <p class="text-xs font-bold uppercase tracking-tight">Este usuario no cuenta con una CLABE registrada. Es obligatorio para poder registrar sus gastos.</p>
+                                        </div>
+                                        
+                                        <p class="mt-3 text-[10px] text-amber-600 font-bold italic">* Solo puedes elegir colegas que pertenezcan al Centro de Costos seleccionado.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        @endif
+
                         <!-- Destinatario del Pago -->
                         <div class="mt-8 pt-8 border-t border-gray-100 dark:border-gray-700 animate-fadeIn" x-show="selectedCcBeneficiary || type === 'viaje'">
                             <h4 class="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Destinatario del Pago</h4>
@@ -145,14 +175,9 @@
                                     <div>
                                         <p class="text-[10px] font-black text-blue-400 uppercase tracking-widest leading-none mb-1">Pago directo al solicitante</p>
                                         <p class="text-lg font-bold text-gray-900 dark:text-white">
-                                            {{ Auth::user()->name }}
-                                            <span class="text-sm font-medium text-gray-400 ml-2 italic">
-                                                @if(Auth::user()->clabe)
-                                                    - **** {{ substr(Auth::user()->clabe, -4) }}
-                                                @else
-                                                    - (Sin CLABE registrada)
-                                                @endif
-                                            </span>
+                                            <span x-text="selectedOwnerName"></span>
+                                            <span x-show="selectedOwnerClabe" class="text-sm font-medium text-gray-400 ml-2 italic" x-text="' - ' + selectedOwnerClabe"></span>
+                                            <span x-show="!selectedOwnerClabe" class="text-sm font-medium text-gray-400 ml-2 italic">- (Sin CLABE registrada)</span>
                                         </p>
                                     </div>
                                     <input type="hidden" name="payee_id" value="{{ Auth::id() }}">
@@ -168,12 +193,10 @@
                                                 <div class="w-2 h-2 bg-white rounded-full" x-show="payeeOption === 'creator'"></div>
                                             </div>
                                             <div>
-                                                <p class="text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight">Recibir yo el pago</p>
+                                                <p class="text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight">Pago al Solicitante</p>
                                                 <p class="text-[10px] text-gray-500 font-bold uppercase italic">
-                                                    Solicitante (Tú)
-                                                    @if(Auth::user()->clabe)
-                                                        - **** {{ substr(Auth::user()->clabe, -4) }}
-                                                    @endif
+                                                    <span x-text="selectedOwnerName"></span>
+                                                    <span x-show="selectedOwnerClabe" x-text="' - ' + selectedOwnerClabe"></span>
                                                 </p>
                                             </div>
                                         </div>
@@ -196,7 +219,7 @@
                                     </label>
 
                                     <!-- Final Payee ID Hidden Input for Reembolso choice -->
-                                    <input type="hidden" name="payee_id" :value="payeeOption === 'beneficiary' ? selectedCcBeneficiaryId : '{{ Auth::id() }}'">
+                                    <input type="hidden" name="payee_id" :value="payeeOption === 'beneficiary' ? selectedCcBeneficiaryId : selectedOwnerId">
                                 </div>
                             </template>
                         </div>
@@ -204,7 +227,7 @@
                 </div>
 
                 <!-- REPEATER (FOR REEMBOLSO, FONDO FIJO, COMIDA, VIAJE) -->
-                <div class="space-y-16">
+                <div class="space-y-16 mt-16" x-show="isValidOwner()" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 transform translate-y-10" x-transition:enter-end="opacity-100 transform translate-y-0">
                     <template x-for="(item, index) in items" :key="item.id">
                         <div class="bg-white dark:bg-gray-800 shadow-2xl rounded-[2.5rem] border border-gray-100 dark:border-gray-700 overflow-hidden animate-fadeIn relative">
                             <input type="hidden" :name="'items['+index+'][draft_id]'" :value="item.draftId">
@@ -709,15 +732,15 @@
                                 </button>
                                 
                                 <button type="submit" 
-                                    :disabled="!hasInvoice && (items.some(i => i.data.total > 2000) || items.some(i => parseFloat(i.data.subtotal) > parseFloat(i.data.total)))"
-                                    :class="!hasInvoice && (items.some(i => i.data.total > 2000) || items.some(i => parseFloat(i.data.subtotal) > parseFloat(i.data.total))) ? 'opacity-50 cursor-not-allowed grayscale' : ''"
+                                    :disabled="(!hasInvoice && (items.some(i => i.data.total > 2000) || items.some(i => parseFloat(i.data.subtotal) > parseFloat(i.data.total)))) || (selectedOwnerId != '{{ Auth::id() }}' && !selectedOwnerClabe)"
+                                    :class="((!hasInvoice && (items.some(i => i.data.total > 2000) || items.some(i => parseFloat(i.data.subtotal) > parseFloat(i.data.total)))) || (selectedOwnerId != '{{ Auth::id() }}' && !selectedOwnerClabe)) ? 'opacity-50 cursor-not-allowed grayscale' : ''"
                                     class="group inline-flex items-center px-12 py-6 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xl uppercase italic hover:bg-indigo-700 shadow-xl transition-all transform hover:scale-105">
                                     <span>REGISTRAR</span>
                                     <svg class="w-6 h-6 ml-3 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
                                 </button>
                             </div>
                         </div>
-                    </div>
+                    </div> <!-- End conditional visibility -->
                 </div>
             </form>
         </div>
@@ -739,6 +762,12 @@
                 selectedCcBeneficiary: '',
                 selectedCcBeneficiaryId: null,
                 selectedCcBeneficiaryClabe: '',
+                selectedOwnerName: '{{ Auth::user()->name }}',
+                selectedOwnerClabe: '{{ Auth::user()->clabe ? "**** " . substr(Auth::user()->clabe, -4) : "" }}',
+                selectedOwnerId: '{{ Auth::id() }}',
+                ccUserMapping: @json($ccUserMapping ?? []),
+                selectedCostCenterId: null,
+                filteredColleagues: [],
                 payeeOption: 'creator',
                 items: [],
                 maxItems: 20,
@@ -865,14 +894,63 @@
                 updateBeneficiary(e) {
                     const selectedOption = e.target.options[e.target.selectedIndex];
                     if (selectedOption && selectedOption.dataset) {
+                        this.selectedCostCenterId = e.target.value || null;
                         this.selectedCcBeneficiary = selectedOption.dataset.beneficiary || '';
                         this.selectedCcBeneficiaryId = selectedOption.dataset.beneficiaryId || null;
                         this.selectedCcBeneficiaryClabe = selectedOption.dataset.beneficiaryClabe || '';
+                        
+                        // Update filtered colleagues for this CC
+                        if (this.selectedCostCenterId && this.ccUserMapping[this.selectedCostCenterId]) {
+                            this.filteredColleagues = this.ccUserMapping[this.selectedCostCenterId].filter(u => u.id != '{{ Auth::id() }}');
+                        } else {
+                            this.filteredColleagues = [];
+                        }
+
+                        // Reset owner if not in the new filtered list (and not me)
+                        if (this.selectedOwnerId != '{{ Auth::id() }}') {
+                             const stillExists = this.filteredColleagues.some(u => u.id == this.selectedOwnerId);
+                             if (!stillExists) {
+                                 this.selectedOwnerId = '{{ Auth::id() }}';
+                                 this.selectedOwnerName = '{{ Auth::user()->name }}';
+                                 this.selectedOwnerClabe = '{{ Auth::user()->clabe ? "**** " . substr(Auth::user()->clabe, -4) : "" }}';
+                                 // Force select reset in DOM
+                                 const ownerSelect = document.querySelector('select[name="user_id"]');
+                                 if (ownerSelect) ownerSelect.value = '{{ Auth::id() }}';
+                             }
+                        }
                     } else {
+                        this.selectedCostCenterId = null;
                         this.selectedCcBeneficiary = '';
                         this.selectedCcBeneficiaryId = null;
                         this.selectedCcBeneficiaryClabe = '';
+                        this.filteredColleagues = [];
                     }
+                },
+                updateOwner(e) {
+                    const selectedOption = e.target.options[e.target.selectedIndex];
+                    if (selectedOption) {
+                        this.selectedOwnerId = selectedOption.value;
+                        // Extract name from text (removing "A nombre de: " or "A mi nombre (")
+                        let rawName = selectedOption.text;
+                        this.selectedOwnerName = rawName.replace('A nombre de: ', '').replace(/A mi nombre \((.*)\)/, '$1');
+                        
+                        // If it's a template-generated option, we might need to find it in filteredColleagues
+                        if (selectedOption.tagName === 'OPTION' && selectedOption.dataset.clabe === undefined) {
+                            const found = this.filteredColleagues.find(u => u.id == this.selectedOwnerId);
+                            if (found) {
+                                this.selectedOwnerClabe = found.clabe || '';
+                            } else {
+                                // Default to me if something weird happens
+                                this.selectedOwnerClabe = '{{ Auth::user()->clabe ? "**** " . substr(Auth::user()->clabe, -4) : "" }}';
+                            }
+                        } else {
+                            this.selectedOwnerClabe = selectedOption.dataset.clabe || '';
+                        }
+                    }
+                },
+                isValidOwner() {
+                    // Always valid if it's me. If it's someone else, they MUST have a clabe.
+                    return this.selectedOwnerId == '{{ Auth::id() }}' || (this.selectedOwnerClabe && this.selectedOwnerClabe.trim() !== '');
                 },
                 addItem(initialData = null) {
                     if (this.items.length >= this.maxItems) return;

@@ -413,13 +413,32 @@ class ReimbursementController extends Controller
         }
         $travelEvents = $travelEventsQuery->orderBy('name')->get();
 
+        // Check for colleagues if user can create on behalf of others
+        $ccUserMapping = [];
+        if ($user->canPerform('reimbursements.create_on_behalf')) {
+            $ccs = $user->isAdmin() ? CostCenter::all() : $costCenters;
+            foreach ($ccs as $cc) {
+                $ccUserMapping[$cc->id] = $cc->authorizedUsers()
+                    ->select('users.id', 'users.name', 'users.clabe')
+                    ->get()
+                    ->map(function($u) {
+                        return [
+                            'id' => $u->id,
+                            'name' => $u->name,
+                            'clabe' => $u->clabe ? '**** ' . substr($u->clabe, -4) : null,
+                            'has_clabe' => !empty($u->clabe)
+                        ];
+                    });
+            }
+        }
+
         // Check for parent trip context
         $parentReimbursement = null;
         if ($request->has('trip_id')) {
             $parentReimbursement = Reimbursement::find($request->trip_id);
         }
 
-        return view('reimbursements.create', compact('type', 'costCenters', 'travelEvents', 'currentWeek', 'categories', 'parentReimbursement', 'hasInvoice'));
+        return view('reimbursements.create', compact('type', 'costCenters', 'travelEvents', 'currentWeek', 'categories', 'parentReimbursement', 'hasInvoice', 'ccUserMapping'));
     }
 
     /**
@@ -480,17 +499,27 @@ class ReimbursementController extends Controller
         
         $costCenter = $costCenterId ? CostCenter::find($costCenterId) : null;
         
-        // Payee Logic
-        $payeeId = $user->id;
-        if (in_array($type, ['fondo_fijo', 'comida'])) {
-            $payeeId = $costCenter ? ($costCenter->beneficiary_id ?? $user->id) : $user->id;
-        } else {
-            $payeeId = $request->input('payee_id', $user->id);
+        // Target User Logic (On Behalf)
+        $targetUserId = Auth::id();
+        if ($request->filled('user_id') && $user->canPerform('reimbursements.create_on_behalf') && $type === 'reembolso') {
+            $candidateUser = \App\Models\User::findOrFail($request->user_id);
+            // Verify they share the selected cost center
+            $sharesCC = $candidateUser->authorizedCostCenters()->where('cost_centers.id', $costCenterId)->exists();
+            if ($sharesCC) {
+                $targetUserId = $candidateUser->id;
+            } else {
+                return back()->withInput()->with('error', 'El beneficiario seleccionado debe pertenecer al mismo Centro de Costos.');
+            }
         }
 
-        // If it's a travel event, we might want to use its director as the first approver if CC is null
-        // For now, let's keep the dynamic workflow logic based on CC if available, or a fallback.
-        
+        // Payee Logic
+        $payeeId = $targetUserId;
+        if (in_array($type, ['fondo_fijo', 'comida'])) {
+            $payeeId = $costCenter ? ($costCenter->beneficiary_id ?? $targetUserId) : $targetUserId;
+        } else {
+            $payeeId = $request->input('payee_id', $targetUserId);
+        }
+
         $currentStepId = null;
         $initialStatus = 'pendiente';
         $approvalData = [];
@@ -507,7 +536,7 @@ class ReimbursementController extends Controller
 
             // AUTO-APPROVAL: If creator is the approver, advance
             while ($firstStep && $firstStep->user_id === $user->id) {
-                $autoNote .= "\n[AUTO-APROBACIÃƒâ€œN: " . $firstStep->name . "]";
+                $autoNote .= "\n[AUTO-APROBACIÓN: " . $firstStep->name . "]";
                 $this->mapApprovalData($firstStep->order, $user->id, $approvalData);
                 
                 $nextStep = $costCenter->approvalSteps()->where('order', '>', $firstStep->order)->orderBy('order', 'asc')->first();
@@ -533,10 +562,10 @@ class ReimbursementController extends Controller
             try {
                 $travelEventId = $item['travel_event_id'] ?? $request->travel_event_id;
                 // Fallback to the resolved cost center from the global request if not specific in item
-                $costCenterId = $item['cost_center_id'] ?? ($request->cost_center_id ?: ($travelEventId ? \App\Models\TravelEvent::where('id', $travelEventId)->value('cost_center_id') : null));
+                $itemCostCenterId = $item['cost_center_id'] ?? ($request->cost_center_id ?: ($travelEventId ? \App\Models\TravelEvent::where('id', $travelEventId)->value('cost_center_id') : null));
 
                 // Permissions and Limits Check
-                if (!$this->canCreateReimbursement($user, $type, $costCenterId, $travelEventId)) {
+                if (!$this->canCreateReimbursement($user, $type, $itemCostCenterId, $travelEventId)) {
                     throw new \Exception("No tienes permiso para registrar este tipo de reembolso en este Centro de Costos o ya has alcanzado tu lÃƒÂ­mite de 1 reembolso activo.");
                 }
 
@@ -582,12 +611,12 @@ class ReimbursementController extends Controller
                     // Check for duplicate in DB or current batch
                     $existing = Reimbursement::where('uuid', $uuid)->first();
                     if ($existing && $existing->status !== 'borrador') {
-                        $errors[] = "ÃƒÂtem #" . ($index + 1) . ": El CFDI con UUID {$uuid} ya estÃƒÂ¡ registrado.";
+                        $errors[] = "ÃƒÂ tem #" . ($index + 1) . ": El CFDI con UUID {$uuid} ya estÃƒÂ¡ registrado.";
                         $failedCount++;
                         continue;
                     }
                     if (in_array($uuid, $processedUuids)) {
-                        $errors[] = "ÃƒÂtem #" . ($index + 1) . ": El CFDI con UUID {$uuid} estÃƒÂ¡ duplicado en esta carga.";
+                        $errors[] = "ÃƒÂ tem #" . ($index + 1) . ": El CFDI con UUID {$uuid} estÃƒÂ¡ duplicado en esta carga.";
                         $failedCount++;
                         continue;
                     }
@@ -630,7 +659,7 @@ class ReimbursementController extends Controller
                 // DATA PRESERVATION: Use draft value if request value is empty
                 $reimbursementData = array_merge([
                     'type' => $type,
-                    'cost_center_id' => $costCenterId,
+                    'cost_center_id' => $itemCostCenterId,
                     'travel_event_id' => $travelEventId,
                     'title' => $travelEvent ? $travelEvent->name : ($item['title'] ?? ($existingDraft ? $existingDraft->title : null)),
                     'week' => $week,
@@ -661,7 +690,7 @@ class ReimbursementController extends Controller
                     'trip_type' => $travelEvent ? $travelEvent->trip_type : ($existingDraft ? $existingDraft->trip_type : null),
                     'trip_start_date' => $travelEvent ? $travelEvent->start_date : ($existingDraft ? $existingDraft->trip_start_date : null),
                     'trip_end_date' => $travelEvent ? $travelEvent->end_date : ($existingDraft ? $existingDraft->trip_end_date : null),
-                    'user_id' => $user->id,
+                    'user_id' => $targetUserId,
                     'payee_id' => $payeeId,
                     'company_confirmed' => isset($item['confirm_company']),
                     'validation_data' => $validationData,
@@ -1077,11 +1106,23 @@ class ReimbursementController extends Controller
         }
 
         // Payee Logic for single store
-        $payeeId = $user->id;
+        $targetUserId = Auth::id();
+        if ($request->filled('user_id') && $user->canPerform('reimbursements.create_on_behalf') && $request->type === 'reembolso') {
+            $candidateUser = \App\Models\User::findOrFail($request->user_id);
+            // Verify they share the selected cost center
+            $sharesCC = $candidateUser->authorizedCostCenters()->where('cost_centers.id', $effectiveCostCenterId)->exists();
+            if ($sharesCC) {
+                $targetUserId = $candidateUser->id;
+            } else {
+                return back()->withInput()->with('error', 'El beneficiario seleccionado debe pertenecer al mismo Centro de Costos.');
+            }
+        }
+
+        $payeeId = $targetUserId;
         if (in_array($request->type, ['fondo_fijo', 'comida'])) {
-            $payeeId = $costCenter ? ($costCenter->beneficiary_id ?? $user->id) : $user->id;
+            $payeeId = $costCenter ? ($costCenter->beneficiary_id ?? $targetUserId) : $targetUserId;
         } else {
-            $payeeId = $request->input('payee_id', $user->id);
+            $payeeId = $request->input('payee_id', $targetUserId);
         }
 
         $reimbursementData = array_merge([
@@ -1125,7 +1166,7 @@ class ReimbursementController extends Controller
             'parent_id' => $request->parent_id,
             'company_confirmed' => $request->has('confirm_company') ? true : false,
             'validation_data' => $validationData,
-            'user_id' => Auth::id(),
+            'user_id' => $targetUserId,
             'payee_id' => $payeeId,
         ], $approvalData);
 
