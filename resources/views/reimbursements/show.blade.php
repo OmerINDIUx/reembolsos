@@ -293,12 +293,14 @@
                             @php
                                 $uM = $reimbursement->validation_data['uuid_match'] ?? false;
                                 $tM = $reimbursement->validation_data['total_match'] ?? false;
-                                $statusColor = ($uM && $tM) ? 'emerald' : (($uM) ? 'amber' : 'rose');
-                                $statusLabel = ($uM && $tM) ? 'FACTURA VALIDADA' : (($uM) ? 'ADVERTENCIA EN MONTOS' : 'REVISIÓN DE SEGURIDAD REQUERIDA');
-                                $bgBanner = ($uM && $tM) ? 'bg-emerald-600' : (($uM) ? 'bg-amber-500' : 'bg-rose-600');
-                                $icon = ($uM && $tM) ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' : (($uM) ? 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' : 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z');
+                                $isMissing = $reimbursement->validation_data['is_missing'] ?? false;
+                                
+                                $statusColor = ($uM && $tM) ? 'emerald' : ($isMissing ? 'amber' : (($uM) ? 'amber' : 'rose'));
+                                $statusLabel = ($uM && $tM) ? 'FACTURA VALIDADA' : ($isMissing ? 'PENDIENTE DE VALIDAR PDF' : (($uM) ? 'ADVERTENCIA EN MONTOS' : 'REVISIÓN DE SEGURIDAD REQUERIDA'));
+                                $bgBanner = ($uM && $tM) ? 'bg-emerald-600' : ($isMissing ? 'bg-amber-500' : (($uM) ? 'bg-amber-500' : 'bg-rose-600'));
+                                $icon = ($uM && $tM) ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' : (($isMissing || $uM) ? 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' : 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z');
                             @endphp
-                            <div class="{{ $bgBanner }} px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg text-white">
+                            <div class="{{ $bgBanner }} px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg text-white transition-colors duration-500">
                                 <div class="flex items-center gap-3">
                                     <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
                                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="{{ $icon }}"></path></svg>
@@ -311,17 +313,17 @@
                                 <div class="flex gap-4">
                                     <div class="bg-black/20 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-3 border border-white/10">
                                         <div class="flex h-3 w-3">
-                                            <span class="animate-ping absolute inline-flex h-3 w-3 rounded-full {{ $uM ? 'bg-emerald-300' : 'bg-rose-300' }} opacity-75"></span>
-                                            <span class="relative inline-flex rounded-full h-3 w-3 {{ $uM ? 'bg-emerald-400' : 'bg-rose-400' }}"></span>
+                                            <span class="animate-ping absolute inline-flex h-3 w-3 rounded-full {{ $uM ? 'bg-emerald-300' : ($isMissing ? 'bg-amber-300' : 'bg-rose-300') }} opacity-75"></span>
+                                            <span class="relative inline-flex rounded-full h-3 w-3 {{ $uM ? 'bg-emerald-400' : ($isMissing ? 'bg-amber-400' : 'bg-rose-400') }}"></span>
                                         </div>
-                                        <span class="text-[10px] font-black uppercase tracking-widest leading-none">UUID: {{ $uM ? 'OK' : 'ERROR' }}</span>
+                                        <span class="text-[10px] font-black uppercase tracking-widest leading-none">UUID: {{ $uM ? 'OK' : ($isMissing ? 'FALTA PDF' : 'ERROR') }}</span>
                                     </div>
                                     <div class="bg-black/20 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-3 border border-white/10">
                                         <div class="flex h-3 w-3">
-                                            <span class="animate-ping absolute inline-flex h-3 w-3 rounded-full {{ $tM ? 'bg-emerald-300' : ($uM ? 'bg-amber-300' : 'bg-rose-300') }} opacity-75"></span>
-                                            <span class="relative inline-flex rounded-full h-3 w-3 {{ $tM ? 'bg-emerald-400' : ($uM ? 'bg-amber-400' : 'bg-rose-400') }}"></span>
+                                            <span class="animate-ping absolute inline-flex h-3 w-3 rounded-full {{ $tM ? 'bg-emerald-300' : ($uM || $isMissing ? 'bg-amber-300' : 'bg-rose-300') }} opacity-75"></span>
+                                            <span class="relative inline-flex rounded-full h-3 w-3 {{ $tM ? 'bg-emerald-400' : ($uM || $isMissing ? 'bg-amber-400' : 'bg-rose-400') }}"></span>
                                         </div>
-                                        <span class="text-[10px] font-black uppercase tracking-widest leading-none">MONTO: {{ $tM ? 'OK' : 'DIFF' }}</span>
+                                        <span class="text-[10px] font-black uppercase tracking-widest leading-none">MONTO: {{ $tM ? 'OK' : ($isMissing ? 'PENDIENTE' : 'DIFF') }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -491,7 +493,8 @@
                         <div class="relative">
                             <div class="absolute left-4 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700"></div>
 
-                            @foreach($reimbursement->costCenter->approvalSteps as $step)
+                            @if($reimbursement->costCenter)
+                                @foreach($reimbursement->costCenter->approvalSteps as $step)
                                 @php
                                     $isCompleted = $reimbursement->approvals->where('step_name', $step->name)->count() > 0 || 
                                                    ($reimbursement->currentStep && $reimbursement->currentStep->order > $step->order) ||
@@ -523,6 +526,7 @@
                                     </div>
                                 </div>
                             @endforeach
+                            @endif
 
                             <!-- PASO FINAL: CUENTAS POR PAGAR (EMBUDO) -->
                             @php

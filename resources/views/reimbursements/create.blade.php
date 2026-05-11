@@ -302,6 +302,14 @@
 
                                                     <!-- PDF Validation Indicator -->
                                                     <div x-show="item.data.pdf_validation" class="mt-2 space-y-2 animate-fadeIn text-[10px] font-black uppercase tracking-widest">
+                                                        <!-- Missing PDF Badge -->
+                                                        <template x-if="item.data.pdf_validation?.is_missing">
+                                                            <div class="flex items-center text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-lg border border-amber-100 italic">
+                                                                <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                                                ESPERANDO PDF PARA VALIDACIÓN
+                                                            </div>
+                                                        </template>
+
                                                         <!-- UUID Badge -->
                                                         <template x-if="item.data.pdf_validation?.uuid_match">
                                                             <div class="flex items-center text-green-600 bg-green-50 dark:bg-green-900/20 px-3 py-1.5 rounded-lg border border-green-100">
@@ -309,7 +317,7 @@
                                                                 UUID VALIDADO
                                                             </div>
                                                         </template>
-                                                        <template x-if="item.data.pdf_validation && !item.data.pdf_validation.uuid_match && !item.data.pdf_validation.error">
+                                                        <template x-if="item.data.pdf_validation && !item.data.pdf_validation.uuid_match && !item.data.pdf_validation.error && !item.data.pdf_validation.is_missing">
                                                             <div class="flex items-center text-red-600 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg border border-red-100">
                                                                 <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                                                                 UUID NO COINCIDE
@@ -323,7 +331,7 @@
                                                                 TOTAL VALIDADO
                                                             </div>
                                                         </template>
-                                                        <template x-if="item.data.pdf_validation && !item.data.pdf_validation.total_match && !item.data.pdf_validation.error">
+                                                        <template x-if="item.data.pdf_validation && !item.data.pdf_validation.total_match && !item.data.pdf_validation.error && !item.data.pdf_validation.is_missing">
                                                             <div class="flex items-center text-red-600 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg border border-red-100">
                                                                 <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                                                                 IMPORTE NO COINCIDE
@@ -1263,7 +1271,7 @@
                             item.data = d; 
                             item.fileName = 'Factura: ' + (d.folio || (d.uuid ? d.uuid.substring(0, 8) : '???'));
                             
-                            if (d.pdf_validation && !d.pdf_validation.uuid_match && !item.noPdf) {
+                            if (d.pdf_validation && !d.pdf_validation.uuid_match && !item.noPdf && !d.pdf_validation.is_missing) {
                                 Swal.fire({
                                     icon: 'warning',
                                     title: '<span class="text-xl font-black uppercase tracking-tight text-orange-600">PDF no coincide</span>',

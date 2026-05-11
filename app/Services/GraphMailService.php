@@ -18,6 +18,13 @@ class GraphMailService
         $this->clientId = env('GRAPH_CLIENT_ID');
         $this->clientSecret = env('ID_Secret') ?? env('GRAPH_CLIENT_SECRET');
         $this->userId = env('GRAPH_USER_ID') ?? config('mail.from.address') ?? 'no-reply@grupoindi.com';
+
+        if (empty($this->clientSecret)) {
+            Log::warning("GraphMailService: Client Secret (GRAPH_CLIENT_SECRET) is missing in .env");
+        }
+        if (empty($this->tenantId) || empty($this->clientId)) {
+            Log::warning("GraphMailService: Tenant ID or Client ID is missing in .env");
+        }
     }
 
     /**
@@ -48,7 +55,11 @@ class GraphMailService
                 return null;
             }
         } catch (\Exception $e) {
-            Log::error("Error obteniendo Token de MS Graph: " . $e->getMessage());
+            $msg = "Error obteniendo Token de MS Graph: " . $e->getMessage();
+            if (method_exists($e, 'getResponse') && $e->getResponse()) {
+                $msg .= " | Respuesta: " . $e->getResponse()->getBody()->getContents();
+            }
+            Log::error($msg);
             throw $e;
         }
     }
@@ -124,7 +135,11 @@ class GraphMailService
                 ],
             ]);
 
-            return $response->getStatusCode() === 202;
+            $isSent = $response->getStatusCode() === 202;
+            if ($isSent) {
+                Log::info("GraphMailService: Correo enviado exitosamente a: " . implode(', ', $emails));
+            }
+            return $isSent;
         } catch (\Exception $e) {
             Log::error("Error enviando correo vía MS Graph: " . $e->getMessage());
             if (method_exists($e, 'getResponse') && $e->getResponse()) {

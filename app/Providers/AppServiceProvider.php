@@ -33,7 +33,8 @@ class AppServiceProvider extends ServiceProvider
         }
 
         Mail::extend('microsoft_graph', function (array $config) {
-            return new MicrosoftGraphTransport(new GraphMailService());
+            \Log::info("Mail: Registrando driver microsoft_graph...");
+            return new \App\Mail\Transport\MicrosoftGraphTransport(new \App\Services\GraphMailService());
         });
     }
 }

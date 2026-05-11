@@ -136,9 +136,9 @@ class ReimbursementController extends Controller
 
             // Authorized Cost Centers
             if ($user->isAdmin() || $user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
-                $authorizedCCs = \App\Models\CostCenter::orderBy('name')->get();
+                $authorizedCCs = \App\Models\CostCenter::orderBy('name', 'asc')->get();
             } else {
-                $authorizedCCs = $user->authorizedCostCenters()->orderBy('name')->get();
+                $authorizedCCs = $user->authorizedCostCenters()->orderBy('name', 'asc')->get();
             }
 
             return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'weeksPaginator', 'availableWeeks', 'authorizedCCs'));
@@ -546,6 +546,13 @@ class ReimbursementController extends Controller
                 $pdfFile = $request->file("items.{$index}.pdf_file") ?? ($item['pdf_file'] ?? null);
                 $validationData = null;
 
+                // Identify draft early to avoid undefined variable errors and reuse files
+                $draftId = $item['draft_id'] ?? null;
+                $existingDraft = null;
+                if ($draftId) {
+                    $existingDraft = Reimbursement::where('id', $draftId)->where('user_id', $user->id)->first();
+                }
+
                 if ($hasInvoice) {
                     $xmlFile = $request->file("items.{$index}.xml_file") ?? ($item['xml_file'] ?? null);
                     if ($xmlFile && $xmlFile instanceof \Illuminate\Http\UploadedFile) {
@@ -554,22 +561,21 @@ class ReimbursementController extends Controller
                         $uuid = $xmlData['uuid'];
                         $xmlPath = $xmlFile->store('xmls');
                         $originalXmlName = $xmlFile->getClientOriginalName();
+
+                        // If no draft_id was provided, try finding it by UUID
+                        if (!$existingDraft) {
+                            $existingDraft = Reimbursement::where('uuid', $uuid)->where('user_id', $user->id)->where('status', 'borrador')->first();
+                        }
                     } else {
                         // Fallback if resuming draft without re-uploading XML
-                        $draftId = $item['draft_id'] ?? null;
-                        if ($draftId) {
-                            $existingDraft = Reimbursement::where('id', $draftId)->where('user_id', $user->id)->first();
-                            if ($existingDraft && $existingDraft->xml_path) {
-                                $xmlContent = Storage::get($existingDraft->xml_path);
-                                $xmlData = $this->extractXmlData($xmlContent);
-                                $uuid = $xmlData['uuid'];
-                                $xmlPath = $existingDraft->xml_path;
-                                $originalXmlName = $existingDraft->original_xml_name;
-                            } else {
-                                throw new \Exception("XML es requerido.");
-                            }
+                        if ($existingDraft && $existingDraft->xml_path) {
+                            $xmlContent = Storage::get($existingDraft->xml_path);
+                            $xmlData = $this->extractXmlData($xmlContent);
+                            $uuid = $xmlData['uuid'];
+                            $xmlPath = $existingDraft->xml_path;
+                            $originalXmlName = $existingDraft->original_xml_name;
                         } else {
-                             throw new \Exception("XML es requerido.");
+                            throw new \Exception("XML es requerido.");
                         }
                     }
 
@@ -607,14 +613,7 @@ class ReimbursementController extends Controller
                     ];
                 }
 
-                // Check for existing draft to reuse files if not re-uploaded
-                $draftId = $item['draft_id'] ?? null;
-                $existingDraft = null;
-                if ($draftId) {
-                    $existingDraft = Reimbursement::where('id', $draftId)->where('user_id', $user->id)->where('status', 'borrador')->first();
-                } elseif (isset($uuid)) {
-                    $existingDraft = Reimbursement::where('uuid', $uuid)->where('user_id', $user->id)->where('status', 'borrador')->first();
-                }
+                // Existing draft already resolved at the start of the loop
 
                 $pdfPath = $pdfFile ? $pdfFile->store('pdfs') : ($existingDraft ? $existingDraft->pdf_path : null);
                 $originalPdfName = $pdfFile ? $pdfFile->getClientOriginalName() : ($existingDraft ? $existingDraft->original_pdf_name : null);
@@ -837,7 +836,14 @@ class ReimbursementController extends Controller
      */
     private function getValidationData($xmlData, $pdfFile)
     {
-        if (!$pdfFile) return null;
+        if (!$pdfFile) {
+            return [
+                'uuid_match' => false,
+                'total_match' => false,
+                'is_missing' => true,
+                'message' => 'Falta archivo PDF para validación.',
+            ];
+        }
 
         try {
             $parser = new Parser();
@@ -1035,15 +1041,13 @@ class ReimbursementController extends Controller
         // DYNAMIC WORKFLOW
         $currentStepId = null;
         $initialStatus = 'pendiente';
+        $autoNote = "";
+        $approvalData = [];
 
         if ($costCenter) {
             $firstStep = $costCenter->approvalSteps()->orderBy('order', 'asc')->first();
             $initialStatus = $firstStep ? 'pendiente' : 'aprobado';
             $currentStepId = $firstStep ? $firstStep->id : null;
-
-            // AUTO-APPROVAL
-            $autoNote = "";
-            $approvalData = [];
             
             while ($firstStep && $firstStep->user_id === $user->id) {
                 $autoNote .= "\n[AUTO-APROBACIÃƒâ€œN: " . $firstStep->name . "]";
@@ -2125,6 +2129,7 @@ class ReimbursementController extends Controller
             if ($reimbursement) {
                 // Validación estricta: UUID exacto O Monto exacto (si no hay código XML)
                 $isValid = false;
+                $parsedTotal = 0;
                 if ($uuid && $uuid !== 'N/A' && $uuid !== 'SIN UUID') {
                     if ($reimbursement->uuid === $uuid) {
                         $isValid = true;
@@ -2537,7 +2542,34 @@ class ReimbursementController extends Controller
         // 2. Ticket Attachment
         if ($reimbursement->ticket_path && Storage::exists($reimbursement->ticket_path) && $reimbursement->ticket_path !== $reimbursement->pdf_path) {
             $path = Storage::path($reimbursement->ticket_path);
-            $this->addImageToPdf($pdf, $path, $itemTitle . " [TICKET]");
+            $mime = Storage::mimeType($reimbursement->ticket_path);
+            $ticketTitle = $itemTitle . " [TICKET]";
+            
+            if (str_contains($mime, 'pdf')) {
+                try {
+                    $reimPageCount = $pdf->setSourceFile($path);
+                    for ($i = 1; $i <= $reimPageCount; $i++) {
+                        $pageId = $pdf->importPage($i);
+                        $pdf->addPage();
+                        $pdf->useTemplate($pageId);
+                        
+                        // Overlay Title
+                        $pdf->SetFillColor(0, 82, 199); // Brand Blue
+                        $pdf->SetTextColor(255, 255, 255);
+                        $pdf->SetFont('Arial', 'B', 7);
+                        $pdf->SetXY(10, 3);
+                        $pdf->Cell(190, 5, mb_convert_encoding($ticketTitle . " (PAG. $i)", 'ISO-8859-1', 'UTF-8'), 0, 0, 'R', true);
+                    }
+                } catch (\Exception $e) {
+                    Log::error("FPDI merge error (Ticket PDF): " . $e->getMessage());
+                    $pdf->addPage();
+                    $pdf->SetFont('Arial', 'B', 12);
+                    $pdf->SetTextColor(200, 0, 0);
+                    $pdf->Cell(0, 10, 'TICKET PDF NO COMPATIBLE', 0, 1, 'C');
+                }
+            } else {
+                $this->addImageToPdf($pdf, $path, $ticketTitle);
+            }
         }
 
         // 3. Extra files
