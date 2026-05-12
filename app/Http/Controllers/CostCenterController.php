@@ -128,9 +128,8 @@ class CostCenterController extends Controller
         $approvedQuery = $costCenter->reimbursements()->applyTimeFilters($request)->whereIn('status', ['aprobado', 'pagado']);
 
         // Budget affecting queries: filtered by type and source (standalone vs travel event)
-        $budgetFilter = function($q) use ($markedUserIds) {
-            $q->whereIn('user_id', $markedUserIds)
-              ->whereIn('type', ['fondo_fijo', 'comida', 'viaje'])
+        $budgetFilter = function($q) {
+            $q->whereIn('type', ['fondo_fijo', 'comida', 'viaje'])
               ->whereNull('travel_event_id');
         };
 
@@ -142,8 +141,8 @@ class CostCenterController extends Controller
             'pending_amount' => (clone $pendingBudgetQuery)->sum('total'),
             'approved_count' => (clone $approvedQuery)->count(),
             'approved_amount' => (clone $approvedBudgetQuery)->sum('total'),
-            'correction_count' => $costCenter->reimbursements()->where('status', 'requiere_correccion')->count(),
-            'rejected_count' => $costCenter->reimbursements()->where('status', 'rechazado')->count(),
+            'correction_count' => $costCenter->reimbursements()->applyTimeFilters($request)->where('status', 'requiere_correccion')->count(),
+            'rejected_count' => $costCenter->reimbursements()->applyTimeFilters($request)->where('status', 'rechazado')->count(),
             'avg_approval_days' => $approvedQuery->whereNotNull('approved_by_treasury_at')
                 ->avg(DB::raw('TIMESTAMPDIFF(SECOND, created_at, approved_by_treasury_at) / 86400')) ?? 0,
         ];
@@ -232,9 +231,14 @@ class CostCenterController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
-        $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:cost_centers,name'],
             'beneficiary_id' => ['nullable', 'exists:users,id'],
+            'director_id' => ['nullable', 'exists:users,id'],
+            'control_obra_id' => ['nullable', 'exists:users,id'],
+            'director_ejecutivo_id' => ['nullable', 'exists:users,id'],
+            'accountant_id' => ['nullable', 'exists:users,id'],
+            'direccion_id' => ['nullable', 'exists:users,id'],
+            'tesoreria_id' => ['nullable', 'exists:users,id'],
             'budget' => ['required', 'numeric', 'min:0'],
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.user_id' => ['required', 'exists:users,id'],
@@ -253,6 +257,12 @@ class CostCenterController extends Controller
             'menfis_email' => $request->menfis_email,
             'budget' => $request->budget,
             'beneficiary_id' => $request->beneficiary_id,
+            'director_id' => $request->director_id,
+            'control_obra_id' => $request->control_obra_id,
+            'director_ejecutivo_id' => $request->director_ejecutivo_id,
+            'accountant_id' => $request->accountant_id,
+            'direccion_id' => $request->direccion_id,
+            'tesoreria_id' => $request->tesoreria_id,
         ]);
 
         // Create initial renewal record
@@ -310,6 +320,12 @@ class CostCenterController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('cost_centers')->ignore($costCenter->id)],
             'beneficiary_id' => ['nullable', 'exists:users,id'],
+            'director_id' => ['nullable', 'exists:users,id'],
+            'control_obra_id' => ['nullable', 'exists:users,id'],
+            'director_ejecutivo_id' => ['nullable', 'exists:users,id'],
+            'accountant_id' => ['nullable', 'exists:users,id'],
+            'direccion_id' => ['nullable', 'exists:users,id'],
+            'tesoreria_id' => ['nullable', 'exists:users,id'],
             'budget' => ['required', 'numeric', 'min:0'],
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.user_id' => ['required', 'exists:users,id'],
@@ -340,6 +356,12 @@ class CostCenterController extends Controller
                 'menfis_email' => $request->menfis_email,
                 'budget' => $request->budget,
                 'beneficiary_id' => $request->beneficiary_id,
+                'director_id' => $request->director_id,
+                'control_obra_id' => $request->control_obra_id,
+                'director_ejecutivo_id' => $request->director_ejecutivo_id,
+                'accountant_id' => $request->accountant_id,
+                'direccion_id' => $request->direccion_id,
+                'tesoreria_id' => $request->tesoreria_id,
             ]);
 
             // 3. Rebuild steps (Delete and Recreate)
