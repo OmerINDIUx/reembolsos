@@ -61,7 +61,7 @@
                                                 </svg>
                                             </a>
                                             
-                                            @if($profile->users_count == 0 && !in_array($profile->name, ['admin', 'director', 'accountant']))
+                                            @if($profile->users_count == 0 && !in_array($profile->name, ['admin', 'director', 'accountant', 'user']))
                                             <form action="{{ route('profiles.destroy', $profile) }}" method="POST" onsubmit="return confirm('¿Estás seguro de eliminar este perfil?');" class="inline">
                                                 @csrf
                                                 @method('DELETE')

@@ -88,6 +88,10 @@ class RBACSeeder extends Seeder
                 'display_name' => 'Dirección N6',
                 'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.bulk_approve', 'reimbursements.export'],
             ],
+            'user' => [
+                'display_name' => 'Usuario Estándar',
+                'permissions' => ['reimbursements.view', 'reimbursements.create'],
+            ],
         ];
 
         foreach ($profilesData as $name => $data) {
@@ -107,7 +111,8 @@ class RBACSeeder extends Seeder
 
         // Migrate existing users to profiles based on their 'role' column
         User::all()->each(function ($user) {
-            $profile = Profile::where('name', $user->role)->first();
+            $roleName = $user->role ?: 'user';
+            $profile = Profile::where('name', $roleName)->first();
             if ($profile) {
                 $user->update(['profile_id' => $profile->id]);
             }

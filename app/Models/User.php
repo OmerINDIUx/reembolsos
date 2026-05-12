@@ -126,6 +126,10 @@ class User extends Authenticatable
 
     public function getRoleNameAttribute()
     {
+        if ($this->profile) {
+            return $this->profile->display_name;
+        }
+
         return match($this->role) {
             'admin' => 'Administrador (Full)',
             'admin_view' => 'Administrador (Lectura)',
