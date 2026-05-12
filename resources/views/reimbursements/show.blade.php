@@ -423,8 +423,8 @@
                         </div>
                     @endif
 
-                    <!-- Subgastos Vinculados -->
-                    @if($reimbursement->children->count() > 0)
+                    <!-- Subgastos Vinculados (Solo para Viajes) -->
+                    @if($reimbursement->type === 'viaje' && $reimbursement->children->count() > 0)
                         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 overflow-hidden dark:border-gray-700">
                             <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                                 <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Gastos Vinculados al Viaje</h3>

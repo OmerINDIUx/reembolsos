@@ -3158,9 +3158,9 @@ class ReimbursementController extends Controller
                         $reimbursement->save();
                     }
 
-                    // Group items under the first created item
+                    // Group items under the first item ONLY if it's a 'viaje'
                     if ($index === 0) {
-                        $mainId = $reimbursement->id;
+                        $mainId = ($request->input('type') === 'viaje') ? $reimbursement->id : null;
                         $reimbursement->parent_id = null;
                         $reimbursement->save();
                     } else {
