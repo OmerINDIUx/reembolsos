@@ -46,7 +46,6 @@
             <form id="reimbursement-form" action="{{ route('reimbursements.bulk_store') }}" method="POST" enctype="multipart/form-data" x-on:submit="handleSubmit" novalidate>
                 @csrf
                 <input type="hidden" name="type" value="{{ $type }}">
-                <input type="hidden" name="week" value="{{ $currentWeek }}">
                 <input type="hidden" name="has_invoice" value="{{ $hasInvoice ? 1 : 0 }}">
                 <input type="hidden" name="draft_id" :value="draftId">
 
@@ -111,9 +110,18 @@
 
                             <div>
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Semana de Proceso</label>
-                                <div class="w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-2xl py-4 px-5 text-gray-500 font-bold">
-                                    {{ $currentWeek }}
-                                </div>
+                                @if(count($availableWeeks) > 1)
+                                    <select name="week" x-model="processWeek" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5 font-bold">
+                                        @foreach($availableWeeks as $week)
+                                            <option value="{{ $week }}">Semana {{ explode('-', $week)[0] }} ({{ explode('-', $week)[1] }}) @if($loop->first) - Actual @else - Siguiente @endif</option>
+                                        @endforeach
+                                    </select>
+                                @else
+                                    <div class="w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-2xl py-4 px-5 text-gray-500 font-bold">
+                                        {{ $currentWeek }}
+                                        <input type="hidden" name="week" value="{{ $currentWeek }}">
+                                    </div>
+                                @endif
                             </div>
                         </div>
 
@@ -605,9 +613,15 @@
                     <div class="flex flex-col items-center space-y-4">
                         <!-- Limits Indicator -->
                         <div class="flex flex-wrap justify-center gap-6 mb-2">
-                            <div class="flex items-center space-x-2">
-                                <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Archivos:</span>
-                                <span :class="items.length >= maxItems ? 'text-red-600' : 'text-indigo-600'" class="text-xs font-bold" x-text="items.length + ' / ' + maxItems"></span>
+                            <div class="flex items-center space-x-6">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Gastos:</span>
+                                    <span :class="items.length >= maxItems ? 'text-red-600' : 'text-indigo-600'" class="text-xs font-bold" x-text="items.length + ' / ' + maxItems"></span>
+                                </div>
+                                <div class="flex items-center space-x-2 border-l border-gray-200 dark:border-gray-700 pl-6">
+                                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Archivos:</span>
+                                    <span class="text-xs font-bold text-purple-600" x-text="countTotalFiles()"></span>
+                                </div>
                             </div>
                             <div class="flex items-center space-x-2">
                                 <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Peso Total:</span>
@@ -629,7 +643,7 @@
                         </button>
                         
                         <template x-if="items.length >= maxItems">
-                            <p class="text-[10px] font-bold text-red-600 uppercase tracking-tight animate-shake">Límite de 20 facturas alcanzado por carga.</p>
+                            <p class="text-[10px] font-bold text-red-600 uppercase tracking-tight animate-shake">Límite de 7 gastos (21 archivos) alcanzado por carga.</p>
                         </template>
                         <template x-if="currentTotalSize >= maxTotalSize">
                             <p class="text-[10px] font-bold text-red-600 uppercase tracking-tight animate-shake">Límite de peso total (64MB) excedido. Por favor registra estas facturas y crea una nueva sesión.</p>
@@ -769,8 +783,9 @@
                 selectedCostCenterId: null,
                 filteredColleagues: [],
                 payeeOption: 'creator',
+                processWeek: '{{ $currentWeek }}',
                 items: [],
-                maxItems: 20,
+                maxItems: 7,
                 @php
                     $val = ini_get('upload_max_filesize');
                     $val = trim($val);
@@ -1378,6 +1393,15 @@
                     return this.items.reduce((acc, i) => {
                         const val = parseFloat(i.data.total) || 0;
                         return acc + val;
+                    }, 0);
+                },
+                countTotalFiles() {
+                    return this.items.reduce((acc, item) => {
+                        let count = 0;
+                        if (item.fileName) count++; // XML
+                        if (item.pdfName) count++;  // PDF
+                        if (item.ticketName) count++; // Ticket
+                        return acc + count;
                     }, 0);
                 },
                 handleSubmit(e) { 

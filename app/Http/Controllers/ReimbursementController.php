@@ -400,7 +400,18 @@ class ReimbursementController extends Controller
         }
         
         // Auto-fill week: WeekNumber-Year (Starts Saturday, Ends Friday)
-        $currentWeek = now()->addDays(2)->format('W-Y');
+        $today = now();
+        $currentProcessWeek = $today->copy()->addDays(2)->format('W-Y');
+        $availableWeeks = [$currentProcessWeek];
+
+        // "A partir del día martes se pueda decidir si el reembolso cae esta semana o la siguiente semana"
+        // Day 2 (Tuesday) to Day 5 (Friday)
+        if ($today->dayOfWeek >= 2 && $today->dayOfWeek <= 5) {
+            $nextProcessWeek = $today->copy()->addDays(9)->format('W-Y');
+            $availableWeeks[] = $nextProcessWeek;
+        }
+
+        $currentWeek = $currentProcessWeek; // For backward compatibility in view if needed
         
         $categories = $this->getCategories();
 
@@ -438,7 +449,7 @@ class ReimbursementController extends Controller
             $parentReimbursement = Reimbursement::find($request->trip_id);
         }
 
-        return view('reimbursements.create', compact('type', 'costCenters', 'travelEvents', 'currentWeek', 'categories', 'parentReimbursement', 'hasInvoice', 'ccUserMapping'));
+        return view('reimbursements.create', compact('type', 'costCenters', 'travelEvents', 'currentWeek', 'availableWeeks', 'categories', 'parentReimbursement', 'hasInvoice', 'ccUserMapping'));
     }
 
     /**
@@ -494,8 +505,8 @@ class ReimbursementController extends Controller
         
         // If a travel event is selected, it MUST use its cost center
         $costCenterId = $travelEvent ? $travelEvent->cost_center_id : $request->cost_center_id;
-        // AUTO-FILL WEEK: Always use current week on publication
-        $week = now()->addDays(2)->format('W-Y');
+        // AUTO-FILL WEEK: Use request value if valid, otherwise fallback
+        $week = $request->week ?: now()->addDays(2)->format('W-Y');
         
         $costCenter = $costCenterId ? CostCenter::find($costCenterId) : null;
         
@@ -1158,7 +1169,7 @@ class ReimbursementController extends Controller
             'type' => $request->type,
             'cost_center_id' => $effectiveCostCenterId,
             'travel_event_id' => $request->travel_event_id,
-            'week' => now()->addDays(2)->format('W-Y'),
+            'week' => $request->week ?: now()->addDays(2)->format('W-Y'),
             'category' => !empty($request->category) ? $request->category : ($existingDraft ? $existingDraft->category : 'viaticos'),
             'uuid' => !empty($request->uuid) ? $request->uuid : ($existingDraft ? $existingDraft->uuid : null),
             'rfc_emisor' => !empty($request->rfc_emisor) ? $request->rfc_emisor : ($existingDraft ? $existingDraft->rfc_emisor : null),
@@ -1281,12 +1292,21 @@ class ReimbursementController extends Controller
         
         // Standard list of cost centers (reuse logic from create if possible)
         $costCenters = CostCenter::with('beneficiary')->orderBy('name')->get();
+        
         // Display CURRENT processing week, not the draft's original week
-        $currentWeek = now()->addDays(2)->format('W-Y');
+        $today = now();
+        $currentProcessWeek = $today->copy()->addDays(2)->format('W-Y');
+        $availableWeeks = [$currentProcessWeek];
+        if ($today->dayOfWeek >= 2 && $today->dayOfWeek <= 5) {
+            $nextProcessWeek = $today->copy()->addDays(9)->format('W-Y');
+            $availableWeeks[] = $nextProcessWeek;
+        }
+        $currentWeek = $currentProcessWeek;
+
         $categories = $this->getCategories();
         $travelEvents = \App\Models\TravelEvent::where('status', 'active')->get();
 
-        return view('reimbursements.create', compact('reimbursement', 'type', 'hasInvoice', 'costCenters', 'currentWeek', 'categories', 'travelEvents'));
+        return view('reimbursements.create', compact('reimbursement', 'type', 'hasInvoice', 'costCenters', 'currentWeek', 'availableWeeks', 'categories', 'travelEvents'));
     }
 
     /**
