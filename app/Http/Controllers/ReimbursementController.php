@@ -39,6 +39,23 @@ class ReimbursementController extends Controller
             ->where('status', '!=', 'borrador')
             ->orderBy('created_at', 'desc');
 
+        // Calculate available weeks based on scoped query
+        $availableWeeksQuery = clone $query;
+        $availableWeeks = $availableWeeksQuery->reorder()
+            ->select('week')
+            ->whereNotNull('week')
+            ->distinct()
+            ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
+            ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', 1) AS UNSIGNED) DESC")
+            ->pluck('week');
+
+        // Authorized Cost Centers logic (Consolidated)
+        if ($user->isAdmin() || $user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
+            $authorizedCCs = \App\Models\CostCenter::orderBy('name', 'asc')->get();
+        } else {
+            $authorizedCCs = $user->authorizedCostCenters()->orderBy('name', 'asc')->get();
+        }
+
         // TRACKER LOGIC: Global search bypasses tab scoping for management roles but respects general visibility
         if ($globalSearch && $canManage) {
             if (!$user->isAdmin() && !$user->isAdminView()) {
@@ -50,7 +67,7 @@ class ReimbursementController extends Controller
                   ->orWhere('uuid', 'like', "%{$globalSearch}%");
             });
             $reimbursements = $query->paginate(10)->appends($request->all());
-            return view('reimbursements.index', compact('reimbursements', 'globalSearch'));
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'authorizedCCs', 'availableWeeks'));
         }
 
         // Apply Tab Scoping
@@ -104,16 +121,6 @@ class ReimbursementController extends Controller
             $query->reorder('created_at', 'desc');
         }
 
-        // Calculate available weeks based on scoped query
-        $availableWeeksQuery = clone $query;
-        $availableWeeks = $availableWeeksQuery->reorder()
-            ->select('week')
-            ->whereNotNull('week')
-            ->distinct()
-            ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
-            ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', 1) AS UNSIGNED) DESC")
-            ->pluck('week');
-
         if ($tab === 'management' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history') {
             // Paginate by weeks (5 weeks per page)
             $weeksQuery = clone $query;
@@ -134,18 +141,10 @@ class ReimbursementController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->get();
 
-            // Authorized Cost Centers
-            if ($user->isAdmin() || $user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
-                $authorizedCCs = \App\Models\CostCenter::orderBy('name', 'asc')->get();
-            } else {
-                $authorizedCCs = $user->authorizedCostCenters()->orderBy('name', 'asc')->get();
-            }
-
             return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'weeksPaginator', 'availableWeeks', 'authorizedCCs'));
         }
 
         $reimbursements = $query->paginate(10)->appends($request->all());
-        $authorizedCCs = $user->isAdmin() ? \App\Models\CostCenter::all() : $user->authorizedCostCenters()->get();
 
         return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'authorizedCCs'));
     }
@@ -528,7 +527,13 @@ class ReimbursementController extends Controller
         if (in_array($type, ['fondo_fijo', 'comida'])) {
             $payeeId = $costCenter ? ($costCenter->beneficiary_id ?? $targetUserId) : $targetUserId;
         } else {
-            $payeeId = $request->input('payee_id', $targetUserId);
+            $requestedPayeeId = $request->input('payee_id', $targetUserId);
+            // If requesting a different payee, verify create_on_behalf permission
+            if ($requestedPayeeId != $targetUserId && !$user->canPerform('reimbursements.create_on_behalf')) {
+                $payeeId = $targetUserId;
+            } else {
+                $payeeId = $requestedPayeeId;
+            }
         }
 
         $currentStepId = null;
@@ -1155,7 +1160,13 @@ class ReimbursementController extends Controller
         if (in_array($request->type, ['fondo_fijo', 'comida'])) {
             $payeeId = $costCenter ? ($costCenter->beneficiary_id ?? $targetUserId) : $targetUserId;
         } else {
-            $payeeId = $request->input('payee_id', $targetUserId);
+            $requestedPayeeId = $request->input('payee_id', $targetUserId);
+            // If requesting a different payee, verify create_on_behalf permission
+            if ($requestedPayeeId != $targetUserId && !$user->canPerform('reimbursements.create_on_behalf')) {
+                $payeeId = $targetUserId;
+            } else {
+                $payeeId = $requestedPayeeId;
+            }
         }
 
         // Add traceability note if on behalf
@@ -1277,7 +1288,7 @@ class ReimbursementController extends Controller
     public function edit(Reimbursement $reimbursement)
     {
         $user = Auth::user();
-        if ($reimbursement->user_id !== $user->id) {
+        if ($reimbursement->user_id !== $user->id && !$user->isAdmin()) {
             abort(403);
         }
 
@@ -3047,7 +3058,13 @@ class ReimbursementController extends Controller
                 try {
                     $id = $itemData['draft_id'] ?? null;
                     
-                    $payeeId = $request->input('payee_id');
+                    $requestedPayeeId = $request->input('payee_id');
+                    $payeeId = $requestedPayeeId;
+
+                    // If requesting a different payee than self, verify permission
+                    if ($requestedPayeeId && $requestedPayeeId != $user->id && !$user->canPerform('reimbursements.create_on_behalf')) {
+                        $payeeId = $user->id;
+                    }
 
                     $data = [
                         'user_id' => $user->id,

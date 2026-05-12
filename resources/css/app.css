@@ -1,6 +1,10 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+}
+
 [x-cloak] { display: none !important; }
 
 @layer components {
@@ -15,7 +19,7 @@
 
     /* Premium Typography */
     .premium-heading {
-        @apply font-black tracking-tighter leading-tight text-gray-900 dark:text-white;
+        @apply font-[800] tracking-tighter leading-tight text-gray-900 dark:text-white;
     }
 
     .label-caps {
@@ -32,7 +36,7 @@
     }
 
     .fin-amount {
-        @apply text-5xl md:text-7xl font-black tracking-tighter leading-none;
+        @apply text-5xl md:text-7xl font-[800] tracking-tighter leading-none;
     }
 
     /* Badges & Indicators */

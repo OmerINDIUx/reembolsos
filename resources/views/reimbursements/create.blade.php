@@ -210,6 +210,7 @@
                                         </div>
                                     </label>
 
+                                    @if(Auth::user()->canPerform('reimbursements.create_on_behalf'))
                                     <label class="relative flex p-4 bg-white dark:bg-gray-900 border-2 rounded-2xl cursor-pointer transition-all hover:border-indigo-200" :class="payeeOption === 'beneficiary' ? 'border-indigo-600 ring-4 ring-indigo-500/10' : 'border-gray-100 dark:border-gray-700'">
                                         <input type="radio" name="payee_option" value="beneficiary" x-model="payeeOption" class="sr-only">
                                         <div class="flex items-center space-x-3">
@@ -225,6 +226,7 @@
                                             </div>
                                         </div>
                                     </label>
+                                    @endif
 
                                     <!-- Final Payee ID Hidden Input for Reembolso choice -->
                                     <input type="hidden" name="payee_id" :value="payeeOption === 'beneficiary' ? selectedCcBeneficiaryId : selectedOwnerId">

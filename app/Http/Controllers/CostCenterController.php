@@ -33,30 +33,12 @@ class CostCenterController extends Controller
             ])
             ->withSum([
                 'reimbursements as pending_total' => function($q) {
-                    $q->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])
-                      ->whereIn('type', ['fondo_fijo', 'comida', 'viaje'])
-                      ->whereNull('travel_event_id')
-                      ->whereExists(function($sq) {
-                          $sq->select(DB::raw(1))
-                             ->from('cost_center_user')
-                             ->whereColumn('cost_center_user.cost_center_id', 'reimbursements.cost_center_id')
-                             ->whereColumn('cost_center_user.user_id', 'reimbursements.user_id')
-                             ->where('can_do_special', true);
-                      });
+                    $q->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
                 }
             ], 'total')
             ->withSum([
                 'reimbursements as approved_total' => function($q) {
-                    $q->whereIn('status', ['aprobado', 'pagado'])
-                      ->whereIn('type', ['fondo_fijo', 'comida', 'viaje'])
-                      ->whereNull('travel_event_id')
-                      ->whereExists(function($sq) {
-                          $sq->select(DB::raw(1))
-                             ->from('cost_center_user')
-                             ->whereColumn('cost_center_user.cost_center_id', 'reimbursements.cost_center_id')
-                             ->whereColumn('cost_center_user.user_id', 'reimbursements.user_id')
-                             ->where('can_do_special', true);
-                      });
+                    $q->whereIn('status', ['aprobado', 'pagado']);
                 }
             ], 'total')
             ->withMin([
@@ -127,14 +109,8 @@ class CostCenterController extends Controller
         $pendingQuery = $costCenter->reimbursements()->applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'pagado', 'rechazado', 'borrador']);
         $approvedQuery = $costCenter->reimbursements()->applyTimeFilters($request)->whereIn('status', ['aprobado', 'pagado']);
 
-        // Budget affecting queries: filtered by type and source (standalone vs travel event)
-        $budgetFilter = function($q) {
-            $q->whereIn('type', ['fondo_fijo', 'comida', 'viaje'])
-              ->whereNull('travel_event_id');
-        };
-
-        $pendingBudgetQuery = (clone $pendingQuery)->where($budgetFilter);
-        $approvedBudgetQuery = (clone $approvedQuery)->where($budgetFilter);
+        $pendingBudgetQuery = clone $pendingQuery;
+        $approvedBudgetQuery = clone $approvedQuery;
 
         $stats = [
             'pending_count' => (clone $pendingQuery)->count(),
@@ -230,7 +206,7 @@ class CostCenterController extends Controller
         if (!Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'accountant', 'direccion')) {
             abort(403, 'Unauthorized action.');
         }
-
+        $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:cost_centers,name'],
             'beneficiary_id' => ['nullable', 'exists:users,id'],
             'director_id' => ['nullable', 'exists:users,id'],
