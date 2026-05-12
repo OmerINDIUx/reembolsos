@@ -593,13 +593,19 @@
                                                     <div>
                                                         <p class="text-sm text-gray-500 dark:text-gray-400">
                                                             <span class="font-bold text-gray-900 dark:text-white">
-                                                                @if($approval->action === 'aprobado')
-                                                                    Aprobado por: 
-                                                                @elseif($approval->action === 'rechazado')
-                                                                    Rechazado por:
-                                                                @else
-                                                                    {{ ucfirst(str_replace('_', ' ', $approval->action)) }} por:
-                                                                @endif
+                                                                @php
+                                                                    $actionLabels = [
+                                                                        'enviado' => 'Enviado',
+                                                                        'submitted' => 'Enviado',
+                                                                        'reenviado' => 'Reenviado',
+                                                                        'resubmitted' => 'Reenviado',
+                                                                        'aprobado' => 'Aprobado',
+                                                                        'rechazado' => 'Rechazado',
+                                                                        'requiere_correccion' => 'Devuelto para corrección',
+                                                                    ];
+                                                                    $actionLabel = $actionLabels[$approval->action] ?? ucfirst(str_replace('_', ' ', $approval->action));
+                                                                @endphp
+                                                                {{ $actionLabel }} por:
 
                                                                 @if($approval->substituted_user_id)
                                                                     {{ $approval->user->name }} <span class="text-indigo-600 dark:text-indigo-400 text-[10px] uppercase font-black tracking-tighter mx-1">a nombre de {{ $approval->substitutedUser->name }}</span>

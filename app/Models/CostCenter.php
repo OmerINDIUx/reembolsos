@@ -25,6 +25,15 @@ class CostCenter extends Model
         'is_active',
     ];
 
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
     public function director()
     {
         return $this->belongsTo(User::class, 'director_id');

@@ -343,10 +343,10 @@ class ReimbursementController extends Controller
         
         // Filter cost centers based on role and permissions
         if ($user->isAdmin()) {
-            $costCenters = CostCenter::with('beneficiary')->orderBy('name')->get();
+            $costCenters = CostCenter::active()->with('beneficiary')->orderBy('name')->get();
         } else {
             // 1. Explicitly authorized Cost Centers
-            $costCenters = $user->authorizedCostCenters()->with('beneficiary')->withPivot('can_do_special')->orderBy('name')->get();
+            $costCenters = $user->authorizedCostCenters()->active()->with('beneficiary')->withPivot('can_do_special')->orderBy('name')->get();
 
             // 2. Inherited Cost Centers from Travel Events (Participants)
             // Note: For 'viaje', we now rely on the Travel Event selector for participants
@@ -416,7 +416,7 @@ class ReimbursementController extends Controller
         // Check for colleagues if user can create on behalf of others
         $ccUserMapping = [];
         if ($user->canPerform('reimbursements.create_on_behalf')) {
-            $ccs = $user->isAdmin() ? CostCenter::all() : $costCenters;
+            $ccs = $user->isAdmin() ? CostCenter::active()->get() : $costCenters;
             foreach ($ccs as $cc) {
                 $ccUserMapping[$cc->id] = $cc->authorizedUsers()
                     ->select('users.id', 'users.name', 'users.clabe')
@@ -654,9 +654,15 @@ class ReimbursementController extends Controller
                 $ticketFile = $request->file("items.{$index}.ticket_file") ?? ($item['ticket_file'] ?? null);
                 $ticketPath = $ticketFile ? $ticketFile->store('tickets') : ($existingDraft ? $existingDraft->ticket_path : null);
 
+                // Add traceability note if on behalf
+                $onBehalfNote = "";
+                if ($targetUserId != $user->id) {
+                    $ownerName = \App\Models\User::find($targetUserId)->name ?? 'Tercero';
+                    $onBehalfNote = "\n[REGISTRO POR TERCEROS: Capturado por {$user->name} a nombre de {$ownerName}]";
+                }
+
                 $finalObs = ($item['observaciones'] ?? "") . $autoNote;
 
-                // DATA PRESERVATION: Use draft value if request value is empty
                 $reimbursementData = array_merge([
                     'type' => $type,
                     'cost_center_id' => $itemCostCenterId,
@@ -683,7 +689,7 @@ class ReimbursementController extends Controller
                     'ticket_path' => $ticketPath,
                     'status' => $initialStatus,
                     'current_step_id' => $currentStepId,
-                    'observaciones' => trim($finalObs),
+                    'observaciones' => trim($finalObs) . $onBehalfNote,
                     'attendees_count' => $item['attendees_count'] ?? ($existingDraft ? $existingDraft->attendees_count : 0),
                     'attendees_names' => $item['attendees_names'] ?? ($existingDraft ? $existingDraft->attendees_names : null),
                     'location' => $item['location'] ?? ($travelEvent ? $travelEvent->location : ($existingDraft ? $existingDraft->location : null)),
@@ -706,6 +712,16 @@ class ReimbursementController extends Controller
                     $reimbursement = $existingDraft;
                 } else {
                     $reimbursement = Reimbursement::create($reimbursementData);
+                }
+
+                // Record Initial Audit History
+                if ($reimbursement->status !== 'borrador') {
+                    $reimbursement->approvals()->create([
+                        'user_id' => $user->id,
+                        'step_name' => 'Solicitante',
+                        'action' => 'enviado',
+                        'comment' => $onBehalfNote ? trim($onBehalfNote, "[]\n") : 'Solicitud enviada para aprobación (Carga Masiva).',
+                    ]);
                 }
 
                 // Send email to Menfis ONLY if it has an XML/UUID
@@ -819,11 +835,17 @@ class ReimbursementController extends Controller
             }
 
             // Ignore self if draft_id is provided
+            // Also ignore if the duplicate is a DRAFT belonging to the CURRENT user
             $existingReimbursement = Reimbursement::where('uuid', $data['uuid'])
                 ->when($request->draft_id, function($q) use ($request) {
                     return $q->where('id', '!=', $request->draft_id);
                 })
+                ->where(function($q) {
+                    $q->where('status', '!=', 'borrador')
+                      ->orWhere('user_id', '!=', auth()->id());
+                })
                 ->first();
+
             if ($existingReimbursement) {
                 return response()->json([
                     'error' => 'duplicate_cfdi',
@@ -1125,6 +1147,13 @@ class ReimbursementController extends Controller
             $payeeId = $request->input('payee_id', $targetUserId);
         }
 
+        // Add traceability note if on behalf
+        $onBehalfNote = "";
+        if ($targetUserId != $user->id) {
+            $ownerName = \App\Models\User::find($targetUserId)->name ?? 'Tercero';
+            $onBehalfNote = "\n[REGISTRO POR TERCEROS: Capturado por {$user->name} a nombre de {$ownerName}]";
+        }
+
         $reimbursementData = array_merge([
             'type' => $request->type,
             'cost_center_id' => $effectiveCostCenterId,
@@ -1152,7 +1181,7 @@ class ReimbursementController extends Controller
             'ticket_path' => $ticketPath,
             'status' => $initialStatus,
             'current_step_id' => $currentStepId,
-            'observaciones' => ($request->observaciones ?? "") . $autoNote,
+            'observaciones' => ($request->observaciones ?? "") . $autoNote . $onBehalfNote,
             'attendees_count' => $request->attendees_count ?? ($existingDraft ? $existingDraft->attendees_count : 0),
             'attendees_names' => $request->attendees_names ?? ($existingDraft ? $existingDraft->attendees_names : null),
             'location' => $request->location ?? ($existingDraft ? $existingDraft->location : null),
@@ -1197,8 +1226,8 @@ class ReimbursementController extends Controller
             $reimbursement->approvals()->create([
                 'user_id' => $user->id,
                 'step_name' => 'Solicitante',
-                'action' => 'submitted',
-                'comment' => 'Solicitud enviada para aprobación.'
+                'action' => 'enviado',
+                'comment' => $onBehalfNote ? trim($onBehalfNote, "[]\n") : 'Solicitud enviada para aprobación.',
             ]);
         }
 
@@ -1542,7 +1571,7 @@ class ReimbursementController extends Controller
             $reimbursement->approvals()->create([
                 'user_id' => $user->id,
                 'step_name' => 'Solicitante',
-                'action' => 'resubmitted',
+                'action' => 'reenviado',
                 'comment' => $request->user_correction_comment
             ]);
         } elseif (isset($data['status']) && ($data['status'] === 'rechazado' || $data['status'] === 'requiere_correccion')) {
@@ -2986,6 +3015,13 @@ class ReimbursementController extends Controller
             $travelEvent = $travelEventId ? \App\Models\TravelEvent::find($travelEventId) : null;
             $requestCostCenterId = $travelEvent ? $travelEvent->cost_center_id : $request->input('cost_center_id');
 
+            if ($requestCostCenterId) {
+                $cc = \App\Models\CostCenter::find($requestCostCenterId);
+                if ($cc && !$cc->is_active) {
+                    return response()->json(['success' => false, 'error' => 'El Centro de Costos seleccionado está inactivo.'], 403);
+                }
+            }
+
             $mainId = null;
             foreach ($items as $index => $itemData) {
                 try {
@@ -3140,17 +3176,17 @@ class ReimbursementController extends Controller
 
     private function canCreateReimbursement(\App\Models\User $user, $type, $costCenterId, $travelEventId = null)
     {
-        if ($user->hasRole('admin', 'accountant', 'direccion')) {
-            return true;
-        }
-
         // Auto-resolve CC if missing but event is provided
         if (!$costCenterId && $travelEventId) {
             $costCenterId = \App\Models\TravelEvent::where('id', $travelEventId)->value('cost_center_id');
         }
 
         $cc = \App\Models\CostCenter::find($costCenterId);
-        if (!$cc) return false;
+        if (!$cc || !$cc->is_active) return false;
+
+        if ($user->hasRole('admin', 'accountant', 'direccion')) {
+            return true;
+        }
 
         $isAuthorized = false;
         $isMarked = false;
