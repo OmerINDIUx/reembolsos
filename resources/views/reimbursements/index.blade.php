@@ -21,7 +21,7 @@
                                         @php
                         $user = Auth::user();
                         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-                        $canManage = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isAdminView() || $identity->isCxp() || $identity->isTreasury() || $identity->isDireccion() || $identity->isDirector() || $identity->isControlObra() || $identity->isExecutiveDirector() || $identity->hasPendingApprovals());
+                        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view'));
                         $defaultTab = $canManage ? 'management' : 'active';
                     @endphp
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">

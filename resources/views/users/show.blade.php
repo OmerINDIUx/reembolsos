@@ -14,7 +14,7 @@
             </div>
             
             <div class="flex items-center gap-3">
-                @if(Auth::user()->isAdmin())
+                @if(Auth::user()->canPerform('users.edit'))
                     @if($user->invitation_token)
                         <form action="{{ route('users.resend_invitation', $user->id) }}" method="POST" class="inline">
                             @csrf
@@ -224,7 +224,7 @@
             </div>
 
             <!-- Admin Section: Substitutes Management -->
-            @if(Auth::user()->isAdmin())
+            @if(Auth::user()->canPerform('users.edit'))
             <div x-data="{ showModal: false }">
                 <div class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mt-8">
                     <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-indigo-50/30 dark:bg-indigo-900/10">

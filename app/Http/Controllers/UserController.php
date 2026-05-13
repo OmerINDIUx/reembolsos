@@ -84,7 +84,7 @@ class UserController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => null, // Password will be set via invitation
-            'role' => $profile->name, // Keep role in sync for legacy compatibility
+            'role' => in_array($profile->name, ['admin', 'director', 'accountant', 'user']) ? $profile->name : 'user', // Keep role in sync for legacy compatibility
             'profile_id' => $request->profile_id,
             'invitation_token' => $token,
             'invitation_sent_at' => now(),
@@ -248,7 +248,7 @@ class UserController extends Controller
         $data = [
             'name' => $request->name,
             'email' => $request->email,
-            'role' => $profile->name, // Keep role in sync
+            'role' => in_array($profile->name, ['admin', 'director', 'accountant', 'user']) ? $profile->name : 'user', // Keep role in sync
             'profile_id' => $request->profile_id,
             'bank_name' => $request->bank_name,
             'clabe' => $request->clabe,

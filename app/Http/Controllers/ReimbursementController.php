@@ -31,7 +31,7 @@ class ReimbursementController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-        $canManage = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isAdminView() || $identity->isCxp() || $identity->isTreasury() || $identity->isDireccion() || $identity->isDirector() || $identity->isControlObra() || $identity->isExecutiveDirector() || $identity->hasPendingApprovals());
+        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view'));
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
         $globalSearch = $request->input('global_search');
         
@@ -50,10 +50,15 @@ class ReimbursementController extends Controller
             ->pluck('week');
 
         // Authorized Cost Centers logic (Consolidated)
-        if ($user->isAdmin() || $user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
+        $canSeeAllCCs = $allIdentities->contains(fn($identity) => $identity->canPerform('cost_centers.view') || $identity->canPerform('reimbursements.bulk_approve'));
+        if ($canSeeAllCCs) {
             $authorizedCCs = \App\Models\CostCenter::orderBy('name', 'asc')->get();
         } else {
-            $authorizedCCs = $user->authorizedCostCenters()->orderBy('name', 'asc')->get();
+            $authorizedCCsIds = [];
+            foreach ($allIdentities as $identity) {
+                $authorizedCCsIds = array_merge($authorizedCCsIds, $identity->authorizedCostCenters()->pluck('cost_centers.id')->toArray());
+            }
+            $authorizedCCs = \App\Models\CostCenter::whereIn('id', array_unique($authorizedCCsIds))->orderBy('name', 'asc')->get();
         }
 
         // TRACKER LOGIC: Global search bypasses tab scoping for management roles but respects general visibility
@@ -1738,7 +1743,8 @@ class ReimbursementController extends Controller
         $query = Reimbursement::with(['user', 'payee', 'costCenter', 'directorApprover', 'controlApprover', 'executiveApprover', 'cxpApprover', 'direccionApprover', 'treasuryApprover'])
             ->where('status', '!=', 'borrador');
             
-        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->hasPendingApprovals();
+        $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
+        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view'));
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
         
         // Synchronize with dashboard visibility logic
@@ -1928,7 +1934,8 @@ class ReimbursementController extends Controller
             ->where('status', '!=', 'borrador')
             ->whereNotNull('xml_path');
              
-        $canManage = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isTreasury() || $user->isDireccion() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->hasPendingApprovals();
+        $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
+        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view'));
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
         
         // Use the same scoping as the dashboard
@@ -3267,23 +3274,25 @@ class ReimbursementController extends Controller
      */
     private function applyTabScope($query, $tab, $user)
     {
-        // Get all identities (the user themselves + anyone they are substituting for)
-        $identityIds = $user->substitutingFor()->pluck('original_user_id')->push($user->id)->unique();
+        $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
+        $identityIds = $allIdentities->pluck('id')->unique();
 
         if ($tab === 'management') {
-            $query->where(function($q) use ($user, $identityIds) {
+            $query->where(function($q) use ($allIdentities, $identityIds) {
                 // 1. Current Approver (including substitutes)
                 $q->whereHas('currentStep', function($sq) use ($identityIds) {
                     $sq->whereIn('user_id', $identityIds);
                 })->whereNotIn('status', ['aprobado', 'rechazado', 'borrador', 'pendiente_pago']);
 
                 // 2. CXP / Treasury Funnel (Pending Payment)
-                if ($user->isCxp() || $user->isTreasury()) {
+                $isCxpOrTreasury = $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.bulk_approve') || $identity->isCxp() || $identity->isTreasury());
+                if ($isCxpOrTreasury) {
                     $q->orWhere('status', 'pendiente_pago');
                 }
 
                 // 3. Admin / Elevated roles see EVERYTHING pending in the system
-                if ($user->isAdmin() || $user->isAdminView()) {
+                $isAdmin = $allIdentities->contains(fn($identity) => $identity->canPerform('profiles.view') || $identity->isAdmin() || $identity->isAdminView());
+                if ($isAdmin) {
                     $q->orWhereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
                 }
             });
