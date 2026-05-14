@@ -89,7 +89,7 @@ class RBACSeeder extends Seeder
                 'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.bulk_approve', 'reimbursements.export'],
             ],
             'user' => [
-                'display_name' => 'Usuario Estándar',
+                'display_name' => 'Usuario General',
                 'permissions' => ['reimbursements.view', 'reimbursements.create'],
             ],
         ];

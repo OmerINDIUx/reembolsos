@@ -139,7 +139,7 @@ class User extends Authenticatable
             'accountant' => 'Cuentas por Pagar N4',
             'direccion' => 'Subdirección N5',
             'tesoreria' => 'Dirección N6',
-            default => 'Usuario Estándar',
+            default => 'Usuario General',
         };
     }
 
