@@ -270,6 +270,11 @@
                                             <span>Descargar Carátula</span>
                                         </button>
 
+                                        <button type="button" @click="downloadCSV()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                            <span>Descargar CSV</span>
+                                        </button>
+
                                         <button type="button" @click="openModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                                             <span>Acción Masiva</span>
@@ -967,6 +972,11 @@
                 downloadCaratula() {
                     const ids = this.selectedIds.join(',');
                     window.location.href = `{{ route('reimbursements.download_caratula') }}?ids=${ids}`;
+                },
+                
+                downloadCSV() {
+                    const ids = this.selectedIds.join(',');
+                    window.location.href = `{{ route('reimbursements.export') }}?ids=${ids}`;
                 },
                 
                 init() {

@@ -1750,6 +1750,12 @@ class ReimbursementController extends Controller
         // Synchronize with dashboard visibility logic
         $this->applyTabScope($query, $tab, $user);
 
+        // Filter by specific IDs if provided
+        if ($request->filled('ids')) {
+            $ids = explode(',', $request->ids);
+            $query->whereIn('id', $ids);
+        }
+
         // Mandatory filtering for export
         if ($request->filled('export_week')) {
             $query->where('week', $request->export_week);
@@ -1940,6 +1946,12 @@ class ReimbursementController extends Controller
         
         // Use the same scoping as the dashboard
         $this->applyTabScope($query, $tab, $user);
+
+        // Filter by specific IDs if provided
+        if ($request->filled('ids')) {
+            $ids = explode(',', $request->ids);
+            $query->whereIn('id', $ids);
+        }
 
         // Mandatory filtering for export (consistent with export method)
         if ($request->filled('export_week')) {
@@ -3288,6 +3300,17 @@ class ReimbursementController extends Controller
                 $isCxpOrTreasury = $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.bulk_approve') || $identity->isCxp() || $identity->isTreasury());
                 if ($isCxpOrTreasury) {
                     $q->orWhere('status', 'pendiente_pago');
+                }
+
+                // 2.5. CXP needs to see approved reimbursements that finished their Custom Approval Flow
+                $isCxp = $allIdentities->contains(fn($identity) => $identity->isCxp() || ($identity->profile && $identity->profile->name === 'accountant'));
+                if ($isCxp) {
+                    $q->orWhere(function($subQ) {
+                        $subQ->where('status', 'aprobado')
+                             ->whereHas('costCenter', function($ccQ) {
+                                 $ccQ->has('approvalSteps');
+                             });
+                    });
                 }
 
                 // 3. Admin / Elevated roles see EVERYTHING pending in the system

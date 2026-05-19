@@ -67,6 +67,7 @@
                         <svg class="absolute -right-4 -bottom-4 w-24 h-24 text-indigo-500/10 group-hover:scale-110 transition-transform duration-500" fill="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     </div>
 
+                    @if($displayStats['approved_count'] > 0)
                     <!-- Total Pagados -->
                     <div class="bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/10 dark:to-gray-800 p-6 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-900/30 relative overflow-hidden group">
                         <div class="relative z-10">
@@ -80,7 +81,9 @@
                         </div>
                         <svg class="absolute -right-4 -bottom-4 w-24 h-24 text-emerald-500/10 group-hover:scale-110 transition-transform duration-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3z"></path><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zM7.001 5a1 1 0 011-1h8a1 1 0 110 2h-8a1 1 0 01-1-1zm0 14a1 1 0 110-2h8a1 1 0 110 2h-8z" clip-rule="evenodd"></path></svg>
                     </div>
+                    @endif
 
+                    @if(($displayStats['rejected_count'] ?? 0) > 0)
                     <!-- Rechazados -->
                     <div class="bg-gradient-to-br from-rose-50 to-white dark:from-rose-900/10 dark:to-gray-800 p-6 rounded-2xl shadow-sm border border-rose-100 dark:border-rose-900/30 relative overflow-hidden group">
                         <div class="relative z-10">
@@ -91,6 +94,7 @@
                         </div>
                         <svg class="absolute -right-4 -bottom-4 w-24 h-24 text-rose-500/10 group-hover:scale-110 transition-transform duration-500" fill="currentColor" viewBox="0 0 24 24"><path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     </div>
+                    @endif
 
                     <!-- Alert Card (Correction or Status Label) -->
                     @if(!$isManagement)

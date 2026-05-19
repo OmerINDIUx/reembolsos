@@ -253,6 +253,20 @@
                                     <span>Descargar Carátula</span>
                                 </button>
 
+                                <button type="button"
+                                    @click="downloadXMLSelected()"
+                                    class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-amber-200 flex items-center space-x-2">
+                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                    <span>Descargar XML</span>
+                                </button>
+
+                                <button type="button"
+                                    @click="downloadCSVSelected()"
+                                    class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
+                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    <span>Descargar CSV</span>
+                                </button>
+
                                 <button type="button" @click="openModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                                     <span>Acción Masiva</span>
@@ -330,7 +344,14 @@
                                     <div class="hidden sm:flex flex-col items-center">
                                         <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Documento</span>
                                         @if($r->uuid)
-                                            <span class="text-[9px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded border border-indigo-100 dark:border-indigo-800 uppercase tracking-tighter">Factura</span>
+                                            <div class="flex items-center space-x-1">
+                                                <span class="text-[9px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded border border-indigo-100 dark:border-indigo-800 uppercase tracking-tighter">Factura</span>
+                                                @if($r->xml_path)
+                                                    <a href="{{ route('reimbursements.download_file', ['reimbursement' => $r->id, 'type' => 'xml']) }}" @click.stop class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300" title="Descargar XML">
+                                                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                                    </a>
+                                                @endif
+                                            </div>
                                         @else
                                             <span class="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded border border-amber-100 dark:border-amber-800 uppercase tracking-tighter">Ticket / Manual</span>
                                         @endif
@@ -505,6 +526,16 @@
                                         <button type="button" @click="downloadCaratula()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-emerald-200 flex items-center space-x-2">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                             <span>Descargar Carátula</span>
+                                        </button>
+
+                                        <button type="button" @click="downloadXML()" class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-amber-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                            <span>Descargar XML</span>
+                                        </button>
+
+                                        <button type="button" @click="downloadCSV()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                            <span>Descargar CSV</span>
                                         </button>
 
                                         <button type="button" @click="openModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
@@ -798,6 +829,18 @@
                 return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             },
 
+            downloadXMLSelected() {
+                if (this.selectedIds.length === 0) return;
+                const ids = this.selectedIds.join(',');
+                window.location.href = `{{ route('reimbursements.export_xml') }}?ids=${ids}`;
+            },
+
+            downloadCSVSelected() {
+                if (this.selectedIds.length === 0) return;
+                const ids = this.selectedIds.join(',');
+                window.location.href = `{{ route('reimbursements.export') }}?ids=${ids}`;
+            },
+
             async downloadCaratulaSelected() {
                 if (this.selectedIds.length === 0) return;
 
@@ -939,6 +982,18 @@
                 
                 formatMoney(amount) {
                     return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                },
+                
+                downloadXML() {
+                    if (this.selectedIds.length === 0) return;
+                    const ids = this.selectedIds.join(',');
+                    window.location.href = `{{ route('reimbursements.export_xml') }}?ids=${ids}`;
+                },
+                
+                downloadCSV() {
+                    if (this.selectedIds.length === 0) return;
+                    const ids = this.selectedIds.join(',');
+                    window.location.href = `{{ route('reimbursements.export') }}?ids=${ids}`;
                 },
                 
                 async downloadCaratula() {
