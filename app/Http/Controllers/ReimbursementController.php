@@ -2345,7 +2345,6 @@ class ReimbursementController extends Controller
             'combustibles y lubricantes',
             'estacionamientos y casetas',
             'hospedajes',
-            'comidas',
             'papelería y articulos de oficina',
             'herramientas y refacciones',
             'materiales diversos',
