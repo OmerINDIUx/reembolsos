@@ -155,6 +155,7 @@
                 <th>Categoría</th>
                 <th class="text-right">Subtotal</th>
                 <th class="text-right">IVA</th>
+                <th class="text-right">Propina</th>
                 <th class="text-right">Total</th>
             </tr>
         </thead>
@@ -165,14 +166,16 @@
                     <td><span class="badge">{{ strtoupper($item['category']) }}</span></td>
                     <td class="text-right">${{ number_format($item['subtotal'], 2) }}</td>
                     <td class="text-right">${{ number_format($item['impuestos'], 2) }}</td>
-                    <td class="text-right">${{ number_format($item['total'], 2) }}</td>
+                    <td class="text-right">${{ number_format($item['propina'] ?? 0, 2) }}</td>
+                    <td class="text-right">${{ number_format($item['total'] + ($item['propina'] ?? 0), 2) }}</td>
                 </tr>
             @endforeach
             <tr class="total-row">
                 <td colspan="2">TOTAL ACUMULADO</td>
                 <td class="text-right">${{ number_format($totals['subtotal'], 2) }}</td>
                 <td class="text-right">${{ number_format($totals['impuestos'], 2) }}</td>
-                <td class="text-right">${{ number_format($totals['total'], 2) }}</td>
+                <td class="text-right">${{ number_format($totals['propina'] ?? 0, 2) }}</td>
+                <td class="text-right">${{ number_format($totals['total'] + ($totals['propina'] ?? 0), 2) }}</td>
             </tr>
         </tbody>
     </table>

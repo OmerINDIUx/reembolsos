@@ -88,6 +88,7 @@
                                         <option value="">Selecciona el Centro de Costos...</option>
                                         @foreach($costCenters as $center)
                                             <option value="{{ $center->id }}" 
+                                                @selected(isset($reimbursement) && $reimbursement->cost_center_id == $center->id)
                                                 data-beneficiary="{{ $center->beneficiary->name ?? 'Sin Beneficiario' }}" 
                                                 data-beneficiary-id="{{ $center->beneficiary_id }}"
                                                 data-beneficiary-clabe="{{ $center->beneficiary->masked_clabe ?? '' }}">
@@ -103,7 +104,7 @@
                                 <select name="travel_event_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" :required="type === 'viaje' && chargeType === 'travel_event'">
                                     <option value="">Selecciona el Viaje o Evento...</option>
                                     @foreach($travelEvents as $event)
-                                        <option value="{{ $event->id }}">{{ $event->name }} ({{ $event->code }})</option>
+                                        <option value="{{ $event->id }}" @selected(isset($reimbursement) && $reimbursement->travel_event_id == $event->id)>{{ $event->name }} ({{ $event->code }})</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -113,7 +114,7 @@
                                 @if(count($availableWeeks) > 1)
                                     <select name="week" x-model="processWeek" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5 font-bold">
                                         @foreach($availableWeeks as $week)
-                                            <option value="{{ $week }}">Semana {{ explode('-', $week)[0] }} ({{ explode('-', $week)[1] }}) @if($loop->first) - Actual @else - Siguiente @endif</option>
+                                            <option value="{{ $week }}" @selected(isset($reimbursement) && $reimbursement->week === $week)>Semana {{ explode('-', $week)[0] }} ({{ explode('-', $week)[1] }}) @if($loop->first) - Actual @else - Siguiente @endif</option>
                                         @endforeach
                                     </select>
                                 @else
@@ -137,7 +138,7 @@
                                     <div class="flex-1">
                                         <p class="text-[10px] font-black text-amber-600 uppercase tracking-widest leading-none mb-3">Propietario del Gasto</p>
                                         <select name="user_id" x-on:change="updateOwner" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all py-3 px-4 text-sm font-bold">
-                                            <option value="{{ Auth::id() }}" data-clabe="{{ Auth::user()->clabe ? '**** ' . substr(Auth::user()->clabe, -4) : '' }}">A mi nombre ({{ Auth::user()->name }})</option>
+                                            <option value="{{ Auth::id() }}" @selected(isset($reimbursement) && $reimbursement->user_id == Auth::id()) data-clabe="{{ Auth::user()->clabe ? '**** ' . substr(Auth::user()->clabe, -4) : '' }}">A mi nombre ({{ Auth::user()->name }})</option>
                                             <template x-for="colleague in filteredColleagues" :key="colleague.id">
                                                 <option :value="colleague.id" :data-clabe="colleague.clabe" x-text="'A nombre de: ' + colleague.name"></option>
                                             </template>
@@ -148,7 +149,7 @@
                                             <p class="text-xs font-bold uppercase tracking-tight">Este usuario no cuenta con una CLABE registrada. Es obligatorio para poder registrar sus gastos.</p>
                                         </div>
                                         
-                                        <p class="mt-3 text-[10px] text-amber-600 font-bold italic">* Solo puedes elegir colegas que pertenezcan al Centro de Costos seleccionado.</p>
+                                        <p class="mt-3 text-[10px] text-amber-600 font-bold italic">* Solo puedes elegir colegas asignados al centro de costos seleccionado.</p>
                                     </div>
                                 </div>
                             </div>
@@ -266,6 +267,10 @@
                                                     <span>Archivo XML (CFDI) *</span>
                                                     <span class="text-[9px] font-black text-gray-400 uppercase italic">Máx 10MB</span>
                                                 </label>
+                                                <div x-show="item.fileName" class="mb-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-xl">
+                                                    <p class="text-[9px] font-black text-green-600 uppercase tracking-widest mb-0.5">Archivo cargado</p>
+                                                    <p class="text-xs font-bold text-gray-800 dark:text-gray-200 truncate" x-text="item.fileName" :title="item.fileName"></p>
+                                                </div>
                                                 <input type="file" :name="'items['+index+'][xml_file]'" accept=".xml" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :required="hasInvoice && !item.fileName" x-on:change="handleXmlChange($event, index)">
                                                 <template x-if="item.fileName">
                                                     <div class="mt-1 flex items-center justify-between">
@@ -295,12 +300,16 @@
                                                             <span class="ml-2 text-[10px] font-bold text-gray-500 uppercase">Sin PDF</span>
                                                         </label>
                                                     </div>
+                                                    <div x-show="item.pdfName" class="mb-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-xl">
+                                                        <p class="text-[9px] font-black text-green-600 uppercase tracking-widest mb-0.5">PDF cargado</p>
+                                                        <p class="text-xs font-bold text-gray-800 dark:text-gray-200 truncate" x-text="item.pdfName" :title="item.pdfName"></p>
+                                                    </div>
                                                     <input type="file" :name="'items['+index+'][pdf_file]'" accept=".pdf" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-3" :disabled="item.noPdf" :required="!item.noPdf && item.xmlParsed && hasInvoice && !item.pdfName" x-on:change="handlePdfChange($event, index)">
                                                     <template x-if="item.pdfName">
                                                         <div class="mt-1 flex items-center justify-between">
                                                             <div class="flex items-center text-[10px] text-green-600 font-bold uppercase italic">
                                                                 <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>
-                                                                <span>PDF Guardado</span>
+                                                                <span x-text="item.pdfName"></span>
                                                             </div>
                                                             <template x-if="item.draftId">
                                                                 <a :href="'/reimbursements/' + item.draftId + '/view-file/pdf'" target="_blank" class="text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest flex items-center bg-indigo-50 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100">
@@ -316,12 +325,16 @@
                                                             <span>Ticket / Pruebas Adicionales</span>
                                                             <span class="text-[9px] font-black text-gray-400 uppercase italic">Máx 10MB</span>
                                                         </label>
+                                                        <div x-show="item.ticketName" class="mb-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-xl">
+                                                            <p class="text-[9px] font-black text-green-600 uppercase tracking-widest mb-0.5">Ticket / prueba cargado</p>
+                                                            <p class="text-xs font-bold text-gray-800 dark:text-gray-200 truncate" x-text="item.ticketName" :title="item.ticketName"></p>
+                                                        </div>
                                                         <input type="file" :name="'items['+index+'][ticket_file]'" accept=".pdf,.jpg,.jpeg,.png,.txt" class="block w-full text-xs text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 dark:text-gray-400 focus:outline-none p-2" :required="!item.ticketName" x-on:change="handleTicketChange($event, index)">
                                                         <template x-if="item.ticketName">
                                                             <div class="mt-1 flex items-center justify-between">
                                                                 <div class="flex items-center text-[10px] text-green-600 font-bold uppercase italic">
                                                                     <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>
-                                                                    <span>Ticket Guardado</span>
+                                                                    <span x-text="item.ticketName"></span>
                                                                 </div>
                                                                 <template x-if="item.draftId">
                                                                     <a :href="'/reimbursements/' + item.draftId + '/view-file/ticket'" target="_blank" class="text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest flex items-center bg-indigo-50 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100">
@@ -385,7 +398,7 @@
                                                         <div class="mt-1 flex items-center justify-between mb-4">
                                                             <div class="flex items-center text-[10px] text-green-600 font-bold uppercase italic">
                                                                 <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>
-                                                                <span>Ticket Guardado</span>
+                                                                <span x-text="item.ticketName"></span>
                                                             </div>
                                                             <template x-if="item.draftId">
                                                                 <a :href="'/reimbursements/' + item.draftId + '/view-file/ticket'" target="_blank" class="text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest flex items-center bg-indigo-50 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100">
@@ -497,7 +510,7 @@
                                                         <input type="text" :name="'items['+index+'][nombre_receptor]'" :value="item.data.nombre_receptor" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs mb-3" readonly>
                                                         <!-- RESTORED CONFIRMATION -->
                                                         <div class="flex items-center">
-                                                            <input type="checkbox" :name="'items['+index+'][confirm_company]'" class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" required>
+                                                            <input type="checkbox" :name="'items['+index+'][confirm_company]'" x-model="item.companyConfirmed" class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" required>
                                                             <label class="ml-2 text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase italic">
                                                                 Confirmo que esta es la empresa en la que estoy dado de alta como colaborador(a).
                                                             </label>
@@ -536,24 +549,41 @@
                                                     <p class="mt-1 text-[9px] font-bold text-red-600 uppercase">El subtotal no puede ser mayor al total</p>
                                                 </template>
                                                 
-                                                <!-- Limit Warning -->
-                                                <template x-if="!hasInvoice && item.data.total > 2000">
-                                                    <div class="mt-4 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-2xl animate-shake">
+                                                <!-- Aviso informativo sin factura > $2,000 -->
+                                                <template x-if="!hasInvoice && parseFloat(item.data.total) > 2000">
+                                                    <div class="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl">
                                                         <div class="flex items-start">
                                                             <div class="flex-shrink-0">
-                                                                <svg class="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                                                 </svg>
                                                             </div>
                                                             <div class="ml-3">
-                                                                <h3 class="text-xs font-black text-red-800 dark:text-red-400 uppercase tracking-tight">Límite Excedido</h3>
-                                                                <p class="mt-1 text-[10px] font-bold text-red-700 dark:text-red-300 leading-relaxed uppercase">
-                                                                    No se pueden hacer reembolsos mayores a $2,000 MXN sin factura. 
-                                                                    Por favor comunícate con tu director para revisar la situación.
+                                                                <h3 class="text-xs font-black text-amber-800 dark:text-amber-300 uppercase tracking-tight">Monto elevado sin factura</h3>
+                                                                <p class="mt-1 text-[10px] font-bold text-amber-700 dark:text-amber-200/90 leading-relaxed uppercase">
+                                                                    Este gasto supera $2,000 MXN sin factura. Puedes continuar con el registro; te recomendamos comunicarte con tu director para revisar la situación.
                                                                 </p>
                                                             </div>
                                                         </div>
                                                     </div>
+                                                </template>
+                                            </div>
+
+                                            <div x-show="hasInvoice && type === 'comida'">
+                                                <label class="block text-[10px] font-black text-orange-500 dark:text-orange-400 uppercase tracking-widest mb-2">Propina Manual</label>
+                                                <div class="relative">
+                                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-orange-400">$</span>
+                                                    <input type="number" step="0.01" min="0"
+                                                        :max="Math.round((parseFloat(item.data.total) || 0) * 0.15 * 100) / 100"
+                                                        :name="'items['+index+'][propina]'"
+                                                        x-model="item.data.propina"
+                                                        @input="const max = Math.round((parseFloat(item.data.total) || 0) * 0.15 * 100) / 100; if (parseFloat(item.data.propina || 0) > max) item.data.propina = max"
+                                                        class="w-full bg-orange-50 dark:bg-orange-900/30 border-2 border-orange-100 dark:border-orange-900/30 rounded-xl py-3 pl-8 text-sm font-bold text-orange-600 dark:text-orange-400 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all placeholder-gray-300"
+                                                        placeholder="0.00">
+                                                </div>
+                                                <p class="mt-1 text-[9px] font-medium text-orange-500 dark:text-orange-400/80">Máximo 15% del total del gasto (<span x-text="'$' + (Math.round((parseFloat(item.data.total) || 0) * 0.15 * 100) / 100).toFixed(2)"></span>, no afecta impuestos)</p>
+                                                <template x-if="parseFloat(item.data.propina || 0) > (parseFloat(item.data.total) || 0) * 0.15">
+                                                    <p class="mt-1 text-[9px] font-bold text-red-600 uppercase">La propina no puede exceder el 15% del total del gasto</p>
                                                 </template>
                                             </div>
                                         </div>
@@ -578,10 +608,10 @@
                                                     </div>
 
                                                     <div class="grid grid-cols-1 md:grid-cols-12 gap-8 relative">
-                                                        <div class="md:col-span-4">
+                                                        <div :class="hasInvoice ? 'md:col-span-4' : 'md:col-span-4'">
                                                             <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Nº Asistentes *</label>
                                                             <div class="relative">
-                                                                <input type="number" :name="'items['+index+'][attendees_count]'" min="1" class="w-full bg-white dark:bg-gray-900 border-2 border-orange-50 dark:border-orange-900/20 rounded-2xl py-4 px-6 text-sm font-bold focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all placeholder-gray-300" :required="type === 'comida'" placeholder="0">
+                                                                <input type="number" :name="'items['+index+'][attendees_count]'" x-model="item.data.attendees_count" min="1" class="w-full bg-white dark:bg-gray-900 border-2 border-orange-50 dark:border-orange-900/20 rounded-2xl py-4 px-6 text-sm font-bold focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all placeholder-gray-300" :required="type === 'comida'" placeholder="0">
                                                                 <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
                                                                     <svg class="w-5 h-5 text-orange-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
                                                                 </div>
@@ -591,7 +621,7 @@
                                                         <div class="md:col-span-8">
                                                             <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Establecimiento / Lugar *</label>
                                                             <div class="relative">
-                                                                <input type="text" :name="'items['+index+'][location]'" class="w-full bg-white dark:bg-gray-900 border-2 border-orange-50 dark:border-orange-900/20 rounded-2xl py-4 px-6 text-sm font-bold focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all placeholder-gray-300" :required="type === 'comida'" placeholder="Nombre del restaurante o local">
+                                                                <input type="text" :name="'items['+index+'][location]'" x-model="item.data.location" class="w-full bg-white dark:bg-gray-900 border-2 border-orange-50 dark:border-orange-900/20 rounded-2xl py-4 px-6 text-sm font-bold focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all placeholder-gray-300" :required="type === 'comida'" placeholder="Nombre del restaurante o local">
                                                                 <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
                                                                     <svg class="w-5 h-5 text-orange-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.828a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                                                                 </div>
@@ -600,7 +630,7 @@
 
                                                         <div class="md:col-span-12">
                                                             <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Relación de Invitados (Nombres)</label>
-                                                            <textarea :name="'items['+index+'][attendees_names]'" rows="3" class="w-full bg-white dark:bg-gray-900 border-2 border-orange-50 dark:border-orange-900/20 rounded-2xl p-6 text-sm font-medium focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all placeholder-gray-300" :required="type === 'comida'" placeholder="Escribe los nombres de las personas que asistieron..."></textarea>
+                                                            <textarea :name="'items['+index+'][attendees_names]'" x-model="item.data.attendees_names" rows="3" class="w-full bg-white dark:bg-gray-900 border-2 border-orange-50 dark:border-orange-900/20 rounded-2xl p-6 text-sm font-medium focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all placeholder-gray-300" :required="type === 'comida'" placeholder="Escribe los nombres de las personas que asistieron..."></textarea>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -748,8 +778,8 @@
                                 </button>
                                 
                                 <button type="submit" 
-                                    :disabled="(!hasInvoice && (items.some(i => i.data.total > 2000) || items.some(i => parseFloat(i.data.subtotal) > parseFloat(i.data.total)))) || (selectedOwnerId != '{{ Auth::id() }}' && !selectedOwnerClabe)"
-                                    :class="((!hasInvoice && (items.some(i => i.data.total > 2000) || items.some(i => parseFloat(i.data.subtotal) > parseFloat(i.data.total)))) || (selectedOwnerId != '{{ Auth::id() }}' && !selectedOwnerClabe)) ? 'opacity-50 cursor-not-allowed grayscale' : ''"
+                                    :disabled="(!hasInvoice && items.some(i => parseFloat(i.data.subtotal) > parseFloat(i.data.total))) || (selectedOwnerId != '{{ Auth::id() }}' && !selectedOwnerClabe)"
+                                    :class="((!hasInvoice && items.some(i => parseFloat(i.data.subtotal) > parseFloat(i.data.total))) || (selectedOwnerId != '{{ Auth::id() }}' && !selectedOwnerClabe)) ? 'opacity-50 cursor-not-allowed grayscale' : ''"
                                     class="group inline-flex items-center px-12 py-6 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xl uppercase italic hover:bg-indigo-700 shadow-xl transition-all transform hover:scale-105">
                                     <span>REGISTRAR</span>
                                     <svg class="w-6 h-6 ml-3 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
@@ -821,24 +851,46 @@
                         this.tripEndDate = @json($reimbursement->trip_end_date ? $reimbursement->trip_end_date->format("Y-m-d") : "");
                         this.observacionesGeneral = @json($reimbursement->observaciones);
                         
-                        // Handle Payee Initialization
-                        @if($reimbursement->payee_id)
-                                @if($reimbursement->payee_id === Auth::id())
-                                    this.payeeOption = 'creator';
-                                @else
-                                    this.payeeOption = 'beneficiary';
-                                    this.selectedCcBeneficiaryId = @json($reimbursement->payee_id);
-                                    this.selectedCcBeneficiary = @json($reimbursement->payee->name ?? 'Beneficiario');
-                                    this.selectedCcBeneficiaryClabe = @json(($reimbursement->payee_id === Auth::id() && Auth::user()->clabe) ? '**** ' . substr(Auth::user()->clabe, -4) : '');
-                                @endif
+                        this.selectedOwnerId = @json($reimbursement->user_id);
+                        this.selectedOwnerName = @json($reimbursement->user->name ?? Auth::user()->name);
+                        @php
+                            $draftOwnerClabe = $reimbursement->user->clabe ?? null;
+                        @endphp
+                        this.selectedOwnerClabe = @json($draftOwnerClabe ? '**** ' . substr($draftOwnerClabe, -4) : '');
+
+                        @php
+                            $draftPayeeId = $reimbursement->payee_id;
+                            $draftOwnerId = $reimbursement->user_id;
+                            $ccBeneficiaryId = $reimbursement->costCenter?->beneficiary_id;
+                        @endphp
+                        @if($draftPayeeId)
+                            @if($draftPayeeId == $draftOwnerId)
+                                this.payeeOption = 'creator';
+                            @elseif($ccBeneficiaryId && $draftPayeeId == $ccBeneficiaryId)
+                                this.payeeOption = 'beneficiary';
+                            @elseif($draftPayeeId == Auth::id())
+                                this.payeeOption = 'creator';
+                            @else
+                                this.payeeOption = 'beneficiary';
+                            @endif
                         @endif
                         
                         // Initialize parent item (main draft)
+                        @php
+                            $draftXmlLabel = $reimbursement->original_xml_name
+                                ?: ($reimbursement->xml_path
+                                    ? ('Factura: ' . ($reimbursement->folio ?: (substr($reimbursement->uuid ?? '', 0, 8) ?: basename($reimbursement->xml_path))))
+                                    : '');
+                            $draftPdfLabel = $reimbursement->original_pdf_name
+                                ?: ($reimbursement->pdf_path ? basename($reimbursement->pdf_path) : '');
+                            $draftTicketLabel = $reimbursement->ticket_path ? basename($reimbursement->ticket_path) : '';
+                        @endphp
                         this.addItem({
                             draftId: @json($reimbursement->id),
-                            fileName: @json($reimbursement->xml_path ? "Factura: " . ($reimbursement->folio ?: (substr($reimbursement->uuid, 0, 8) ?: 'Cargada')) : ""),
-                            pdfName: @json($reimbursement->pdf_path ? "PDF Guardado" : ""),
-                            ticketName: @json($reimbursement->ticket_path ? "Ticket/Prueba Guardado" : ""),
+                            fileName: @json($draftXmlLabel),
+                            pdfName: @json($draftPdfLabel),
+                            ticketName: @json($draftTicketLabel),
+                            companyConfirmed: @json((bool) $reimbursement->company_confirmed),
                             xmlParsed: {{ $reimbursement->xml_path ? 'true' : 'false' }},
                             data: {
                                 uuid: @json($reimbursement->uuid),
@@ -859,17 +911,31 @@
                                 regimen_fiscal_emisor: @json($reimbursement->regimen_fiscal_emisor),
                                 category: @json($reimbursement->category),
                                 pdf_validation: @json($reimbursement->validation_data),
-                                observaciones: @json($reimbursement->observaciones)
+                                observaciones: @json($reimbursement->observaciones),
+                                attendees_count: @json($reimbursement->attendees_count),
+                                location: @json($reimbursement->location),
+                                attendees_names: @json($reimbursement->attendees_names),
+                                propina: {{ $reimbursement->propina ?: 0 }}
                             }
                         });
 
                         // Initialize children items if they exist
                         @foreach($reimbursement->children as $child)
+                            @php
+                                $childXmlLabel = $child->original_xml_name
+                                    ?: ($child->xml_path
+                                        ? ('Factura: ' . ($child->folio ?: (substr($child->uuid ?? '', 0, 8) ?: basename($child->xml_path))))
+                                        : '');
+                                $childPdfLabel = $child->original_pdf_name
+                                    ?: ($child->pdf_path ? basename($child->pdf_path) : '');
+                                $childTicketLabel = $child->ticket_path ? basename($child->ticket_path) : '';
+                            @endphp
                             this.addItem({
                                 draftId: @json($child->id),
-                                fileName: @json($child->xml_path ? "Factura: " . ($child->folio ?: (substr($child->uuid, 0, 8) ?: 'Cargada')) : ""),
-                                pdfName: @json($child->pdf_path ? "PDF Guardado" : ""),
-                                ticketName: @json($child->ticket_path ? "Ticket/Prueba Guardado" : ""),
+                                fileName: @json($childXmlLabel),
+                                pdfName: @json($childPdfLabel),
+                                ticketName: @json($childTicketLabel),
+                                companyConfirmed: @json((bool) $child->company_confirmed),
                                 xmlParsed: {{ $child->xml_path ? 'true' : 'false' }},
                                 data: {
                                     uuid: @json($child->uuid),
@@ -890,12 +956,20 @@
                                     regimen_fiscal_emisor: @json($child->regimen_fiscal_emisor),
                                     category: @json($child->category),
                                     pdf_validation: @json($child->validation_data),
-                                    observaciones: @json($child->observaciones)
+                                    observaciones: @json($child->observaciones),
+                                    attendees_count: @json($child->attendees_count),
+                                    location: @json($child->location),
+                                    attendees_names: @json($child->attendees_names),
+                                    propina: {{ $child->propina ?: 0 }}
                                 }
                             });
                         @endforeach
                     @else
                         this.addItem(); 
+                    @endif
+
+                    @if(isset($reimbursement))
+                        this.$nextTick(() => this.restoreDraftStep1());
                     @endif
 
                     // Trigger validation for items that have both files but no validation record yet
@@ -907,6 +981,36 @@
 
                     // Auto-save every 30 seconds
                     setInterval(() => this.saveDraft(true), 30000);
+                },
+                restoreDraftStep1() {
+                    @if(isset($reimbursement))
+                    const ccId = @json($reimbursement->cost_center_id);
+                    const travelEventId = @json($reimbursement->travel_event_id);
+                    const ownerId = @json($reimbursement->user_id);
+
+                    if (ccId) {
+                        const ccSelect = document.querySelector('select[name="cost_center_id"]');
+                        if (ccSelect) {
+                            ccSelect.value = String(ccId);
+                            ccSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+
+                    if (travelEventId) {
+                        const teSelect = document.querySelector('select[name="travel_event_id"]');
+                        if (teSelect) {
+                            teSelect.value = String(travelEventId);
+                        }
+                    }
+
+                    if (ownerId) {
+                        const ownerSelect = document.querySelector('select[name="user_id"]');
+                        if (ownerSelect) {
+                            ownerSelect.value = String(ownerId);
+                            ownerSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+                    @endif
                 },
                 updateBeneficiary(e) {
                     const selectedOption = e.target.options[e.target.selectedIndex];
@@ -980,12 +1084,14 @@
                         ticketName: initialData ? initialData.ticketName : '',
                         xmlParsed: initialData ? initialData.xmlParsed : false,
                         noPdf: false,
+                        companyConfirmed: initialData ? !!initialData.companyConfirmed : false,
                         manualData: { nombre_emisor: '', fecha: '', subtotal: 0, total: 0, impuestos: 0 },
                         data: initialData ? initialData.data : { 
                             uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', 
                             nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, 
                             impuestos: 0, metodo_pago: '', forma_pago: '', uso_cfdi: '', 
-                            lugar_expedicion: '', regimen_fiscal_emisor: '', category: '', observaciones: '' 
+                            lugar_expedicion: '', regimen_fiscal_emisor: '', category: '', observaciones: '',
+                            attendees_count: '', location: '', attendees_names: '', propina: 0
                         }
                     };
                     
@@ -996,6 +1102,8 @@
 
                     // NEW: Prevent autosave if Step 2 is empty
                     if (isAuto) {
+                        const ccSelect = document.querySelector('select[name="cost_center_id"]');
+                        const hasStep1Data = !!(ccSelect && ccSelect.value) || !!this.selectedCostCenterId;
                         let hasStep2Data = this.items.some(item => {
                             return item.draftId || // Already saved
                                    item.xmlParsed || // XML exists
@@ -1003,10 +1111,11 @@
                                    item.ticketName || // Ticket preview exists
                                    parseFloat(item.data.total) > 0 || // Amount exists
                                    (item.data.nombre_emisor && item.data.nombre_emisor.trim() !== '') ||
-                                   (item.data.observaciones && item.data.observaciones.trim() !== '');
+                                   (item.data.observaciones && item.data.observaciones.trim() !== '') ||
+                                   (item.data.category && item.data.category.trim() !== '');
                         });
 
-                        if (!hasStep2Data) return; // Ignore if no data in Step 2
+                        if (!hasStep1Data && !hasStep2Data) return;
                     }
 
                     this.isSaving = true;
@@ -1049,12 +1158,16 @@
                                         this.items[index].draftId = r.id;
                                         if (r.has_xml) {
                                             this.items[index].xmlParsed = true;
-                                            if (!this.items[index].fileName) {
+                                            if (r.xml_name) {
+                                                this.items[index].fileName = r.xml_name;
+                                            } else if (!this.items[index].fileName) {
                                                 this.items[index].fileName = 'Factura: ' + (r.folio || 'Guardada');
                                             }
                                         }
-                                        if (r.has_pdf) this.items[index].pdfName = 'PDF Guardado';
-                                        if (r.has_ticket) this.items[index].ticketName = 'Ticket Guardado';
+                                        if (r.has_pdf && r.pdf_name) this.items[index].pdfName = r.pdf_name;
+                                        else if (r.has_pdf && !this.items[index].pdfName) this.items[index].pdfName = 'PDF guardado';
+                                        if (r.has_ticket && r.ticket_name) this.items[index].ticketName = r.ticket_name;
+                                        else if (r.has_ticket && !this.items[index].ticketName) this.items[index].ticketName = 'Ticket guardado';
                                         if (r.folio) this.items[index].folio = r.folio;
                                     }
                                 });
@@ -1137,7 +1250,7 @@
                         return;
                     }
 
-                    this.items[index].fileName = 'Leyendo...';
+                    this.items[index].fileName = file.name;
                     this.validateFiles(index);
                     this.calculateTotalFileSize();
                 },
@@ -1173,6 +1286,10 @@
                         });
                         e.target.value = '';
                         return;
+                    }
+
+                    if (typeof index !== 'undefined') {
+                        this.items[index].pdfName = file.name;
                     }
 
                     if (this.hasInvoice) {
@@ -1362,9 +1479,22 @@
                                 return;
                             }
 
-                            item.xmlParsed = true; 
-                            item.data = d; 
-                            item.fileName = 'Factura: ' + (d.folio || (d.uuid ? d.uuid.substring(0, 8) : '???'));
+                             const oldPropina = item.data.propina || 0;
+                             const oldAttendeesCount = item.data.attendees_count || '';
+                             const oldLocation = item.data.location || '';
+                             const oldAttendeesNames = item.data.attendees_names || '';
+                             const oldCategory = item.data.category || '';
+                             const oldObservaciones = item.data.observaciones || '';
+                             item.xmlParsed = true; 
+                             item.data = d; 
+                             const maxPropina = Math.round((parseFloat(item.data.total) || 0) * 0.15 * 100) / 100;
+                             item.data.propina = Math.min(parseFloat(oldPropina) || 0, maxPropina);
+                             item.data.attendees_count = oldAttendeesCount;
+                             item.data.location = oldLocation;
+                             item.data.attendees_names = oldAttendeesNames;
+                             if (oldCategory) item.data.category = oldCategory;
+                             if (oldObservaciones) item.data.observaciones = oldObservaciones;
+                             item.fileName = 'Factura: ' + (d.folio || (d.uuid ? d.uuid.substring(0, 8) : '???'));
                             
                             if (d.pdf_validation && !d.pdf_validation.uuid_match && !item.noPdf && !d.pdf_validation.is_missing) {
                                 Swal.fire({
@@ -1469,6 +1599,31 @@
                             }
                         });
                         return;
+                    }
+
+                    if (this.type === 'comida' && this.hasInvoice) {
+                        const hasExceededTip = this.items.some(i => {
+                            const total = parseFloat(i.data.total) || 0;
+                            const propina = parseFloat(i.data.propina) || 0;
+                            const maxPropina = Math.round(total * 0.15 * 100) / 100;
+                            return propina > maxPropina;
+                        });
+
+                        if (hasExceededTip) {
+                            e.preventDefault();
+                            Swal.fire({
+                                title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Límite de Propina Excedido</span>',
+                                html: `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">La propina manual <b>no puede ser mayor al 15% del total del gasto</b>. Por favor, corrígela antes de enviar.</p>`,
+                                icon: 'error',
+                                confirmButtonText: 'CORREGIR',
+                                confirmButtonColor: '#ef4444',
+                                customClass: {
+                                    popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
+                                    confirmButton: 'rounded-xl px-8 py-3 font-black text-xs uppercase tracking-widest'
+                                }
+                            });
+                            return;
+                        }
                     }
 
                     if (!this.hasInvoice) {

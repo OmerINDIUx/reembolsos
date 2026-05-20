@@ -213,7 +213,11 @@
                                                     </form>
 
                                                     @if($cc->reimbursements_count == 0)
-                                                    <form action="{{ route('cost_centers.destroy', $cc->id) }}" method="POST" class="inline" onsubmit="return confirm('¿Estás seguro de eliminar permanentemente este centro de costos?');">
+                                                    <form action="{{ route('cost_centers.destroy', $cc->id) }}" method="POST" class="inline"
+                                                          data-confirm="Se eliminará permanentemente este centro de costos y sus datos vinculados."
+                                                          data-confirm-title="¿Eliminar centro de costos?"
+                                                          data-confirm-type="danger"
+                                                          data-confirm-btn="SÍ, ELIMINAR">
                                                         @csrf
                                                         @method('DELETE')
                                                         <button type="submit" class="text-red-600 hover:text-red-900 transition-colors">
@@ -231,7 +235,11 @@
                                                     </form>
 
                                                     @if($cc->reimbursements_count == 0)
-                                                    <form action="{{ route('cost_centers.destroy', $cc->id) }}" method="POST" class="inline" onsubmit="return confirm('¿Estás seguro de eliminar permanentemente este centro de costos del historial?');">
+                                                    <form action="{{ route('cost_centers.destroy', $cc->id) }}" method="POST" class="inline"
+                                                          data-confirm="Se eliminará permanentemente este centro de costos del historial."
+                                                          data-confirm-title="¿Eliminar del historial?"
+                                                          data-confirm-type="danger"
+                                                          data-confirm-btn="SÍ, ELIMINAR">
                                                         @csrf
                                                         @method('DELETE')
                                                         <button type="submit" class="text-red-600 hover:text-red-900 transition-colors">

@@ -13,7 +13,7 @@ class RBACSeeder extends Seeder
     {
         // Define Modules and Permissions
         $modules = [
-            'reimbursements' => ['view', 'create', 'create_special', 'create_on_behalf', 'edit', 'delete', 'approve', 'bulk_approve', 'export'],
+            'reimbursements' => ['view', 'create', 'create_special', 'create_on_behalf', 'create_all_cost_centers', 'edit', 'delete', 'approve', 'bulk_approve', 'export', 'global_history'],
             'users' => ['view', 'create', 'edit', 'delete'],
             'cost_centers' => ['view', 'create', 'edit', 'delete'],
             'travel_events' => ['view', 'create', 'edit', 'delete', 'close'],
@@ -32,6 +32,8 @@ class RBACSeeder extends Seeder
             'bulk_approve' => 'Permite procesar aprobaciones masivas mediante archivos CSV.',
             'export' => 'Permite exportar datos a formatos Excel/CSV.',
             'close' => 'Permite dar por finalizados los eventos de viaje.',
+            'global_history' => 'Permite visualizar la pestaña de Historial Global en el listado de reembolsos.',
+            'create_all_cost_centers' => 'Permite crear reembolsos en cualquier centro de costos activo, sin estar asignado al centro.',
         ];
 
         foreach ($modules as $module => $actions) {
@@ -43,6 +45,12 @@ class RBACSeeder extends Seeder
                 }
                 if ($action === 'bulk_approve') {
                     $displayName = 'Aprobación Masiva (CSV)';
+                }
+                if ($action === 'global_history') {
+                    $displayName = 'Ver Historial Global';
+                }
+                if ($action === 'create_all_cost_centers') {
+                    $displayName = 'Reembolsar en todos los centros de costos';
                 }
                 
                 $description = $descriptions[$action] ?? "Permite realizar la acción {$action} en el módulo {$module}.";
@@ -62,31 +70,31 @@ class RBACSeeder extends Seeder
             ],
             'admin_view' => [
                 'display_name' => 'Administrador (Lectura)',
-                'permissions' => ['reimbursements.view', 'users.view', 'cost_centers.view', 'travel_events.view', 'profiles.view'],
+                'permissions' => ['reimbursements.view', 'users.view', 'cost_centers.view', 'travel_events.view', 'profiles.view', 'reimbursements.global_history'],
             ],
             'director' => [
                 'display_name' => 'Director N1',
-                'permissions' => ['reimbursements.view', 'reimbursements.approve'],
+                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.global_history'],
             ],
             'control_obra' => [
                 'display_name' => 'Control de Obra N2',
-                'permissions' => ['reimbursements.view', 'reimbursements.approve'],
+                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.global_history'],
             ],
             'director_ejecutivo' => [
                 'display_name' => 'Director Ejecutivo N3',
-                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'users.view', 'cost_centers.view'],
+                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'users.view', 'cost_centers.view', 'reimbursements.global_history'],
             ],
             'accountant' => [
                 'display_name' => 'Cuentas por Pagar N4',
-                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.bulk_approve', 'reimbursements.export', 'users.view', 'cost_centers.view'],
+                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.bulk_approve', 'reimbursements.export', 'users.view', 'cost_centers.view', 'reimbursements.global_history'],
             ],
             'direccion' => [
                 'display_name' => 'Subdirección N5',
-                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'users.view', 'cost_centers.view'],
+                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'users.view', 'cost_centers.view', 'reimbursements.global_history'],
             ],
             'tesoreria' => [
                 'display_name' => 'Dirección N6',
-                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.bulk_approve', 'reimbursements.export'],
+                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.bulk_approve', 'reimbursements.export', 'reimbursements.global_history'],
             ],
             'user' => [
                 'display_name' => 'Usuario General',

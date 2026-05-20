@@ -62,7 +62,11 @@
                                             </a>
                                             
                                             @if($profile->users_count == 0 && !in_array($profile->name, ['admin', 'director', 'accountant', 'user']))
-                                            <form action="{{ route('profiles.destroy', $profile) }}" method="POST" onsubmit="return confirm('¿Estás seguro de eliminar este perfil?');" class="inline">
+                                            <form action="{{ route('profiles.destroy', $profile) }}" method="POST" class="inline"
+                                                  data-confirm="Se eliminará el perfil y sus permisos asociados. Esta acción no se puede deshacer."
+                                                  data-confirm-title="¿Eliminar perfil?"
+                                                  data-confirm-type="danger"
+                                                  data-confirm-btn="SÍ, ELIMINAR">
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="submit" class="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 bg-red-50 dark:bg-red-900/20 p-2 rounded-lg transition-colors shadow-sm">

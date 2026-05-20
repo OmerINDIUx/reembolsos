@@ -31,7 +31,7 @@ class ReimbursementController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view'));
+        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
         $globalSearch = $request->input('global_search');
         
@@ -348,6 +348,21 @@ class ReimbursementController extends Controller
         // Filter cost centers based on role and permissions
         if ($user->isAdmin()) {
             $costCenters = CostCenter::active()->with('beneficiary')->orderBy('name')->get();
+        } elseif ($user->canPerform('reimbursements.create_all_cost_centers')) {
+            $costCenters = CostCenter::active()->with('beneficiary')->orderBy('name')->get();
+            $costCenters->each(function($cc) use ($user) {
+                if ($cc->beneficiary && $cc->beneficiary_id === $user->id) {
+                    $cc->beneficiary->masked_clabe = $user->clabe ? '**** ' . substr($user->clabe, -4) : null;
+                } elseif ($cc->beneficiary) {
+                    $cc->beneficiary->masked_clabe = null;
+                }
+            });
+            $costCenters = $costCenters->filter(function($cc) use ($user, $type) {
+                if (in_array($type, ['fondo_fijo', 'comida', 'viaje'])) {
+                    return $user->canPerform('reimbursements.create_special');
+                }
+                return $user->canPerform('reimbursements.create');
+            });
         } else {
             // 1. Explicitly authorized Cost Centers
             $costCenters = $user->authorizedCostCenters()->active()->with('beneficiary')->withPivot('can_do_special')->orderBy('name')->get();
@@ -428,22 +443,25 @@ class ReimbursementController extends Controller
         }
         $travelEvents = $travelEventsQuery->orderBy('name')->get();
 
-        // Check for colleagues if user can create on behalf of others
+        // Colleagues per cost center (only for create_on_behalf; must belong to that CC)
         $ccUserMapping = [];
         if ($user->canPerform('reimbursements.create_on_behalf')) {
-            $ccs = $user->isAdmin() ? CostCenter::active()->get() : $costCenters;
+            $ccs = ($user->isAdmin() || $user->canPerform('reimbursements.create_all_cost_centers'))
+                ? CostCenter::active()->get()
+                : $costCenters;
+            $mapUser = function ($u) {
+                return [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'clabe' => $u->clabe ? '**** ' . substr($u->clabe, -4) : null,
+                    'has_clabe' => !empty($u->clabe),
+                ];
+            };
             foreach ($ccs as $cc) {
                 $ccUserMapping[$cc->id] = $cc->authorizedUsers()
                     ->select('users.id', 'users.name', 'users.clabe')
                     ->get()
-                    ->map(function($u) {
-                        return [
-                            'id' => $u->id,
-                            'name' => $u->name,
-                            'clabe' => $u->clabe ? '**** ' . substr($u->clabe, -4) : null,
-                            'has_clabe' => !empty($u->clabe)
-                        ];
-                    });
+                    ->map($mapUser);
             }
         }
 
@@ -486,17 +504,17 @@ class ReimbursementController extends Controller
             'items.*.uuid' => $hasInvoice ? 'required_without:items.*.draft_id' : 'nullable',
             'items.*.total' => 'required',
             'items.*.fecha' => 'required',
+            'items.*.propina' => 'nullable|numeric|min:0',
         ];
 
         if (!$hasInvoice) {
             $rules['items.*.nombre_emisor'] = 'required|string';
             $rules['items.*.fecha'] = 'required|date|before_or_equal:today';
-            $rules['items.*.total'] = 'required|numeric|max:2000';
+            $rules['items.*.total'] = 'required|numeric|min:0';
             $rules['items.*.subtotal'] = 'required|numeric|lte:items.*.total';
         }
 
         $request->validate($rules, [
-            'items.*.total.max' => 'No se pueden hacer reembolsos mayores a $2,000 MXN sin factura. ComunÃƒÂ­cate con tu director.',
             'items.*.fecha.before_or_equal' => 'La fecha de emisiÃƒÂ³n no puede ser una fecha futura.',
             'items.*.subtotal.lte' => 'El subtotal no puede ser mayor al total del comprobante.',
         ]);
@@ -518,9 +536,7 @@ class ReimbursementController extends Controller
         $targetUserId = Auth::id();
         if ($request->filled('user_id') && $user->canPerform('reimbursements.create_on_behalf') && $type === 'reembolso') {
             $candidateUser = \App\Models\User::findOrFail($request->user_id);
-            // Verify they share the selected cost center
-            $sharesCC = $candidateUser->authorizedCostCenters()->where('cost_centers.id', $costCenterId)->exists();
-            if ($sharesCC) {
+            if ($this->canRegisterOnBehalfInCostCenter($user, $candidateUser, $costCenterId)) {
                 $targetUserId = $candidateUser->id;
             } else {
                 return back()->withInput()->with('error', 'El beneficiario seleccionado debe pertenecer al mismo Centro de Costos.');
@@ -684,6 +700,19 @@ class ReimbursementController extends Controller
 
                 $finalObs = ($item['observaciones'] ?? "") . $autoNote;
 
+                // --- Propina: Parse, validate and store (only for comida) ---
+                $itemTotal = floatval(!empty($xmlData['total']) ? $xmlData['total'] : ($existingDraft ? $existingDraft->total : ($item['total'] ?? 0)));
+                $propina = floatval($item['propina'] ?? 0);
+                if ($type === 'comida' && $propina > 0) {
+                    $maxPropina = round($itemTotal * 0.15, 2);
+                    if ($propina > $maxPropina) {
+                        throw new \Exception("La propina manual de los alimentos ($" . number_format($propina, 2) . ") no puede ser mayor al 15% del total del gasto ($" . number_format($maxPropina, 2) . "). Por favor corrígela antes de enviar.");
+                    }
+                } elseif ($type !== 'comida') {
+                    // Never store propina for non-food expenses
+                    $propina = 0;
+                }
+
                 $reimbursementData = array_merge([
                     'type' => $type,
                     'cost_center_id' => $itemCostCenterId,
@@ -717,6 +746,7 @@ class ReimbursementController extends Controller
                     'trip_type' => $travelEvent ? $travelEvent->trip_type : ($existingDraft ? $existingDraft->trip_type : null),
                     'trip_start_date' => $travelEvent ? $travelEvent->start_date : ($existingDraft ? $existingDraft->trip_start_date : null),
                     'trip_end_date' => $travelEvent ? $travelEvent->end_date : ($existingDraft ? $existingDraft->trip_end_date : null),
+                    'propina' => $propina,
                     'user_id' => $targetUserId,
                     'payee_id' => $payeeId,
                     'company_confirmed' => isset($item['confirm_company']),
@@ -1105,7 +1135,7 @@ class ReimbursementController extends Controller
             if ($user->isControlObra() && $costCenter->control_obra_id === $user->id) $isAuthorized = true;
             if ($user->isExecutiveDirector() && $costCenter->director_ejecutivo_id === $user->id) $isAuthorized = true;
 
-            if (!$isAuthorized && !$user->isAdmin()) {
+            if (!$isAuthorized && !$user->isAdmin() && !$user->canPerform('reimbursements.create_all_cost_centers')) {
                 abort(403, 'No tienes permiso para registrar gastos en este centro de costos.');
             }
         }
@@ -1152,9 +1182,7 @@ class ReimbursementController extends Controller
         $targetUserId = Auth::id();
         if ($request->filled('user_id') && $user->canPerform('reimbursements.create_on_behalf') && $request->type === 'reembolso') {
             $candidateUser = \App\Models\User::findOrFail($request->user_id);
-            // Verify they share the selected cost center
-            $sharesCC = $candidateUser->authorizedCostCenters()->where('cost_centers.id', $effectiveCostCenterId)->exists();
-            if ($sharesCC) {
+            if ($this->canRegisterOnBehalfInCostCenter($user, $candidateUser, $effectiveCostCenterId)) {
                 $targetUserId = $candidateUser->id;
             } else {
                 return back()->withInput()->with('error', 'El beneficiario seleccionado debe pertenecer al mismo Centro de Costos.');
@@ -1301,7 +1329,7 @@ class ReimbursementController extends Controller
             return redirect()->route('reimbursements.show', $reimbursement);
         }
 
-        $reimbursement->load('children');
+        $reimbursement->load(['children', 'payee', 'costCenter.beneficiary', 'user']);
 
         $type = $reimbursement->type;
         $hasInvoice = !empty($reimbursement->uuid);
@@ -1322,7 +1350,25 @@ class ReimbursementController extends Controller
         $categories = $this->getCategories();
         $travelEvents = \App\Models\TravelEvent::where('status', 'active')->get();
 
-        return view('reimbursements.create', compact('reimbursement', 'type', 'hasInvoice', 'costCenters', 'currentWeek', 'availableWeeks', 'categories', 'travelEvents'));
+        $ccUserMapping = [];
+        if ($user->canPerform('reimbursements.create_on_behalf')) {
+            $mapUser = function ($u) {
+                return [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'clabe' => $u->clabe ? '**** ' . substr($u->clabe, -4) : null,
+                    'has_clabe' => !empty($u->clabe),
+                ];
+            };
+            foreach ($costCenters as $cc) {
+                $ccUserMapping[$cc->id] = $cc->authorizedUsers()
+                    ->select('users.id', 'users.name', 'users.clabe')
+                    ->get()
+                    ->map($mapUser);
+            }
+        }
+
+        return view('reimbursements.create', compact('reimbursement', 'type', 'hasInvoice', 'costCenters', 'currentWeek', 'availableWeeks', 'categories', 'travelEvents', 'ccUserMapping'));
     }
 
     /**
@@ -1482,14 +1528,29 @@ class ReimbursementController extends Controller
                 'fecha' => 'nullable|date',
                 'subtotal' => 'nullable|numeric',
                 'total' => 'nullable|numeric',
+                'propina' => 'nullable|numeric|min:0',
                 'ticket_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png,txt|max:32768',
             ]);
+
+            // Server-side 15% propina limit check on correction
+            if ($reimbursement->type === 'comida' && $request->filled('propina')) {
+                $maxPropina = round((float)$reimbursement->total * 0.15, 2);
+                $propinaCorrected = (float)$request->propina;
+                if ($propinaCorrected > $maxPropina) {
+                    return back()->withInput()->withErrors(['propina' => "La propina no puede ser mayor al 15% del total facturado ($" . number_format($maxPropina, 2) . ")."]);
+                }
+            }
             
             $data = array_filter($request->only([
                 'attendees_count', 'location', 'attendees_names',
                 'title', 'trip_destination', 'trip_nights', 'trip_start_date', 'trip_end_date',
                 'nombre_emisor', 'fecha', 'subtotal', 'total'
             ]), function($value) { return !is_null($value); });
+
+            // Persist propina if allowed (only for comida with invoice)
+            if ($reimbursement->type === 'comida' && !empty($reimbursement->uuid) && $request->has('propina')) {
+                $data['propina'] = (float)$request->propina;
+            }
 
             // Safety: If reimbursement has a UUID, we MUST NOT allow changing core fiscal fields manually
             if (!empty($reimbursement->uuid)) {
@@ -1744,7 +1805,7 @@ class ReimbursementController extends Controller
             ->where('status', '!=', 'borrador');
             
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view'));
+        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
         
         // Synchronize with dashboard visibility logic
@@ -1941,7 +2002,7 @@ class ReimbursementController extends Controller
             ->whereNotNull('xml_path');
              
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view'));
+        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
         
         // Use the same scoping as the dashboard
@@ -2549,6 +2610,7 @@ class ReimbursementController extends Controller
                     'category' => $items->first()->category,
                     'subtotal' => $items->sum('subtotal'),
                     'impuestos' => $items->sum('impuestos'),
+                    'propina' => $items->sum('propina'),
                     'total' => $items->sum('total'),
                 ];
             });
@@ -2556,6 +2618,7 @@ class ReimbursementController extends Controller
             $totals = [
                 'subtotal' => $groupItems->sum('subtotal'),
                 'impuestos' => $groupItems->sum('impuestos'),
+                'propina' => $groupItems->sum('propina'),
                 'total' => $groupItems->sum('total'),
             ];
 
@@ -3130,7 +3193,8 @@ class ReimbursementController extends Controller
                         'rfc_emisor', 'rfc_receptor', 'nombre_receptor', 'observaciones',
                         'metodo_pago', 'forma_pago', 'uso_cfdi', 'lugar_expedicion', 'regimen_fiscal_emisor',
                         'trip_destination', 'trip_nights', 'trip_start_date', 'trip_end_date', 'location',
-                        'uuid', 'folio', 'category', 'trip_type'
+                        'uuid', 'folio', 'category', 'trip_type', 'propina',
+                        'attendees_count', 'attendees_names',
                     ];
                     
                     // Fallback from Travel Event for inheritance
@@ -3147,6 +3211,12 @@ class ReimbursementController extends Controller
                         if (isset($itemData[$field]) && $itemData[$field] !== "" && $itemData[$field] !== "null" && $itemData[$field] !== null) {
                             $data[$field] = $itemData[$field];
                         }
+                    }
+
+                    if ($request->has("items.{$index}.confirm_company")) {
+                        $data['company_confirmed'] = true;
+                    } elseif (!$reimbursement) {
+                        $data['company_confirmed'] = false;
                     }
 
                     // Enhanced and Safer File Handling (10MB limit)
@@ -3209,7 +3279,12 @@ class ReimbursementController extends Controller
                         'has_xml' => !empty($reimbursement->xml_path),
                         'has_pdf' => !empty($reimbursement->pdf_path),
                         'has_ticket' => !empty($reimbursement->ticket_path),
-                        'folio' => $reimbursement->folio
+                        'folio' => $reimbursement->folio,
+                        'xml_name' => $reimbursement->original_xml_name
+                            ?: ($reimbursement->xml_path ? basename($reimbursement->xml_path) : null),
+                        'pdf_name' => $reimbursement->original_pdf_name
+                            ?: ($reimbursement->pdf_path ? basename($reimbursement->pdf_path) : null),
+                        'ticket_name' => $reimbursement->ticket_path ? basename($reimbursement->ticket_path) : null,
                     ];
                     Log::info("Draft saved for item {$index}: ID {$reimbursement->id}");
 
@@ -3230,6 +3305,15 @@ class ReimbursementController extends Controller
         }
     }
 
+    private function canRegisterOnBehalfInCostCenter(\App\Models\User $actor, \App\Models\User $candidate, $costCenterId): bool
+    {
+        if (!$costCenterId || (int) $candidate->id === (int) $actor->id) {
+            return true;
+        }
+
+        return $candidate->authorizedCostCenters()->where('cost_centers.id', $costCenterId)->exists();
+    }
+
     private function canCreateReimbursement(\App\Models\User $user, $type, $costCenterId, $travelEventId = null)
     {
         // Auto-resolve CC if missing but event is provided
@@ -3242,6 +3326,13 @@ class ReimbursementController extends Controller
 
         if ($user->hasRole('admin', 'accountant', 'direccion')) {
             return true;
+        }
+
+        if ($user->canPerform('reimbursements.create_all_cost_centers')) {
+            if (in_array($type, ['fondo_fijo', 'comida', 'viaje'])) {
+                return $user->canPerform('reimbursements.create_special');
+            }
+            return $user->canPerform('reimbursements.create');
         }
 
         $isAuthorized = false;
@@ -3331,6 +3422,14 @@ class ReimbursementController extends Controller
                   ->whereIn('status', ['aprobado', 'rechazado']);
 
         } elseif ($tab === 'global_history') {
+            // Check permission dynamically
+            if (!$user->canPerform('reimbursements.global_history')) {
+                // If they don't have permission, restrict to their own items
+                $query->whereIn('user_id', $identityIds)
+                      ->whereIn('status', ['aprobado', 'rechazado']);
+                return;
+            }
+
             // History for elevated roles or oversight
             if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion')) {
                 // Elevated roles see EVERYTHING
@@ -3338,16 +3437,28 @@ class ReimbursementController extends Controller
             } elseif ($user->isTreasury() || $user->isCxp()) {
                 // CXP/Treasury see all finished items
                 $query->whereIn('status', ['aprobado', 'rechazado']);
-            } elseif ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector()) {
-                // Directors see finished items in their Cost Centers
-                $query->whereHas('costCenter', function($q) use ($user) {
-                    if ($user->isDirector()) $q->where('director_id', $user->id);
-                    if ($user->isControlObra()) $q->where('control_obra_id', $user->id);
-                    if ($user->isExecutiveDirector()) $q->where('director_ejecutivo_id', $user->id);
-                })->whereIn('status', ['aprobado', 'rechazado']);
             } else {
-                $query->whereIn('user_id', $identityIds)
-                      ->whereIn('status', ['aprobado', 'rechazado']);
+                // Get all Cost Centers the user (and substituted identities) is assigned/registered in
+                $authorizedCCsIds = [];
+                foreach ($allIdentities as $identity) {
+                    $authorizedCCsIds = array_merge($authorizedCCsIds, $identity->authorizedCostCenters()->pluck('cost_centers.id')->toArray());
+                }
+                $authorizedCCsIds = array_unique($authorizedCCsIds);
+
+                $query->whereHas('costCenter', function($q) use ($user, $authorizedCCsIds) {
+                    $q->whereIn('id', $authorizedCCsIds);
+                    
+                    // Also include cost centers where they are director/control_obra/executive_director
+                    if ($user->isDirector()) {
+                        $q->orWhere('director_id', $user->id);
+                    }
+                    if ($user->isControlObra()) {
+                        $q->orWhere('control_obra_id', $user->id);
+                    }
+                    if ($user->isExecutiveDirector()) {
+                        $q->orWhere('director_ejecutivo_id', $user->id);
+                    }
+                })->whereIn('status', ['aprobado', 'rechazado']);
             }
         } else {
             // DEFAULT FALLBACK: Personal Scope (including substituted)

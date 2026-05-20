@@ -20,7 +20,7 @@
                                 <h4 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Acción Requerida: Ajustes Necesarios</h4>
                                 <p class="text-gray-700 dark:text-gray-300 text-base mb-6">Esta solicitud ha sido devuelta para corrección. Revisa las observaciones del aprobador y actualiza la información o archivos.</p>
                                 
-                                <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST" enctype="multipart/form-data" class="space-y-6">
+                                <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST" enctype="multipart/form-data" class="space-y-6" onsubmit="const prop = parseFloat(document.getElementById('edit-propina')?.value || 0); const limit = {{ $reimbursement->total * 0.15 }}; if (prop > limit) { Swal.fire({title: '<span class=\'text-xl font-black uppercase tracking-tight text-red-600\'>Límite de Propina Excedido</span>', html: '<p class=\'text-sm font-medium text-gray-600 dark:text-gray-400 mt-2\'>La propina no puede ser mayor al 15% del total facturado (${{ number_format($reimbursement->total * 0.15, 2) }}).</p>', icon: 'error', confirmButtonText: 'CORREGIR', confirmButtonColor: '#ef4444', customClass: { popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800', confirmButton: 'rounded-xl px-8 py-3 font-black text-xs uppercase tracking-widest' } }); return false; }">
                                     @csrf
                                     @method('PUT')
                                     <input type="hidden" name="is_resubmission" value="1">
@@ -60,6 +60,16 @@
                                                 <label class="text-sm font-semibold text-gray-600 dark:text-gray-400">Lugar</label>
                                                 <input type="text" name="location" value="{{ old('location', $reimbursement->location) }}" class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600">
                                             </div>
+                                            @if($reimbursement->uuid)
+                                            <div class="space-y-2">
+                                                <label class="text-sm font-bold text-orange-600 dark:text-orange-400">Propina Manual</label>
+                                                <div class="relative">
+                                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">$</span>
+                                                    <input type="number" step="0.01" min="0" id="edit-propina" name="propina" value="{{ old('propina', $reimbursement->propina) }}" class="w-full rounded-lg border-orange-300 dark:border-orange-900/40 shadow-sm focus:border-orange-500 focus:ring-orange-500 dark:bg-gray-800 dark:text-orange-300 pl-8 text-sm font-semibold">
+                                                </div>
+                                                <p class="text-[10px] text-orange-500 font-bold uppercase mt-1">Máximo 15% del total: ${{ number_format($reimbursement->total * 0.15, 2) }}</p>
+                                            </div>
+                                            @endif
                                         @endif
                                         
                                         <div class="md:col-span-2 space-y-2">
@@ -80,12 +90,27 @@
                 </div>
             @endif
 
-            @if(!$reimbursement->uuid || $reimbursement->folio === 'SIN-FACTURA')
-                <div class="bg-orange-50 border border-orange-200 rounded-xl mb-6 p-4 flex items-center shadow-sm dark:bg-orange-900/20 dark:border-orange-800">
-                    <svg class="w-6 h-6 text-orange-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                    <div>
-                        <h4 class="text-sm font-bold text-orange-800 dark:text-orange-300">Registro Manual Sin Factura (Sin XML)</h4>
-                        <p class="text-orange-600 dark:text-orange-400 text-xs">Este gasto requiere validación manual, no tiene datos XML fiscales asociados.</p>
+            @php
+                $isManualNoInvoice = !$reimbursement->uuid || $reimbursement->folio === 'SIN-FACTURA';
+                $exceedsManualAmountNotice = $isManualNoInvoice && (float) $reimbursement->total > 2000;
+            @endphp
+            @if($isManualNoInvoice)
+                <div class="bg-orange-50 border border-orange-200 rounded-xl mb-6 p-4 flex items-start shadow-sm dark:bg-orange-900/20 dark:border-orange-800">
+                    <svg class="w-6 h-6 text-orange-500 mr-3 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    <div class="space-y-2">
+                        <div>
+                            <h4 class="text-sm font-bold text-orange-800 dark:text-orange-300">Registro Manual Sin Factura (Sin XML)</h4>
+                            <p class="text-orange-600 dark:text-orange-400 text-xs">Este gasto requiere validación manual, no tiene datos XML fiscales asociados.</p>
+                        </div>
+                        @if($exceedsManualAmountNotice)
+                            <div class="pt-2 border-t border-orange-200/80 dark:border-orange-800/60">
+                                <h4 class="text-sm font-bold text-amber-800 dark:text-amber-300">Monto elevado sin factura</h4>
+                                <p class="text-amber-700 dark:text-amber-200/90 text-xs">
+                                    Este gasto supera <strong>$2,000 MXN</strong> sin factura (total registrado: <strong>${{ number_format($reimbursement->total, 2) }}</strong>).
+                                    Se recomienda comunicarse con el director para revisar la situación.
+                                </p>
+                            </div>
+                        @endif
                     </div>
                 </div>
             @endif
@@ -149,9 +174,11 @@
                     <div class="bg-indigo-600 rounded-xl overflow-hidden shadow-sm">
                         <div class="p-6 md:p-8 text-white flex flex-col md:flex-row md:justify-between md:items-center gap-6">
                             <div>
-                                <p class="text-indigo-200 text-sm font-semibold mb-1">Monto Total</p>
+                                <p class="text-indigo-200 text-sm font-semibold mb-1">
+                                    {{ $reimbursement->propina > 0 ? 'Monto Total Reembolsable (Factura + Propina)' : 'Monto Total' }}
+                                </p>
                                 <div class="text-4xl md:text-5xl font-bold tracking-tight">
-                                    <span class="text-indigo-300 font-normal mr-1">$</span>{{ number_format($reimbursement->total, 2) }}
+                                    <span class="text-indigo-300 font-normal mr-1">$</span>{{ number_format($reimbursement->total + ($reimbursement->propina ?? 0), 2) }}
                                     <span class="text-xl ml-1 text-indigo-300">{{ $reimbursement->moneda }}</span>
                                 </div>
                             </div>
@@ -164,6 +191,12 @@
                                     <p class="text-indigo-200 text-xs uppercase tracking-wider mb-1">Impuestos</p>
                                     <p class="text-lg font-semibold">${{ number_format($reimbursement->total - $reimbursement->subtotal, 2) }}</p>
                                 </div>
+                                @if(($reimbursement->propina ?? 0) > 0)
+                                <div>
+                                    <p class="text-orange-300 text-xs uppercase tracking-wider mb-1 font-bold">Propina</p>
+                                    <p class="text-lg font-semibold text-orange-200">${{ number_format($reimbursement->propina, 2) }}</p>
+                                </div>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -663,7 +696,7 @@
                     const allowedExtensions = hasUuid ? ['pdf'] : ['pdf', 'jpg', 'jpeg', 'png', 'txt'];
 
                     if (!allowedExtensions.includes(extension)) {
-                        alert(`Archivo Inválido. Solo se acepta: ${allowedExtensions.join(', ')}`);
+                        AppAlert({ title: 'Archivo inválido', message: `Solo se acepta: ${allowedExtensions.join(', ')}`, type: 'danger', icon: 'error' });
                         this.value = '';
                         validationResult.classList.add('hidden');
                         return;

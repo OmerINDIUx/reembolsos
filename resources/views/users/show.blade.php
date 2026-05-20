@@ -266,7 +266,11 @@
                                             {{ $substitute->is_active ? 'Desactivar' : 'Activar' }}
                                         </button>
                                     </form>
-                                    <form action="{{ route('users.substitutes.remove', [$user->id, $substitute->user_id]) }}" method="POST" onsubmit="return confirm('¿Eliminar esta sustitución?')">
+                                    <form action="{{ route('users.substitutes.remove', [$user->id, $substitute->user_id]) }}" method="POST"
+                                          data-confirm="El usuario dejará de actuar como sustituto en las aprobaciones."
+                                          data-confirm-title="¿Eliminar sustitución?"
+                                          data-confirm-type="warning"
+                                          data-confirm-btn="SÍ, ELIMINAR">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all">

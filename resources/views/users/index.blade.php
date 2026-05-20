@@ -152,7 +152,11 @@
                                         <a href="{{ route('users.edit', $user->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Editar</a>
                                         
                                         @if($user->id !== auth()->id())
-                                        <form action="{{ route('users.destroy', $user->id) }}" method="POST" class="inline" onsubmit="return confirm('¿Estás seguro de eliminar este usuario?');">
+                                        <form action="{{ route('users.destroy', $user->id) }}" method="POST" class="inline"
+                                              data-confirm="Se eliminará el usuario del sistema. Esta acción no se puede deshacer."
+                                              data-confirm-title="¿Eliminar usuario?"
+                                              data-confirm-type="danger"
+                                              data-confirm-btn="SÍ, ELIMINAR">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Eliminar</button>

@@ -21,7 +21,7 @@
                                         @php
                         $user = Auth::user();
                         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-                        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view'));
+                        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
                         $defaultTab = $canManage ? 'management' : 'active';
                     @endphp
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
@@ -52,10 +52,13 @@
                                 // User and permissions already defined above
                             @endphp
 
-                            @if($canManage)
+                            @if($canManage && $user->canPerform('reimbursements.approve'))
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'management'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab', $defaultTab) == 'management' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="management-tab" type="button" role="tab" aria-controls="management" aria-selected="false">Módulo de Gestión</a>
                             </li>
+                            @endif
+
+                            @if($user->canPerform('reimbursements.global_history'))
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'global_history'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'global_history' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="global-history-tab" type="button" role="tab" aria-controls="global_history" aria-selected="false">
                                     Historial Global
@@ -302,7 +305,7 @@
                                             </div>
                                             <div class="text-right">
                                                 <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total en Grupo</h3>
-                                                <p class="text-2xl font-black text-indigo-700 dark:text-indigo-400 leading-none mt-1">${{ number_format($userItems->sum('total'), 2) }}</p>
+                                                <p class="text-2xl font-black text-indigo-700 dark:text-indigo-400 leading-none mt-1">${{ number_format($userItems->sum('total') + $userItems->sum('propina'), 2) }}</p>
                                             </div>
                                         </div>
 
@@ -331,7 +334,7 @@
                                                         }
                                                     }
                                                     $idsJson = json_encode($batchItems->pluck('id'));
-                                                    $totalAmount = $batchItems->sum('total');
+                                                    $totalAmount = $batchItems->sum('total') + $batchItems->sum('propina');
                                                 @endphp
                                                 <a href="{{ route('reimbursements.audit', ['week' => $week, 'cc' => $ccName, 'tab' => $tab]) }}" 
                                                    class="flex flex-col md:flex-row items-start md:items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/30 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-md transition-all group no-underline space-y-3 md:space-y-0">
@@ -491,7 +494,12 @@
                                             {{ \Illuminate\Support\Str::limit($r->nombre_emisor, 20) }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                            ${{ number_format($r->total, 2) }} {{ $r->moneda }}
+                                            <div class="flex flex-col">
+                                                <span class="font-bold text-gray-900 dark:text-white">${{ number_format($r->total + ($r->propina ?? 0), 2) }} {{ $r->moneda }}</span>
+                                                @if(($r->propina ?? 0) > 0)
+                                                    <span class="text-[10px] font-bold text-orange-500 dark:text-orange-400 uppercase tracking-tight">Incluye ${{ number_format($r->propina, 2) }} propina</span>
+                                                @endif
+                                            </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             <div class="flex flex-col">
@@ -746,7 +754,7 @@
                     const fromWeek = document.getElementById('from_week')?.value;
                     const toWeek = document.getElementById('to_week')?.value;
                     if (!fromWeek && !toWeek) {
-                        alert('Por favor selecciona una semana o un rango de fechas válido.');
+                        AppAlert({ title: 'Filtro requerido', message: 'Por favor selecciona una semana o un rango de fechas válido.', type: 'warning' });
                         return;
                     }
                 }
@@ -1033,7 +1041,7 @@
                 clearInterval(ticker);
                 this.loading = false;
                 console.error('Error generando caratula:', e);
-                alert('Ocurrió un error al generar la carátula. Intenta de nuevo.');
+                AppAlert({ title: 'Error en el proceso', message: 'Ocurrió un error al generar la carátula. Intenta de nuevo.', type: 'danger', icon: 'error' });
             }
         }
     }" 

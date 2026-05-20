@@ -120,7 +120,11 @@
                                                         <a href="{{ route('reimbursements.edit', $draft->id) }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-sm">
                                                             Continuar
                                                         </a>
-                                                        <form action="{{ route('reimbursements.destroy', $draft->id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de eliminar este borrador?')">
+                                                        <form action="{{ route('reimbursements.destroy', $draft->id) }}" method="POST"
+                                                              data-confirm="Esta acción eliminará el borrador y no se podrá recuperar."
+                                                              data-confirm-title="¿Eliminar borrador?"
+                                                              data-confirm-type="danger"
+                                                              data-confirm-btn="SÍ, ELIMINAR">
                                                             @csrf
                                                             @method('DELETE')
                                                             <button type="submit" class="p-2 text-red-400 hover:text-red-600 transition-colors" title="Eliminar Borrador">
