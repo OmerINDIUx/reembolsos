@@ -775,8 +775,7 @@ class ReimbursementController extends Controller
                     ]);
                 }
 
-                // Send email to Menfis ONLY if it has an XML/UUID
-                if (!empty($reimbursement->uuid)) {
+                if (!empty($reimbursement->uuid) && $this->canSendMenfisEmail($reimbursement)) {
                     $this->sendMenfisEmail($reimbursement);
                 }
 
@@ -809,21 +808,11 @@ class ReimbursementController extends Controller
                         NotificationBatchService::add($cxp, $cr);
                     }
                 }
-            } elseif ($initialStatus === 'aprobado_control') {
-                // To N3
-                $targetUser = $costCenter->directorEjecutivo;
-            } elseif ($initialStatus === 'aprobado_director') {
-                // To N2
-                $targetUser = $costCenter->controlObra;
             } elseif ($initialStatus === 'pendiente' && $currentStepId) {
-                // FLUJO PERSONALIZADO: Notificar al usuario del paso actual
                 $step = \App\Models\ApprovalStep::find($currentStepId);
                 if ($step) {
                     $targetUser = $step->user;
                 }
-            } else {
-                // Fallback: To N1 director if no custom step
-                $targetUser = $costCenter->director;
             }
 
             if ($targetUser) {
@@ -1130,12 +1119,7 @@ class ReimbursementController extends Controller
         }
 
         if ($costCenter && ($user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector())) {
-            $isAuthorized = false;
-            if ($user->isDirector() && $costCenter->director_id === $user->id) $isAuthorized = true;
-            if ($user->isControlObra() && $costCenter->control_obra_id === $user->id) $isAuthorized = true;
-            if ($user->isExecutiveDirector() && $costCenter->director_ejecutivo_id === $user->id) $isAuthorized = true;
-
-            if (!$isAuthorized && !$user->isAdmin() && !$user->canPerform('reimbursements.create_all_cost_centers')) {
+            if (!$costCenter->hasApprover($user->id) && !$user->isAdmin() && !$user->canPerform('reimbursements.create_all_cost_centers')) {
                 abort(403, 'No tienes permiso para registrar gastos en este centro de costos.');
             }
         }
@@ -1435,21 +1419,7 @@ class ReimbursementController extends Controller
                 
                 if ($canSee) break;
 
-                // Legacy Fallbacks
-                if ($identity->isDirector() && $cc && $cc->director_id === $identity->id) {
-                    $canSee = true; 
-                    break;
-                } elseif ($identity->isControlObra() && $cc && $cc->control_obra_id === $identity->id) {
-                    if ($reimbursement->approved_by_director_at !== null || !in_array($status, ['pendiente', 'requiere_correccion'])) {
-                        $canSee = true;
-                        break;
-                    }
-                } elseif ($identity->isExecutiveDirector() && $cc && $cc->director_ejecutivo_id === $identity->id) {
-                    if ($reimbursement->approved_by_control_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director'])) {
-                        $canSee = true;
-                        break;
-                    }
-                } elseif ($identity->isCxp()) {
+                if ($identity->isCxp()) {
                     if ($reimbursement->approved_by_executive_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control'])) {
                         $canSee = true;
                         break;
@@ -1727,7 +1697,7 @@ class ReimbursementController extends Controller
             }
         }
 
-        if ($isOwnerCorrecting && $request->has('is_resubmission') && $request->hasFile('pdf_file') && !empty($reimbursement->uuid)) {
+        if ($isOwnerCorrecting && $request->has('is_resubmission') && $request->hasFile('pdf_file') && !empty($reimbursement->uuid) && $this->canSendMenfisEmail($reimbursement)) {
             $this->sendMenfisEmail($reimbursement);
         }
 
@@ -2147,34 +2117,6 @@ class ReimbursementController extends Controller
                  $newObs = "[MASIVO] APROBADO masivamente por " . $user->name . $substituteText . " el " . now()->format('d/m/Y H:i');
                  $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
                  // Action === 'aprobado'
-                 // Legacy state mapping
-                if ($user->isDirector() && $reimbursement->costCenter->director_id === $user->id) {
-                     $data['approved_by_director_id'] = $user->id;
-                     $data['approved_by_director_at'] = now();
-                     $data['status'] = 'aprobado_director';
-                } elseif ($user->isControlObra() && $reimbursement->costCenter->control_obra_id === $user->id) {
-                     $data['approved_by_control_id'] = $user->id;
-                     $data['approved_by_control_at'] = now();
-                     $data['status'] = 'aprobado_control';
-                } elseif ($user->isExecutiveDirector() && $reimbursement->costCenter->director_ejecutivo_id === $user->id) {
-                     $data['approved_by_executive_id'] = $user->id;
-                     $data['approved_by_executive_at'] = now();
-                     $data['status'] = 'aprobado_ejecutivo';
-                } elseif ($user->isCxp()) {
-                     $data['approved_by_cxp_id'] = $user->id;
-                     $data['approved_by_cxp_at'] = now();
-                     $data['status'] = 'aprobado_cxp';
-                } elseif ($user->isDireccion()) {
-                     $data['approved_by_direccion_id'] = $user->id;
-                     $data['approved_by_direccion_at'] = now();
-                     $data['status'] = 'aprobado_direccion';
-                } elseif ($user->isTreasury()) {
-                     $data['approved_by_treasury_id'] = $user->id;
-                     $data['approved_by_treasury_at'] = now();
-                     $data['status'] = 'aprobado';
-                }
-
-                // Logic to mark legacy columns based on the current step being approved
                 $currentStep = $reimbursement->currentStep;
                 if ($currentStep) {
                     $this->mapApprovalData($currentStep->order, $user->id, $data);
@@ -3343,11 +3285,8 @@ class ReimbursementController extends Controller
         if ($authorizedUser) {
             $isAuthorized = true;
             $isMarked = $authorizedUser->pivot->can_do_special;
-        } else {
-            // Also allow if they are the approver of this cost center
-            if ($user->isDirector() && $cc->director_id === $user->id) $isAuthorized = true;
-            if ($user->isControlObra() && $cc->control_obra_id === $user->id) $isAuthorized = true;
-            if ($user->isExecutiveDirector() && $cc->director_ejecutivo_id === $user->id) $isAuthorized = true;
+        } elseif ($cc->hasApprover($user->id)) {
+            $isAuthorized = true;
         }
 
         // 2. Inherited Authorization via active Travel Event
@@ -3446,18 +3385,8 @@ class ReimbursementController extends Controller
                 $authorizedCCsIds = array_unique($authorizedCCsIds);
 
                 $query->whereHas('costCenter', function($q) use ($user, $authorizedCCsIds) {
-                    $q->whereIn('id', $authorizedCCsIds);
-                    
-                    // Also include cost centers where they are director/control_obra/executive_director
-                    if ($user->isDirector()) {
-                        $q->orWhere('director_id', $user->id);
-                    }
-                    if ($user->isControlObra()) {
-                        $q->orWhere('control_obra_id', $user->id);
-                    }
-                    if ($user->isExecutiveDirector()) {
-                        $q->orWhere('director_ejecutivo_id', $user->id);
-                    }
+                    $q->whereIn('id', $authorizedCCsIds)
+                      ->orWhereHas('approvalSteps', fn($asq) => $asq->where('user_id', $user->id));
                 })->whereIn('status', ['aprobado', 'rechazado']);
             }
         } else {
@@ -3491,25 +3420,23 @@ class ReimbursementController extends Controller
                    });
             });
 
-            // 3. CC Roles (Director sees everything in CC, Others see if it reached them)
+            // 3. Primer aprobador del flujo ve todo el CC; demás aprobadores cuando el paso actual alcanzó su nivel
             $q->orWhereHas('costCenter', function($cq) use ($user) {
-                $cq->where('director_id', $user->id);
+                $cq->whereHas('approvalSteps', fn($asq) => $asq->where('user_id', $user->id)->where('order', 1));
             });
 
             $q->orWhere(function($sub) use ($user) {
-                $sub->whereHas('costCenter', fn($cq) => $cq->where('control_obra_id', $user->id))
-                    ->where(function($rq) {
-                        $rq->whereNotNull('approved_by_director_at')
-                           ->orWhereNotIn('status', ['pendiente', 'requiere_correccion']);
-                    });
-            });
-
-            $q->orWhere(function($sub) use ($user) {
-                $sub->whereHas('costCenter', fn($cq) => $cq->where('director_ejecutivo_id', $user->id))
-                    ->where(function($rq) {
-                        $rq->whereNotNull('approved_by_control_at')
-                           ->orWhereNotIn('status', ['pendiente', 'requiere_correccion', 'aprobado_director']);
-                    });
+                $sub->whereHas('costCenter', function($cq) use ($user) {
+                    $cq->whereHas('approvalSteps', fn($asq) => $asq->where('user_id', $user->id)->where('order', '>', 1));
+                })->where(function($rq) use ($user) {
+                    $rq->whereIn('status', ['aprobado', 'pendiente_pago'])
+                       ->orWhereHas('currentStep', function($csq) use ($user) {
+                           $csq->whereRaw(
+                               '`order` >= (SELECT MIN(`order`) FROM approval_steps WHERE cost_center_id = reimbursements.cost_center_id AND user_id = ?)',
+                               [$user->id]
+                           );
+                       });
+                });
             });
 
             // 4. Centralized Roles (CXP, Treasury, Direccion) - Matching Sequential Logic
@@ -3524,14 +3451,26 @@ class ReimbursementController extends Controller
             }
         });
     }
-    protected function sendMenfisEmail(Reimbursement $reimbursement)
+    protected function canSendMenfisEmail(Reimbursement $reimbursement): bool
     {
-        if ($reimbursement->costCenter && $reimbursement->costCenter->menfis_email) {
-            try {
-                \Illuminate\Support\Facades\Mail::to($reimbursement->costCenter->menfis_email)->send(new \App\Mail\MenfisInvoiceMail($reimbursement));
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error("Error sending Menfis email for reimbursement {$reimbursement->id}: " . $e->getMessage());
-            }
+        $reimbursement->loadMissing('costCenter');
+
+        return $reimbursement->costCenter?->menfisEmailAddress() !== null;
+    }
+
+    protected function sendMenfisEmail(Reimbursement $reimbursement): void
+    {
+        $reimbursement->loadMissing('costCenter');
+        $email = $reimbursement->costCenter?->menfisEmailAddress();
+
+        if ($email === null) {
+            return;
+        }
+
+        try {
+            Mail::to($email)->send(new MenfisInvoiceMail($reimbursement));
+        } catch (\Throwable $e) {
+            Log::warning("Menfis email skipped for reimbursement {$reimbursement->id}: " . $e->getMessage());
         }
     }
 }

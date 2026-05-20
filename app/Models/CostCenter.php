@@ -74,6 +74,22 @@ class CostCenter extends Model
         return $this->hasMany(ApprovalStep::class)->orderBy('order');
     }
 
+    public function hasApprover(int $userId): bool
+    {
+        return $this->approvalSteps()->where('user_id', $userId)->exists();
+    }
+
+    public function menfisEmailAddress(): ?string
+    {
+        $email = is_string($this->menfis_email) ? trim($this->menfis_email) : '';
+
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return null;
+        }
+
+        return $email;
+    }
+
     public function budgetRenewals()
     {
         return $this->hasMany(BudgetRenewal::class)->orderBy('renewal_date', 'desc');

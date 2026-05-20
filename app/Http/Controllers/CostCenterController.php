@@ -20,7 +20,7 @@ class CostCenterController extends Controller
         $user = Auth::user();
 
         // Base query
-        $query = CostCenter::with(['director', 'controlObra', 'directorEjecutivo', 'accountant', 'direccion', 'tesoreria', 'beneficiary'])
+        $query = CostCenter::with(['beneficiary', 'approvalSteps.user'])
             ->withCount([
                 'reimbursements as pending_count' => function($q) {
                     $q->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
@@ -100,7 +100,7 @@ class CostCenterController extends Controller
         }
 
         $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
-        $costCenter->load(['director', 'controlObra', 'directorEjecutivo', 'accountant', 'direccion', 'tesoreria', 'beneficiary', 'approvalSteps.user']);
+        $costCenter->load(['beneficiary', 'approvalSteps.user']);
 
         // 1. Basic Stats
         // ONLY marked users affect the budget
@@ -206,15 +206,13 @@ class CostCenterController extends Controller
         if (!Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'accountant', 'direccion')) {
             abort(403, 'Unauthorized action.');
         }
+        $request->merge([
+            'menfis_email' => filled($request->menfis_email) ? trim($request->menfis_email) : null,
+        ]);
+
         $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:cost_centers,name'],
             'beneficiary_id' => ['nullable', 'exists:users,id'],
-            'director_id' => ['nullable', 'exists:users,id'],
-            'control_obra_id' => ['nullable', 'exists:users,id'],
-            'director_ejecutivo_id' => ['nullable', 'exists:users,id'],
-            'accountant_id' => ['nullable', 'exists:users,id'],
-            'direccion_id' => ['nullable', 'exists:users,id'],
-            'tesoreria_id' => ['nullable', 'exists:users,id'],
             'budget' => ['required', 'numeric', 'min:0'],
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.user_id' => ['required', 'exists:users,id'],
@@ -233,12 +231,6 @@ class CostCenterController extends Controller
             'menfis_email' => $request->menfis_email,
             'budget' => $request->budget,
             'beneficiary_id' => $request->beneficiary_id,
-            'director_id' => $request->director_id,
-            'control_obra_id' => $request->control_obra_id,
-            'director_ejecutivo_id' => $request->director_ejecutivo_id,
-            'accountant_id' => $request->accountant_id,
-            'direccion_id' => $request->direccion_id,
-            'tesoreria_id' => $request->tesoreria_id,
         ]);
 
         // Create initial renewal record
@@ -293,15 +285,13 @@ class CostCenterController extends Controller
              abort(403, 'Unauthorized action.');
         }
 
+        $request->merge([
+            'menfis_email' => filled($request->menfis_email) ? trim($request->menfis_email) : null,
+        ]);
+
         $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('cost_centers')->ignore($costCenter->id)],
             'beneficiary_id' => ['nullable', 'exists:users,id'],
-            'director_id' => ['nullable', 'exists:users,id'],
-            'control_obra_id' => ['nullable', 'exists:users,id'],
-            'director_ejecutivo_id' => ['nullable', 'exists:users,id'],
-            'accountant_id' => ['nullable', 'exists:users,id'],
-            'direccion_id' => ['nullable', 'exists:users,id'],
-            'tesoreria_id' => ['nullable', 'exists:users,id'],
             'budget' => ['required', 'numeric', 'min:0'],
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.user_id' => ['required', 'exists:users,id'],
@@ -332,12 +322,6 @@ class CostCenterController extends Controller
                 'menfis_email' => $request->menfis_email,
                 'budget' => $request->budget,
                 'beneficiary_id' => $request->beneficiary_id,
-                'director_id' => $request->director_id,
-                'control_obra_id' => $request->control_obra_id,
-                'director_ejecutivo_id' => $request->director_ejecutivo_id,
-                'accountant_id' => $request->accountant_id,
-                'direccion_id' => $request->direccion_id,
-                'tesoreria_id' => $request->tesoreria_id,
             ]);
 
             // 3. Rebuild steps (Delete and Recreate)

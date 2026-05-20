@@ -100,10 +100,10 @@
                         <p class="text-xs font-bold text-indigo-100 mt-2 opacity-80 mb-4">Promedio aprobación</p>
                         
                         <div class="flex -space-x-2 overflow-hidden">
-                            @foreach(['director', 'controlObra', 'directorEjecutivo', 'accountant', 'direccion', 'tesoreria'] as $role)
-                                @if($costCenter->$role)
-                                    <div class="inline-block h-8 w-8 rounded-full ring-2 ring-indigo-600 bg-indigo-400 flex items-center justify-center text-[10px] font-black uppercase text-white shadow-lg" title="{{ $costCenter->$role->name }}">
-                                        {{ substr($costCenter->$role->name, 0, 1) }}
+                            @foreach($costCenter->approvalSteps as $step)
+                                @if($step->user)
+                                    <div class="inline-block h-8 w-8 rounded-full ring-2 ring-indigo-600 bg-indigo-400 flex items-center justify-center text-[10px] font-black uppercase text-white shadow-lg" title="{{ $step->name }}: {{ $step->user->name }}">
+                                        {{ substr($step->user->name, 0, 1) }}
                                     </div>
                                 @endif
                             @endforeach

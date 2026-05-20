@@ -60,24 +60,24 @@ class MenfisInvoiceMail extends Mailable
         $attachments = [];
         $disk = config('filesystems.default', 'public');
 
-        \Log::info("MenfisInvoiceMail: Buscando archivos para reembolso {$this->reimbursement->id} en disco '{$disk}'");
-
-        if ($this->reimbursement->xml_path && \Storage::disk($disk)->exists($this->reimbursement->xml_path)) {
-            $attachments[] = Attachment::fromPath(\Storage::disk($disk)->path($this->reimbursement->xml_path))
-                ->as($this->reimbursement->original_xml_name ?? 'factura.xml');
-            \Log::info("- XML encontrado y adjuntado: " . $this->reimbursement->xml_path);
-        } else {
-            \Log::warning("- XML NO encontrado en: " . ($this->reimbursement->xml_path ?? 'Ruta vacía'));
+        if ($this->reimbursement->xml_path && Storage::disk($disk)->exists($this->reimbursement->xml_path)) {
+            try {
+                $attachments[] = Attachment::fromPath(Storage::disk($disk)->path($this->reimbursement->xml_path))
+                    ->as($this->reimbursement->original_xml_name ?? 'factura.xml');
+            } catch (\Throwable $e) {
+                \Log::warning("MenfisInvoiceMail: no se adjuntó XML del reembolso {$this->reimbursement->id}: {$e->getMessage()}");
+            }
         }
 
-        if ($this->reimbursement->pdf_path && \Storage::disk($disk)->exists($this->reimbursement->pdf_path)) {
-            $xmlName = $this->reimbursement->original_xml_name ?? 'factura.xml';
-            $baseName = pathinfo($xmlName, PATHINFO_FILENAME);
-            $attachments[] = Attachment::fromPath(\Storage::disk($disk)->path($this->reimbursement->pdf_path))
-                ->as($baseName . '.pdf');
-            \Log::info("- PDF encontrado y adjuntado: " . $this->reimbursement->pdf_path);
-        } else {
-            \Log::warning("- PDF NO encontrado en: " . ($this->reimbursement->pdf_path ?? 'Ruta vacía'));
+        if ($this->reimbursement->pdf_path && Storage::disk($disk)->exists($this->reimbursement->pdf_path)) {
+            try {
+                $xmlName = $this->reimbursement->original_xml_name ?? 'factura.xml';
+                $baseName = pathinfo($xmlName, PATHINFO_FILENAME);
+                $attachments[] = Attachment::fromPath(Storage::disk($disk)->path($this->reimbursement->pdf_path))
+                    ->as($baseName . '.pdf');
+            } catch (\Throwable $e) {
+                \Log::warning("MenfisInvoiceMail: no se adjuntó PDF del reembolso {$this->reimbursement->id}: {$e->getMessage()}");
+            }
         }
 
         return $attachments;
