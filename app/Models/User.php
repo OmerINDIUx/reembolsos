@@ -186,10 +186,34 @@ class User extends Authenticatable
         return $this->belongsTo(Profile::class);
     }
 
+    public function isApproverOrLinked()
+    {
+        // Check if the user is in any Cost Center's approval steps
+        $inApprovalSteps = \App\Models\ApprovalStep::where('user_id', $this->id)->exists();
+        if ($inApprovalSteps) {
+            return true;
+        }
+
+        // Check if they are role-linked to any Cost Center
+        return \App\Models\CostCenter::where('director_id', $this->id)
+            ->orWhere('control_obra_id', $this->id)
+            ->orWhere('director_ejecutivo_id', $this->id)
+            ->orWhere('accountant_id', $this->id)
+            ->orWhere('direccion_id', $this->id)
+            ->orWhere('tesoreria_id', $this->id)
+            ->orWhere('beneficiary_id', $this->id)
+            ->exists();
+    }
+
     public function canPerform($permission)
     {
         // Admins always have all permissions
         if ($this->isAdmin()) {
+            return true;
+        }
+
+        // Dynamically allow global_history permission for any approver or role-linked user
+        if ($permission === 'reimbursements.global_history' && $this->isApproverOrLinked()) {
             return true;
         }
 

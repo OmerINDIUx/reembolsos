@@ -57,6 +57,19 @@ class ReimbursementController extends Controller
             $authorizedCCsIds = [];
             foreach ($allIdentities as $identity) {
                 $authorizedCCsIds = array_merge($authorizedCCsIds, $identity->authorizedCostCenters()->pluck('cost_centers.id')->toArray());
+                
+                // Add Cost Centers where the user is an approver or role-linked
+                $extraIds = \App\Models\ApprovalStep::where('user_id', $identity->id)->pluck('cost_center_id')
+                    ->concat(\App\Models\CostCenter::where('director_id', $identity->id)
+                        ->orWhere('control_obra_id', $identity->id)
+                        ->orWhere('director_ejecutivo_id', $identity->id)
+                        ->orWhere('accountant_id', $identity->id)
+                        ->orWhere('direccion_id', $identity->id)
+                        ->orWhere('tesoreria_id', $identity->id)
+                        ->orWhere('beneficiary_id', $identity->id)
+                        ->pluck('id'))
+                    ->unique();
+                $authorizedCCsIds = array_merge($authorizedCCsIds, $extraIds->toArray());
             }
             $authorizedCCs = \App\Models\CostCenter::whereIn('id', array_unique($authorizedCCsIds))->orderBy('name', 'asc')->get();
         }
@@ -367,6 +380,40 @@ class ReimbursementController extends Controller
             // 1. Explicitly authorized Cost Centers
             $costCenters = $user->authorizedCostCenters()->active()->with('beneficiary')->withPivot('can_do_special')->orderBy('name')->get();
 
+            // 1b. Include Cost Centers where the user is an approver or role-linked
+            $extraCCIds = \App\Models\ApprovalStep::where('user_id', $user->id)->pluck('cost_center_id')
+                ->concat(CostCenter::where('director_id', $user->id)
+                    ->orWhere('control_obra_id', $user->id)
+                    ->orWhere('director_ejecutivo_id', $user->id)
+                    ->orWhere('accountant_id', $user->id)
+                    ->orWhere('direccion_id', $user->id)
+                    ->orWhere('tesoreria_id', $user->id)
+                    ->orWhere('beneficiary_id', $user->id)
+                    ->pluck('id'))
+                ->unique();
+
+            if ($extraCCIds->isNotEmpty()) {
+                $extraCCs = CostCenter::active()->whereIn('id', $extraCCIds)->with('beneficiary')->get();
+                foreach ($extraCCs as $ecc) {
+                    if (!$costCenters->contains('id', $ecc->id)) {
+                        // Attach a virtual pivot to act like an authorized cost center
+                        $ecc->setRelation('pivot', new \Illuminate\Database\Eloquent\Relations\Pivot([
+                            'can_do_special' => true, // Being an approver/role implies high trust, allow special types
+                            'cost_center_id' => $ecc->id,
+                            'user_id' => $user->id
+                        ]));
+                        $costCenters->push($ecc);
+                    } else {
+                        // If they are explicitly authorized but ALSO an approver/role-linked,
+                        // make sure they have can_do_special enabled if they didn't already
+                        $existingCc = $costCenters->firstWhere('id', $ecc->id);
+                        if ($existingCc && $existingCc->pivot) {
+                            $existingCc->pivot->can_do_special = true;
+                        }
+                    }
+                }
+            }
+
             // 2. Inherited Cost Centers from Travel Events (Participants)
             // Note: For 'viaje', we now rely on the Travel Event selector for participants
             // to avoid showing Cost Centers they don't have explicit privileges for.
@@ -413,8 +460,8 @@ class ReimbursementController extends Controller
                     return $isMarked || $user->canPerform('reimbursements.create_special');
                 }
 
-                // Standard reimbursement requires 'create' permission
-                return $user->canPerform('reimbursements.create');
+                // Standard reimbursement: since they are in this local list, they are authorized/associated
+                return true;
             });
         }
         
@@ -3252,7 +3299,18 @@ class ReimbursementController extends Controller
             return true;
         }
 
-        return $candidate->authorizedCostCenters()->where('cost_centers.id', $costCenterId)->exists();
+        $cc = \App\Models\CostCenter::find($costCenterId);
+        if (!$cc) return false;
+
+        return $candidate->authorizedCostCenters()->where('cost_centers.id', $costCenterId)->exists()
+            || $cc->hasApprover($candidate->id)
+            || $cc->director_id === $candidate->id
+            || $cc->control_obra_id === $candidate->id
+            || $cc->director_ejecutivo_id === $candidate->id
+            || $cc->accountant_id === $candidate->id
+            || $cc->direccion_id === $candidate->id
+            || $cc->tesoreria_id === $candidate->id
+            || $cc->beneficiary_id === $candidate->id;
     }
 
     private function canCreateReimbursement(\App\Models\User $user, $type, $costCenterId, $travelEventId = null)
@@ -3284,8 +3342,16 @@ class ReimbursementController extends Controller
         if ($authorizedUser) {
             $isAuthorized = true;
             $isMarked = $authorizedUser->pivot->can_do_special;
-        } elseif ($cc->hasApprover($user->id)) {
+        } elseif ($cc->hasApprover($user->id) ||
+                  $cc->director_id === $user->id ||
+                  $cc->control_obra_id === $user->id ||
+                  $cc->director_ejecutivo_id === $user->id ||
+                  $cc->accountant_id === $user->id ||
+                  $cc->direccion_id === $user->id ||
+                  $cc->tesoreria_id === $user->id ||
+                  $cc->beneficiary_id === $user->id) {
             $isAuthorized = true;
+            $isMarked = true; // Being an approver/director/role implies high trust, allow special types
         }
 
         // 2. Inherited Authorization via active Travel Event
@@ -3380,13 +3446,26 @@ class ReimbursementController extends Controller
                 $authorizedCCsIds = [];
                 foreach ($allIdentities as $identity) {
                     $authorizedCCsIds = array_merge($authorizedCCsIds, $identity->authorizedCostCenters()->pluck('cost_centers.id')->toArray());
+                    
+                    // Add Cost Centers where the user is an approver or role-linked
+                    $extraIds = \App\Models\ApprovalStep::where('user_id', $identity->id)->pluck('cost_center_id')
+                        ->concat(\App\Models\CostCenter::where('director_id', $identity->id)
+                            ->orWhere('control_obra_id', $identity->id)
+                            ->orWhere('director_ejecutivo_id', $identity->id)
+                            ->orWhere('accountant_id', $identity->id)
+                            ->orWhere('direccion_id', $identity->id)
+                            ->orWhere('tesoreria_id', $identity->id)
+                            ->orWhere('beneficiary_id', $identity->id)
+                            ->pluck('id'))
+                        ->unique();
+                    $authorizedCCsIds = array_merge($authorizedCCsIds, $extraIds->toArray());
                 }
                 $authorizedCCsIds = array_unique($authorizedCCsIds);
 
                 $query->whereHas('costCenter', function($q) use ($user, $authorizedCCsIds) {
                     $q->whereIn('id', $authorizedCCsIds)
                       ->orWhereHas('approvalSteps', fn($asq) => $asq->where('user_id', $user->id));
-                })->whereIn('status', ['aprobado', 'rechazado']);
+                });
             }
         } else {
             // DEFAULT FALLBACK: Personal Scope (including substituted)

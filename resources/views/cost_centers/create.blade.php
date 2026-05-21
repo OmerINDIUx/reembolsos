@@ -81,7 +81,7 @@
                                                 <select :name="'steps['+index+'][user_id]'" x-model="step.user_id" class="block w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" required>
                                                     <option value="">Seleccione Usuario...</option>
                                                     @foreach($users as $u)
-                                                        <option value="{{ $u->id }}">{{ $u->name }} ({{ $u->role }})</option>
+                                                        <option value="{{ $u->id }}">{{ $u->name }} ({{ $u->role_name }})</option>
                                                     @endforeach
                                                 </select>
                                             </div>
@@ -123,7 +123,7 @@
                                             <select :name="'allowed_users['+index+'][user_id]'" x-model="user.user_id" class="block w-full rounded-xl border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm font-bold" required>
                                                 <option value="">Seleccione Usuario...</option>
                                                 @foreach($users as $u)
-                                                    <option value="{{ $u->id }}">{{ $u->name }} ({{ $u->role }})</option>
+                                                    <option value="{{ $u->id }}">{{ $u->name }} ({{ $u->role_name }})</option>
                                                 @endforeach
                                             </select>
                                         </div>
