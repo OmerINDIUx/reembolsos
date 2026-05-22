@@ -479,7 +479,7 @@ class ReimbursementController extends Controller
 
         $currentWeek = $currentProcessWeek; // For backward compatibility in view if needed
         
-        $categories = $this->getCategories();
+        $categories = $this->getCategoriesForType($type);
 
         // Load active travel events (filtered by user access unless admin)
         $travelEventsQuery = \App\Models\TravelEvent::where('status', 'active');
@@ -531,6 +531,14 @@ class ReimbursementController extends Controller
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
+
+        if ($request->input('type') === 'comida') {
+            $items = $request->input('items', []);
+            foreach ($items as $index => $item) {
+                $items[$index]['category'] = 'comida';
+            }
+            $request->merge(['items' => $items]);
+        }
 
         $rules = [
             'type' => 'required|in:reembolso,fondo_fijo,comida,viaje',
@@ -1100,6 +1108,10 @@ class ReimbursementController extends Controller
             abort(403, 'Tu rol no tiene permisos para registrar reembolsos.');
         }
 
+        if ($request->input('type') === 'comida') {
+            $request->merge(['category' => 'comida']);
+        }
+
         $request->validate([
             'type' => 'required|in:reembolso,fondo_fijo,comida,viaje',
             'cost_center_id' => 'required_without:travel_event_id|nullable|exists:cost_centers,id',
@@ -1378,7 +1390,7 @@ class ReimbursementController extends Controller
         }
         $currentWeek = $currentProcessWeek;
 
-        $categories = $this->getCategories();
+        $categories = $this->getCategoriesForType($type);
         $travelEvents = \App\Models\TravelEvent::where('status', 'active')->get();
 
         $ccUserMapping = [];
@@ -2390,6 +2402,7 @@ class ReimbursementController extends Controller
     {
         return [
             'combustibles y lubricantes',
+            'comida',
             'estacionamientos y casetas',
             'hospedajes',
             'papelería y articulos de oficina',
@@ -2417,6 +2430,18 @@ class ReimbursementController extends Controller
             'utensilios auxiliares para trabajo',
             'telefonia y radio',
         ];
+    }
+
+    private function getCategoriesForType(string $type): array
+    {
+        if ($type === 'comida') {
+            return $this->getCategories();
+        }
+
+        return array_values(array_filter(
+            $this->getCategories(),
+            fn ($category) => $category !== 'comida'
+        ));
     }
     /**
      * View a file (XML or PDF) in the browser.
@@ -3199,6 +3224,10 @@ class ReimbursementController extends Controller
                         if (isset($itemData[$field]) && $itemData[$field] !== "" && $itemData[$field] !== "null" && $itemData[$field] !== null) {
                             $data[$field] = $itemData[$field];
                         }
+                    }
+
+                    if ($request->input('type') === 'comida') {
+                        $data['category'] = 'comida';
                     }
 
                     if ($request->has("items.{$index}.confirm_company")) {

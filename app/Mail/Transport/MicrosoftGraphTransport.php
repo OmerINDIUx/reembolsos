@@ -4,6 +4,7 @@ namespace App\Mail\Transport;
 
 use App\Services\GraphMailService;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mailer\Transport\AbstractTransport;
 use Symfony\Component\Mime\MessageConverter;
@@ -58,7 +59,9 @@ class MicrosoftGraphTransport extends AbstractTransport
             ];
         }
 
-        $this->graphService->send($to, $subject, $content, $attachments);
+        if (!$this->graphService->send($to, $subject, $content, $attachments)) {
+            throw new TransportException('Microsoft Graph no pudo enviar el correo. Revisa el log para ver la respuesta del servicio.');
+        }
     }
 
     public function __toString(): string

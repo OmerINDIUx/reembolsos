@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use App\Mail\UserInvitation;
@@ -87,10 +88,14 @@ class UserController extends Controller
             'role' => in_array($profile->name, ['admin', 'director', 'accountant', 'user']) ? $profile->name : 'user', // Keep role in sync for legacy compatibility
             'profile_id' => $request->profile_id,
             'invitation_token' => $token,
-            'invitation_sent_at' => now(),
+            'invitation_sent_at' => null,
         ]);
 
-        Mail::to($user->email)->send(new UserInvitation($user));
+        if (!$this->sendInvitationEmail($user)) {
+            return redirect()
+                ->route('users.index')
+                ->with('error', 'El usuario fue creado, pero no se pudo enviar la invitación. Revisa la configuración de correo en el servidor.');
+        }
 
         return redirect()->route('users.index')->with('success', 'Usuario creado exitosamente. Se ha enviado una invitación por correo.');
     }
@@ -289,18 +294,32 @@ class UserController extends Controller
             return back()->with('error', 'Este usuario ya ha completado su registro.');
         }
 
-        // Generate new token if missing
         if (!$user->invitation_token) {
-            $user->update([
-                'invitation_token' => Str::random(64),
-                'invitation_sent_at' => now(),
-            ]);
-        } else {
-            $user->update(['invitation_sent_at' => now()]);
+            $user->update(['invitation_token' => Str::random(64)]);
         }
 
-        Mail::to($user->email)->send(new UserInvitation($user));
+        if (!$this->sendInvitationEmail($user)) {
+            return back()->with('error', 'No se pudo reenviar la invitación. Revisa la configuración de correo en el servidor.');
+        }
 
         return back()->with('success', 'La invitación ha sido reenviada exitosamente.');
+    }
+
+    private function sendInvitationEmail(User $user): bool
+    {
+        try {
+            Mail::to($user->email)->send(new UserInvitation($user));
+            $user->forceFill(['invitation_sent_at' => now()])->save();
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::error('Error enviando invitación de usuario.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'message' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
     }
 }

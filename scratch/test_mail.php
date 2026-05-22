@@ -12,13 +12,13 @@ $testEmail = 'omer.tenahua@grupoindi.com'; // Adjust if needed
 
 // Forzar configuración para la prueba
 config([
-    'mail.mailers.smtp.host' => 'smtp.office365.com',
-    'mail.mailers.smtp.port' => 587,
-    'mail.mailers.smtp.username' => 'no-replay@grupoindi.com',
-    'mail.mailers.smtp.password' => 'J(291903043236uj',
-    'mail.mailers.smtp.encryption' => 'tls',
-    'mail.from.address' => 'no-replay@grupoindi.com',
-    'mail.from.name' => 'Sistema de Reembolsos',
+    'mail.mailers.smtp.host' => env('MAIL_HOST', 'smtp.office365.com'),
+    'mail.mailers.smtp.port' => env('MAIL_PORT', 587),
+    'mail.mailers.smtp.username' => env('MAIL_USERNAME'),
+    'mail.mailers.smtp.password' => env('MAIL_PASSWORD'),
+    'mail.mailers.smtp.encryption' => env('MAIL_ENCRYPTION', 'tls'),
+    'mail.from.address' => env('MAIL_FROM_ADDRESS', 'no-reply@example.com'),
+    'mail.from.name' => env('MAIL_FROM_NAME', 'Sistema de Reembolsos'),
 ]);
 
 echo "Iniciando prueba de correo...\n";

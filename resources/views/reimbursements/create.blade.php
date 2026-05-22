@@ -434,7 +434,8 @@
                                             <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3">Clasificación</h4>
                                             <div>
                                                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Categoría *</label>
-                                                <select :name="'items['+index+'][category]'" x-model="item.data.category" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 text-sm py-3" required>
+                                                <input x-show="type === 'comida'" type="hidden" :name="'items['+index+'][category]'" value="comida">
+                                                <select :name="type === 'comida' ? null : 'items['+index+'][category]'" x-model="item.data.category" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 text-sm py-3 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed dark:disabled:bg-gray-900/60" :disabled="type === 'comida'" required>
                                                     <option value="">Selecciona...</option>
                                                     @foreach($categories as $cat)
                                                         <option value="{{ $cat }}">{{ $cat }}</option>
@@ -837,6 +838,7 @@
                 maxTotalSize: 64 * 1024 * 1024, // 64 MB Total
                 currentTotalSize: 0,
                 hasInvoice: {{ $hasInvoice ? 'true' : 'false' }},
+                lockedCategory: @json($type === 'comida' ? 'comida' : null),
                 draftId: {{ isset($reimbursement) ? $reimbursement->id : 'null' }},
                 lastAutoSave: null,
                 isSaving: false,
@@ -1090,10 +1092,14 @@
                             uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', 
                             nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, 
                             impuestos: 0, metodo_pago: '', forma_pago: '', uso_cfdi: '', 
-                            lugar_expedicion: '', regimen_fiscal_emisor: '', category: '', observaciones: '',
+                            lugar_expedicion: '', regimen_fiscal_emisor: '', category: this.lockedCategory || '', observaciones: '',
                             attendees_count: '', location: '', attendees_names: '', propina: 0
                         }
                     };
+
+                    if (this.lockedCategory) {
+                        newItem.data.category = this.lockedCategory;
+                    }
                     
                     this.items.push(newItem);
                 },
@@ -1455,7 +1461,7 @@
                             item.xmlParsed = false; 
                             xmlInput.value = ''; 
                             item.fileName = ''; 
-                            item.data = { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '' };
+                            item.data = { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '', category: this.lockedCategory || '' };
                         }
                         else { 
                             // Check for duplicates in current session list
@@ -1475,7 +1481,7 @@
                                 xmlInput.value = '';
                                 item.xmlParsed = false;
                                 item.fileName = '';
-                                item.data = { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '' };
+                                item.data = { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '', category: this.lockedCategory || '' };
                                 return;
                             }
 
@@ -1492,7 +1498,7 @@
                              item.data.attendees_count = oldAttendeesCount;
                              item.data.location = oldLocation;
                              item.data.attendees_names = oldAttendeesNames;
-                             if (oldCategory) item.data.category = oldCategory;
+                             item.data.category = this.lockedCategory || oldCategory || '';
                              if (oldObservaciones) item.data.observaciones = oldObservaciones;
                              item.fileName = 'Factura: ' + (d.folio || (d.uuid ? d.uuid.substring(0, 8) : '???'));
                             

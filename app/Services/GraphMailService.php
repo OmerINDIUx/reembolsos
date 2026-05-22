@@ -16,8 +16,8 @@ class GraphMailService
     {
         $this->tenantId = env('GRAPH_TENANT_ID');
         $this->clientId = env('GRAPH_CLIENT_ID');
-        $this->clientSecret = env('ID_Secret') ?? env('GRAPH_CLIENT_SECRET');
-        $this->userId = env('GRAPH_USER_ID') ?? config('mail.from.address') ?? 'no-reply@grupoindi.com';
+        $this->clientSecret = env('ID_Secret') ?: env('GRAPH_CLIENT_SECRET');
+        $this->userId = env('GRAPH_USER_ID') ?: config('mail.from.address') ?: 'no-reply@grupoindi.com';
 
         if (empty($this->clientSecret)) {
             Log::warning("GraphMailService: Client Secret (GRAPH_CLIENT_SECRET) is missing in .env");
@@ -32,6 +32,11 @@ class GraphMailService
      */
     protected function getAccessToken()
     {
+        if (empty($this->tenantId) || empty($this->clientId) || empty($this->clientSecret)) {
+            Log::error('GraphMailService: faltan credenciales de Microsoft Graph en el archivo .env.');
+            return null;
+        }
+
         $client = new Client();
         $url = "https://login.microsoftonline.com/{$this->tenantId}/oauth2/v2.0/token";
 
@@ -60,7 +65,7 @@ class GraphMailService
                 $msg .= " | Respuesta: " . $e->getResponse()->getBody()->getContents();
             }
             Log::error($msg);
-            throw $e;
+            return null;
         }
     }
 
@@ -71,6 +76,7 @@ class GraphMailService
     {
         $token = $this->getAccessToken();
         if (!$token) {
+            Log::error('GraphMailService: no se pudo enviar correo porque no se obtuvo token de Microsoft Graph.');
             return false;
         }
 
