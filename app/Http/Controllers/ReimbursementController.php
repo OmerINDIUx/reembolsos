@@ -589,7 +589,7 @@ class ReimbursementController extends Controller
         
         // Target User Logic (On Behalf)
         $targetUserId = Auth::id();
-        if ($request->filled('user_id') && $user->canPerform('reimbursements.create_on_behalf') && $type === 'reembolso') {
+        if ($request->filled('user_id') && $user->canPerform('reimbursements.create_on_behalf') && in_array($type, ['reembolso', 'comida'])) {
             $candidateUser = \App\Models\User::findOrFail($request->user_id);
             if ($this->canRegisterOnBehalfInCostCenter($user, $candidateUser, $costCenterId)) {
                 $targetUserId = $candidateUser->id;
@@ -600,7 +600,7 @@ class ReimbursementController extends Controller
 
         // Payee Logic
         $payeeId = $targetUserId;
-        if (in_array($type, ['fondo_fijo', 'comida'])) {
+        if ($type === 'fondo_fijo') {
             $payeeId = $costCenter ? ($costCenter->beneficiary_id ?? $targetUserId) : $targetUserId;
         } else {
             $requestedPayeeId = $request->input('payee_id', $targetUserId);
@@ -671,7 +671,9 @@ class ReimbursementController extends Controller
                 $draftId = $item['draft_id'] ?? null;
                 $existingDraft = null;
                 if ($draftId) {
-                    $existingDraft = Reimbursement::where('id', $draftId)->where('user_id', $user->id)->first();
+                    $existingDraft = Reimbursement::where('id', $draftId)
+                        ->whereIn('user_id', array_unique([$user->id, $targetUserId]))
+                        ->first();
                 }
 
                 if ($hasInvoice) {
@@ -685,7 +687,10 @@ class ReimbursementController extends Controller
 
                         // If no draft_id was provided, try finding it by UUID
                         if (!$existingDraft) {
-                            $existingDraft = Reimbursement::where('uuid', $uuid)->where('user_id', $user->id)->where('status', 'borrador')->first();
+                            $existingDraft = Reimbursement::where('uuid', $uuid)
+                                ->whereIn('user_id', array_unique([$user->id, $targetUserId]))
+                                ->where('status', 'borrador')
+                                ->first();
                         }
                     } else {
                         // Fallback if resuming draft without re-uploading XML
@@ -1223,7 +1228,7 @@ class ReimbursementController extends Controller
 
         // Payee Logic for single store
         $targetUserId = Auth::id();
-        if ($request->filled('user_id') && $user->canPerform('reimbursements.create_on_behalf') && $request->type === 'reembolso') {
+        if ($request->filled('user_id') && $user->canPerform('reimbursements.create_on_behalf') && in_array($request->type, ['reembolso', 'comida'])) {
             $candidateUser = \App\Models\User::findOrFail($request->user_id);
             if ($this->canRegisterOnBehalfInCostCenter($user, $candidateUser, $effectiveCostCenterId)) {
                 $targetUserId = $candidateUser->id;
@@ -1233,7 +1238,7 @@ class ReimbursementController extends Controller
         }
 
         $payeeId = $targetUserId;
-        if (in_array($request->type, ['fondo_fijo', 'comida'])) {
+        if ($request->type === 'fondo_fijo') {
             $payeeId = $costCenter ? ($costCenter->beneficiary_id ?? $targetUserId) : $targetUserId;
         } else {
             $requestedPayeeId = $request->input('payee_id', $targetUserId);
@@ -3140,6 +3145,7 @@ class ReimbursementController extends Controller
             $travelEventId = $request->input('travel_event_id');
             $travelEvent = $travelEventId ? \App\Models\TravelEvent::find($travelEventId) : null;
             $requestCostCenterId = $travelEvent ? $travelEvent->cost_center_id : $request->input('cost_center_id');
+            $type = $request->input('type');
 
             if ($requestCostCenterId) {
                 $cc = \App\Models\CostCenter::find($requestCostCenterId);
@@ -3148,31 +3154,46 @@ class ReimbursementController extends Controller
                 }
             }
 
+            $targetUserId = $user->id;
+            if ($request->filled('user_id') && $user->canPerform('reimbursements.create_on_behalf') && in_array($type, ['reembolso', 'comida'])) {
+                $candidateUser = \App\Models\User::find($request->input('user_id'));
+                if ($candidateUser && $this->canRegisterOnBehalfInCostCenter($user, $candidateUser, $requestCostCenterId)) {
+                    $targetUserId = $candidateUser->id;
+                } else {
+                    return response()->json(['success' => false, 'error' => 'El beneficiario seleccionado debe pertenecer al mismo Centro de Costos.'], 422);
+                }
+            }
+
             $mainId = null;
             foreach ($items as $index => $itemData) {
                 try {
                     $id = $itemData['draft_id'] ?? null;
-                    
-                    $requestedPayeeId = $request->input('payee_id');
-                    $payeeId = $requestedPayeeId;
 
-                    // If requesting a different payee than self, verify permission
-                    if ($requestedPayeeId && $requestedPayeeId != $user->id && !$user->canPerform('reimbursements.create_on_behalf')) {
-                        $payeeId = $user->id;
+                    $payeeId = $targetUserId;
+                    if ($type === 'fondo_fijo') {
+                        $cc = $requestCostCenterId ? \App\Models\CostCenter::find($requestCostCenterId) : null;
+                        $payeeId = $cc ? ($cc->beneficiary_id ?? $targetUserId) : $targetUserId;
+                    } else {
+                        $requestedPayeeId = $request->input('payee_id', $targetUserId);
+                        if ($requestedPayeeId != $targetUserId && !$user->canPerform('reimbursements.create_on_behalf')) {
+                            $payeeId = $targetUserId;
+                        } else {
+                            $payeeId = $requestedPayeeId;
+                        }
                     }
 
                     $data = [
-                        'user_id' => $user->id,
+                        'user_id' => $targetUserId,
                     ];
 
                     // Find existing to check status and preserve data
                     $reimbursement = null;
                     if ($id) {
-                        $reimbursement = Reimbursement::where('user_id', $user->id)->find($id);
+                        $reimbursement = Reimbursement::whereIn('user_id', array_unique([$user->id, $targetUserId]))->find($id);
                     } 
                     
                     if (!$reimbursement && isset($itemData['uuid'])) {
-                        $reimbursement = Reimbursement::where('user_id', $user->id)
+                        $reimbursement = Reimbursement::whereIn('user_id', array_unique([$user->id, $targetUserId]))
                                                     ->where('uuid', $itemData['uuid'])
                                                     ->where('status', 'borrador')
                                                     ->first();
@@ -3181,7 +3202,7 @@ class ReimbursementController extends Controller
                     // PREVENT DATA LOSS: Only update global fields if they are NOT empty in the request
                     // Or if we are creating a brand new record
                     $globalFields = [
-                        'type' => $request->input('type'),
+                        'type' => $type,
                         'cost_center_id' => $requestCostCenterId,
                         'travel_event_id' => $travelEventId,
                         'week' => $request->input('week'),
