@@ -72,12 +72,12 @@ class User extends Authenticatable
 
     public function isCxp()
     {
-        return $this->role === 'accountant';
+        return $this->role === 'accountant' || $this->profile?->name === 'accountant';
     }
 
     public function isTreasury()
     {
-        return $this->role === 'tesoreria';
+        return $this->role === 'tesoreria' || $this->profile?->name === 'tesoreria';
     }
 
     public function isControlObra()
@@ -136,9 +136,9 @@ class User extends Authenticatable
             'director' => 'Director N1',
             'control_obra' => 'Control de Obra N2',
             'director_ejecutivo' => 'Director Ejecutivo N3',
-            'accountant' => 'Cuentas por Pagar N4',
+            'accountant' => 'Cuentas por Pagar Revisador',
             'direccion' => 'Subdirección N5',
-            'tesoreria' => 'Dirección N6',
+            'tesoreria' => 'Cuentas por Pagar Pagador',
             default => 'Usuario General',
         };
     }

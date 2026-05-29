@@ -121,7 +121,9 @@ class DashboardController extends Controller
             'aprobado_ejecutivo' => 'Aprob. Ejecut. (Old)',
             'aprobado_cxp' => 'Aprob. Subdir. (Old)',
             'aprobado_direccion' => 'Aprob. Direcc. (Old)',
-            'aprobado' => 'Pagado',
+            'pendiente_revision_cxp' => 'CXP Revisadores',
+            'pendiente_pago' => 'CXP Pagadores',
+            'aprobado' => 'En proceso de pago',
             'rechazado' => 'Rechazado',
             'requiere_correccion' => 'Para Corregir',
             'en_evento' => 'En Evento',
@@ -228,4 +230,3 @@ class DashboardController extends Controller
         ];
     }
 }
-

@@ -184,9 +184,13 @@ class Reimbursement extends Model
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
         if ($allIdentities->contains(fn($identity) => $identity->isAdmin())) return true;
 
-        // Shared Funnel for Accounts Payable (CXP) and Treasury
+        // Accounts Payable is split into review first, payment second.
+        if ($this->status === 'pendiente_revision_cxp') {
+            return $allIdentities->contains(fn($identity) => $identity->isCxp());
+        }
+
         if ($this->status === 'pendiente_pago') {
-            return $allIdentities->contains(fn($identity) => $identity->isCxp() || $identity->isTreasury());
+            return $allIdentities->contains(fn($identity) => $identity->isTreasury());
         }
         
         $currentStep = $this->currentStep;

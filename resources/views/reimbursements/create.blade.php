@@ -658,14 +658,14 @@
                             </div>
                             <div class="flex items-center space-x-2">
                                 <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Peso Total:</span>
-                                <span :class="currentTotalSize >= maxTotalSize * 0.9 ? 'text-red-600' : 'text-indigo-600'" class="text-xs font-bold" x-text="(currentTotalSize / (1024*1024)).toFixed(2) + 'MB / ' + (maxTotalSize / (1024*1024)) + 'MB'"></span>
+                                <span class="text-xs font-bold text-indigo-600" x-text="(currentTotalSize / (1024*1024)).toFixed(2) + 'MB seleccionados'"></span>
                             </div>
                         </div>
 
                         <button type="button" 
                             x-on:click="addItem()" 
-                            :disabled="items.length >= maxItems || currentTotalSize >= maxTotalSize"
-                            :class="(items.length >= maxItems || currentTotalSize >= maxTotalSize) ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:shadow-2xl transform hover:scale-105'"
+                            :disabled="items.length >= maxItems"
+                            :class="items.length >= maxItems ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:shadow-2xl transform hover:scale-105'"
                             class="group flex items-center justify-center p-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[2rem] transition-all">
                             <div class="bg-white dark:bg-gray-800 px-12 py-6 rounded-[1.9rem] flex items-center">
                                 <div class="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center mr-4 group-hover:rotate-180 transition-transform duration-500">
@@ -676,11 +676,9 @@
                         </button>
                         
                         <template x-if="items.length >= maxItems">
-                            <p class="text-[10px] font-bold text-red-600 uppercase tracking-tight animate-shake">Límite de 7 gastos (21 archivos) alcanzado por carga.</p>
+                            <p class="text-[10px] font-bold text-red-600 uppercase tracking-tight animate-shake">Límite de 30 gastos (90 archivos) alcanzado por carga.</p>
                         </template>
-                        <template x-if="currentTotalSize >= maxTotalSize">
-                            <p class="text-[10px] font-bold text-red-600 uppercase tracking-tight animate-shake">Límite de peso total (64MB) excedido. Por favor registra estas facturas y crea una nueva sesión.</p>
-                        </template>
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Los archivos se guardan por slot para evitar cortes por peso total.</p>
                     </div>
                 </div>
 
@@ -818,7 +816,7 @@
                 payeeOption: 'creator',
                 processWeek: '{{ $currentWeek }}',
                 items: [],
-                maxItems: 7,
+                maxItems: 30,
                 @php
                     $val = ini_get('upload_max_filesize');
                     $val = trim($val);
@@ -835,13 +833,14 @@
                     $finalMax = min($phpMax, $appMax);
                 @endphp
                 maxFileSize: {{ $finalMax }}, // PHP upload_max_filesize or 10MB
-                maxTotalSize: 64 * 1024 * 1024, // 64 MB Total
+                maxTotalSize: 64 * 1024 * 1024,
                 currentTotalSize: 0,
                 hasInvoice: {{ $hasInvoice ? 'true' : 'false' }},
                 lockedCategory: @json($type === 'comida' ? 'comida' : null),
                 draftId: {{ isset($reimbursement) ? $reimbursement->id : 'null' }},
                 lastAutoSave: null,
                 isSaving: false,
+                isSubmitting: false,
                 init() { 
                     @if(isset($reimbursement))
                         this.chargeType = @json($reimbursement->travel_event_id ? "travel_event" : "cost_center");
@@ -1103,107 +1102,172 @@
                     
                     this.items.push(newItem);
                 },
+                getFieldValue(name) {
+                    const field = document.querySelector(`[name="${name}"]`);
+                    return field ? field.value : '';
+                },
+                getItemFileInput(index, field) {
+                    return document.querySelector(`input[name="items[${index}][${field}]"]`);
+                },
+                itemHasContent(item, index) {
+                    const hasFiles = ['xml_file', 'pdf_file', 'ticket_file'].some(field => {
+                        const input = this.getItemFileInput(index, field);
+                        return input && input.files && input.files.length > 0;
+                    });
+
+                    return item.draftId || hasFiles || item.xmlParsed || item.pdfName || item.ticketName ||
+                        parseFloat(item.data.total) > 0 ||
+                        (item.data.nombre_emisor && item.data.nombre_emisor.trim() !== '') ||
+                        (item.data.observaciones && item.data.observaciones.trim() !== '') ||
+                        (item.data.category && item.data.category.trim() !== '');
+                },
+                itemHasPendingUpload(index) {
+                    return ['xml_file', 'pdf_file', 'ticket_file'].some(field => {
+                        const input = this.getItemFileInput(index, field);
+                        return input && input.files && input.files.length > 0;
+                    });
+                },
+                buildSlotFormData(index) {
+                    const item = this.items[index];
+                    const formData = new FormData();
+                    const globalFields = ['type', 'has_invoice', 'cost_center_id', 'travel_event_id', 'week', 'user_id', 'payee_id', 'title'];
+
+                    formData.append('_token', '{{ csrf_token() }}');
+                    globalFields.forEach(name => formData.append(name, this.getFieldValue(name)));
+                    if (this.draftId) formData.append('draft_id', this.draftId);
+                    if (item.draftId) formData.append(`items[${index}][draft_id]`, item.draftId);
+                    if (item.companyConfirmed) formData.append(`items[${index}][confirm_company]`, '1');
+
+                    Object.keys(item.data || {}).forEach(field => {
+                        const value = item.data[field];
+                        if (value !== undefined && value !== null) {
+                            formData.append(`items[${index}][${field}]`, value);
+                        }
+                    });
+
+                    ['xml_file', 'pdf_file', 'ticket_file'].forEach(field => {
+                        const input = this.getItemFileInput(index, field);
+                        if (input && input.files && input.files[0]) {
+                            formData.append(`items[${index}][${field}]`, input.files[0]);
+                        }
+                    });
+
+                    return formData;
+                },
+                applyDraftResult(result) {
+                    if (result.main_id) this.draftId = result.main_id;
+                    if (!result.ids) return;
+
+                    Object.keys(result.ids).forEach(index => {
+                        if (this.items[index]) {
+                            const r = result.ids[index];
+                            this.items[index].draftId = r.id;
+                            if (r.has_xml) {
+                                this.items[index].xmlParsed = true;
+                                this.items[index].fileName = r.xml_name || this.items[index].fileName || 'Factura: ' + (r.folio || 'Guardada');
+                                const xmlInput = this.getItemFileInput(index, 'xml_file');
+                                if (xmlInput) xmlInput.value = '';
+                            }
+                            if (r.has_pdf && r.pdf_name) {
+                                this.items[index].pdfName = r.pdf_name;
+                                const pdfInput = this.getItemFileInput(index, 'pdf_file');
+                                if (pdfInput) pdfInput.value = '';
+                            } else if (r.has_pdf && !this.items[index].pdfName) {
+                                this.items[index].pdfName = 'PDF guardado';
+                                const pdfInput = this.getItemFileInput(index, 'pdf_file');
+                                if (pdfInput) pdfInput.value = '';
+                            }
+                            if (r.has_ticket && r.ticket_name) {
+                                this.items[index].ticketName = r.ticket_name;
+                                const ticketInput = this.getItemFileInput(index, 'ticket_file');
+                                if (ticketInput) ticketInput.value = '';
+                            } else if (r.has_ticket && !this.items[index].ticketName) {
+                                this.items[index].ticketName = 'Ticket guardado';
+                                const ticketInput = this.getItemFileInput(index, 'ticket_file');
+                                if (ticketInput) ticketInput.value = '';
+                            }
+                            if (r.folio) this.items[index].folio = r.folio;
+                        }
+                    });
+                    this.$nextTick(() => this.calculateTotalFileSize());
+                },
+                async saveSlot(index, isAuto = false) {
+                    if (!this.items[index] || !this.itemHasContent(this.items[index], index)) return true;
+
+                    const response = await fetch('{{ route("reimbursements.auto_save") }}', {
+                        method: 'POST',
+                        body: this.buildSlotFormData(index),
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+
+                    const raw = await response.text();
+                    let result = {};
+                    try {
+                        result = raw ? JSON.parse(raw) : {};
+                    } catch (parseError) {
+                        result = { error: raw ? raw.substring(0, 240) : 'Respuesta inválida del servidor' };
+                    }
+
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.error || `No se pudo guardar el slot ${index + 1}`);
+                    }
+
+                    this.applyDraftResult(result);
+                    this.lastAutoSave = new Date().toLocaleTimeString();
+                    return true;
+                },
                 async saveDraft(isAuto = false) {
                     if (this.isSaving) return;
 
-                    // NEW: Prevent autosave if Step 2 is empty
-                    if (isAuto) {
-                        const ccSelect = document.querySelector('select[name="cost_center_id"]');
-                        const hasStep1Data = !!(ccSelect && ccSelect.value) || !!this.selectedCostCenterId;
-                        let hasStep2Data = this.items.some(item => {
-                            return item.draftId || // Already saved
-                                   item.xmlParsed || // XML exists
-                                   item.pdfName || // PDF preview exists
-                                   item.ticketName || // Ticket preview exists
-                                   parseFloat(item.data.total) > 0 || // Amount exists
-                                   (item.data.nombre_emisor && item.data.nombre_emisor.trim() !== '') ||
-                                   (item.data.observaciones && item.data.observaciones.trim() !== '') ||
-                                   (item.data.category && item.data.category.trim() !== '');
-                        });
+                    const indexes = this.items
+                        .map((item, index) => ({ item, index }))
+                        .filter(({ item, index }) => {
+                            if (!this.itemHasContent(item, index)) return false;
+                            if (!isAuto) return true;
+                            return !item.draftId || this.itemHasPendingUpload(index);
+                        })
+                        .map(({ index }) => index);
 
-                        if (!hasStep1Data && !hasStep2Data) return;
-                    }
+                    if (isAuto && indexes.length === 0) return;
 
                     this.isSaving = true;
-                    
                     try {
-                        const formElem = document.getElementById('reimbursement-form');
-                        const formData = new FormData(formElem);
-                        
-                        // IF isAuto, we could strip files, but user wants everything.
-                        // However, to avoid timeouts, for AUTO-SAVE we'll strip them IF they haven't changed.
-                        // For simplicity now, let's just send everything but handle the response.
-
-                        if (this.draftId) {
-                            formData.append('draft_id', this.draftId);
+                        for (const index of indexes) {
+                            await this.saveSlot(index, isAuto);
                         }
-                        
-                        // Also append individual item draft IDs if they exist
-                        this.items.forEach((item, index) => {
-                            if (item.draftId) {
-                                formData.append(`items[${index}][draft_id]`, item.draftId);
-                            }
-                        });
 
-                        formData.append('_token', '{{ csrf_token() }}');
-
-                        const response = await fetch('{{ route("reimbursements.auto_save") }}', {
-                            method: 'POST',
-                            body: formData,
-                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                        });
-
-                        const result = await response.json();
-                        if (result.success) {
-                            // Update IDs
-                            if (result.main_id) this.draftId = result.main_id;
-                            if (result.ids) {
-                                Object.keys(result.ids).forEach(index => {
-                                    if (this.items[index]) {
-                                        const r = result.ids[index];
-                                        this.items[index].draftId = r.id;
-                                        if (r.has_xml) {
-                                            this.items[index].xmlParsed = true;
-                                            if (r.xml_name) {
-                                                this.items[index].fileName = r.xml_name;
-                                            } else if (!this.items[index].fileName) {
-                                                this.items[index].fileName = 'Factura: ' + (r.folio || 'Guardada');
-                                            }
-                                        }
-                                        if (r.has_pdf && r.pdf_name) this.items[index].pdfName = r.pdf_name;
-                                        else if (r.has_pdf && !this.items[index].pdfName) this.items[index].pdfName = 'PDF guardado';
-                                        if (r.has_ticket && r.ticket_name) this.items[index].ticketName = r.ticket_name;
-                                        else if (r.has_ticket && !this.items[index].ticketName) this.items[index].ticketName = 'Ticket guardado';
-                                        if (r.folio) this.items[index].folio = r.folio;
-                                    }
-                                });
-                            }
-
-                            this.lastAutoSave = new Date().toLocaleTimeString();
-                            if (!isAuto) {
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: '<span class="text-lg font-black uppercase tracking-tight">Borrador Guardado</span>',
-                                    text: 'Se han guardado todos los archivos y datos.',
-                                    timer: 2000,
-                                    showConfirmButton: false,
-                                    toast: true,
-                                    position: 'top-end',
-                                    customClass: {
-                                        popup: 'rounded-2xl border-none shadow-2xl dark:bg-gray-800'
-                                    }
-                                });
-                            }
-                        } else {
-                            throw new Error(result.error || 'Server error');
+                        if (!isAuto) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '<span class="text-lg font-black uppercase tracking-tight">Borrador Guardado</span>',
+                                text: 'Se han guardado todos los archivos y datos.',
+                                timer: 2000,
+                                showConfirmButton: false,
+                                toast: true,
+                                position: 'top-end',
+                                customClass: {
+                                    popup: 'rounded-2xl border-none shadow-2xl dark:bg-gray-800'
+                                }
+                            });
                         }
                     } catch (e) {
                         console.error('Draft Save Error:', e);
                         if (!isAuto) {
                             Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo guardar: ' + e.message });
+                            throw e;
                         }
                     } finally {
                         this.isSaving = false;
+                    }
+                },
+                async savePendingSlots() {
+                    const indexes = this.items
+                        .map((item, index) => ({ item, index }))
+                        .filter(({ item, index }) => this.itemHasContent(item, index) && (!item.draftId || this.itemHasPendingUpload(index)))
+                        .map(({ index }) => index);
+
+                    for (const index of indexes) {
+                        await this.saveSlot(index, false);
                     }
                 },
                 removeItem(index) { 
@@ -1302,7 +1366,7 @@
                         this.validateFiles(index);
                     } else {
                         // In manual mode, we should also trigger an auto-save when a PDF is uploaded
-                        this.saveDraft(true);
+                        this.saveSlot(index, true).catch(e => console.error('Slot Save Error:', e));
                     }
 
                     this.calculateTotalFileSize();
@@ -1351,7 +1415,11 @@
                     }
 
                     this.calculateTotalFileSize();
-                    this.saveDraft(true);
+                    if (typeof index !== 'undefined') {
+                        this.saveSlot(index, true).catch(e => console.error('Slot Save Error:', e));
+                    } else {
+                        this.saveDraft(true);
+                    }
                 },
                 calculateTotalFileSize() {
                     let total = 0;
@@ -1409,7 +1477,7 @@
                                     statusLabel = 'RECHAZADO';
                                 } else if (d.status === 'aprobado') {
                                     statusClasses = 'bg-green-100 text-green-800';
-                                    statusLabel = 'PAGADO';
+                                    statusLabel = 'EN PROCESO DE PAGO';
                                 } else if (d.status === 'pendiente') {
                                     statusClasses = 'bg-yellow-100 text-yellow-800';
                                     statusLabel = 'PENDIENTE';
@@ -1501,6 +1569,7 @@
                              item.data.category = this.lockedCategory || oldCategory || '';
                              if (oldObservaciones) item.data.observaciones = oldObservaciones;
                              item.fileName = 'Factura: ' + (d.folio || (d.uuid ? d.uuid.substring(0, 8) : '???'));
+                             this.saveSlot(index, true).catch(e => console.error('Slot Save Error:', e));
                             
                             if (d.pdf_validation && !d.pdf_validation.uuid_match && !item.noPdf && !d.pdf_validation.is_missing) {
                                 Swal.fire({
@@ -1542,25 +1611,9 @@
                         return acc + count;
                     }, 0);
                 },
-                handleSubmit(e) { 
+                async handleSubmit(e) { 
+                    if (this.isSubmitting) return;
                     const form = e.target;
-
-                    // New: Validate total size before anything else
-                    if (this.currentTotalSize > this.maxTotalSize) {
-                        e.preventDefault();
-                        Swal.fire({
-                            title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Límite de Peso Excedido</span>',
-                            html: `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">El peso total de los archivos subidos es de <b>${(this.currentTotalSize / (1024*1024)).toFixed(2)} MB</b>, lo que supera el límite de <b>64 MB</b>. Por favor, realiza la carga en varias sesiones.</p>`,
-                            icon: 'error',
-                            confirmButtonText: 'ENTENDIDO',
-                            confirmButtonColor: '#ef4444',
-                            customClass: {
-                                popup: 'rounded-[1.5rem] border-none shadow-2xl dark:bg-gray-800',
-                                confirmButton: 'rounded-xl px-12 py-3 font-black text-xs uppercase tracking-widest'
-                            }
-                        });
-                        return;
-                    }
 
                     // Manual Validation Check
                     if (!form.checkValidity()) {
@@ -1652,7 +1705,32 @@
                             return;
                         }
                     }
-                    document.getElementById('loading-overlay').classList.remove('hidden'); 
+                    e.preventDefault();
+                    document.getElementById('loading-overlay').classList.remove('hidden');
+                    this.isSubmitting = true;
+
+                    try {
+                        await this.savePendingSlots();
+
+                        const missingDraft = this.items.findIndex((item, index) => this.itemHasContent(item, index) && !item.draftId);
+                        if (missingDraft >= 0) {
+                            throw new Error(`No se pudo preparar el gasto #${missingDraft + 1}.`);
+                        }
+
+                        form.querySelectorAll('input[type="file"][name^="items["]').forEach(input => {
+                            input.disabled = true;
+                        });
+
+                        form.submit();
+                    } catch (error) {
+                        this.isSubmitting = false;
+                        document.getElementById('loading-overlay').classList.add('hidden');
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'No se pudo enviar',
+                            text: error.message || 'Revisa los archivos e inténtalo de nuevo.'
+                        });
+                    }
                 }
             }
         }

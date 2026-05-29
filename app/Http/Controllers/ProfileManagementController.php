@@ -79,7 +79,7 @@ class ProfileManagementController extends Controller
             return back()->with('error', 'No se puede eliminar un perfil que tiene usuarios asociados.');
         }
 
-        if (in_array($profile->name, ['admin', 'director', 'accountant', 'user'])) {
+        if (in_array($profile->name, ['admin', 'admin_view', 'director', 'control_obra', 'director_ejecutivo', 'accountant', 'direccion', 'tesoreria', 'user'])) {
             return back()->with('error', 'Los perfiles del sistema no pueden ser eliminados.');
         }
 

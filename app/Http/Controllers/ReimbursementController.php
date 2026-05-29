@@ -616,32 +616,14 @@ class ReimbursementController extends Controller
         $initialStatus = 'pendiente';
         $approvalData = [];
         $autoNote = "";
+        $autoApprovedSteps = collect();
 
         if ($travelEvent && $travelEvent->status === 'active') {
             // Reembolsos de un evento activo se quedan en pausa hasta que el Aprobador Principal "cierre" el evento.
             $initialStatus = 'en_evento';
             $currentStepId = null;
         } elseif ($costCenter) {
-            $firstStep = $costCenter->approvalSteps()->orderBy('order', 'asc')->first();
-            $initialStatus = $firstStep ? 'pendiente' : 'aprobado';
-            $currentStepId = $firstStep ? $firstStep->id : null;
-
-            // AUTO-APPROVAL: If creator is the approver, advance
-            while ($firstStep && $firstStep->user_id === $user->id) {
-                $autoNote .= "\n[AUTO-APROBACIÓN: " . $firstStep->name . "]";
-                $this->mapApprovalData($firstStep->order, $user->id, $approvalData);
-                
-                $nextStep = $costCenter->approvalSteps()->where('order', '>', $firstStep->order)->orderBy('order', 'asc')->first();
-                if ($nextStep) {
-                    $firstStep = $nextStep;
-                    $currentStepId = $nextStep->id;
-                } else {
-                    $firstStep = null;
-                    $currentStepId = null;
-                    $initialStatus = 'aprobado';
-                    break;
-                }
-            }
+            [$currentStepId, $initialStatus, $autoNote, $approvalData, $autoApprovedSteps] = $this->buildInitialApprovalState($costCenter, $user);
         }
 
         $createdCount = 0;
@@ -827,12 +809,12 @@ class ReimbursementController extends Controller
 
                 // Record Initial Audit History
                 if ($reimbursement->status !== 'borrador') {
-                    $reimbursement->approvals()->create([
-                        'user_id' => $user->id,
-                        'step_name' => 'Solicitante',
-                        'action' => 'enviado',
-                        'comment' => $onBehalfNote ? trim($onBehalfNote, "[]\n") : 'Solicitud enviada para aprobación (Carga Masiva).',
-                    ]);
+                    $this->recordInitialApprovalHistory(
+                        $reimbursement,
+                        $user,
+                        $onBehalfNote ? trim($onBehalfNote, "[]\n") : 'Solicitud enviada para aprobación (Carga Masiva).',
+                        $autoApprovedSteps
+                    );
                 }
 
                 if (!empty($reimbursement->uuid) && $this->canSendMenfisEmail($reimbursement)) {
@@ -862,7 +844,9 @@ class ReimbursementController extends Controller
 
             if ($initialStatus === 'aprobado_ejecutivo') {
                 // To CXP
-                $cxpUsers = User::where('role', 'accountant')->get();
+                $cxpUsers = User::where('role', 'accountant')
+                    ->orWhereHas('profile', fn($q) => $q->where('name', 'accountant'))
+                    ->get();
                 foreach($cxpUsers as $cxp) {
                     foreach($createdReimbursements as $cr) {
                         NotificationBatchService::add($cxp, $cr);
@@ -1193,27 +1177,10 @@ class ReimbursementController extends Controller
         $initialStatus = 'pendiente';
         $autoNote = "";
         $approvalData = [];
+        $autoApprovedSteps = collect();
 
         if ($costCenter) {
-            $firstStep = $costCenter->approvalSteps()->orderBy('order', 'asc')->first();
-            $initialStatus = $firstStep ? 'pendiente' : 'aprobado';
-            $currentStepId = $firstStep ? $firstStep->id : null;
-            
-            while ($firstStep && $firstStep->user_id === $user->id) {
-                $autoNote .= "\n[AUTO-APROBACIÃƒâ€œN: " . $firstStep->name . "]";
-                $this->mapApprovalData($firstStep->order, $user->id, $approvalData);
-                
-                $nextStep = $costCenter->approvalSteps()->where('order', '>', $firstStep->order)->orderBy('order', 'asc')->first();
-                if ($nextStep) {
-                    $firstStep = $nextStep;
-                    $currentStepId = $nextStep->id;
-                } else {
-                    $firstStep = null;
-                    $currentStepId = null;
-                    $initialStatus = 'aprobado';
-                    break;
-                }
-            }
+            [$currentStepId, $initialStatus, $autoNote, $approvalData, $autoApprovedSteps] = $this->buildInitialApprovalState($costCenter, $user);
         }
 
         $finalObs = ($request->observaciones ?? "") . $autoNote;
@@ -1326,12 +1293,12 @@ class ReimbursementController extends Controller
 
         // Record Initial Audit History
         if ($reimbursement->status !== 'borrador') {
-            $reimbursement->approvals()->create([
-                'user_id' => $user->id,
-                'step_name' => 'Solicitante',
-                'action' => 'enviado',
-                'comment' => $onBehalfNote ? trim($onBehalfNote, "[]\n") : 'Solicitud enviada para aprobación.',
-            ]);
+            $this->recordInitialApprovalHistory(
+                $reimbursement,
+                $user,
+                $onBehalfNote ? trim($onBehalfNote, "[]\n") : 'Solicitud enviada para aprobación.',
+                $autoApprovedSteps
+            );
         }
 
         // Handle International Trip Files
@@ -1475,7 +1442,7 @@ class ReimbursementController extends Controller
                         $canSee = true;
                         break;
                     }
-                    if ($reimbursement->status === 'aprobado' || $reimbursement->status === 'pendiente_pago') {
+                    if (in_array($reimbursement->status, ['aprobado', 'pendiente_revision_cxp', 'pendiente_pago'])) {
                         $canSee = true;
                         break;
                     }
@@ -1484,7 +1451,7 @@ class ReimbursementController extends Controller
                 if ($canSee) break;
 
                 if ($identity->isCxp()) {
-                    if ($reimbursement->approved_by_executive_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control'])) {
+                    if (in_array($status, ['pendiente_revision_cxp', 'pendiente_pago', 'aprobado']) || $reimbursement->approved_by_executive_at !== null) {
                         $canSee = true;
                         break;
                     }
@@ -1494,7 +1461,7 @@ class ReimbursementController extends Controller
                         break;
                     }
                 } elseif ($identity->isTreasury()) {
-                    if ($reimbursement->approved_by_direccion_at !== null || !in_array($status, ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp'])) {
+                    if (in_array($status, ['pendiente_pago', 'aprobado']) || $reimbursement->approved_by_direccion_at !== null) {
                         $canSee = true;
                         break;
                     }
@@ -1638,8 +1605,18 @@ class ReimbursementController extends Controller
             $newObs = "CORREGIDO por " . $user->name . " el " . now()->format('d/m/Y H:i') . ": " . $request->user_correction_comment;
             $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
 
-            // Direct routing rule: Return to the level that was currently reviewing it
-            if ($reimbursement->approved_by_direccion_id !== null) {
+            // Direct routing rule: return to the stage that requested the correction.
+            $lastCorrection = $reimbursement->approvals()
+                ->where('action', 'requiere_correccion')
+                ->latest()
+                ->first();
+            $lastCorrectionStep = $lastCorrection->step_name ?? '';
+
+            if (str_contains($lastCorrectionStep, 'Cuentas por Pagar Revisadores')) {
+                $data['status'] = 'pendiente_revision_cxp';
+            } elseif (str_contains($lastCorrectionStep, 'Cuentas por Pagar Pagadores')) {
+                $data['status'] = 'pendiente_pago';
+            } elseif ($reimbursement->approved_by_direccion_id !== null) {
                 $data['status'] = 'aprobado_direccion'; // Back to Treasury
             } elseif ($reimbursement->approved_by_cxp_id !== null) {
                 $data['status'] = 'aprobado_cxp'; // Back to DirecciÃƒÂ³n
@@ -1714,7 +1691,11 @@ class ReimbursementController extends Controller
 
             $reimbursement->approvals()->create([
                 'user_id' => $user->id,
-                'step_name' => $stepForAudit->name ?? 'Revision',
+                'step_name' => $stepForAudit->name ?? match ($originalStatus) {
+                    'pendiente_revision_cxp' => 'Cuentas por Pagar Revisadores',
+                    'pendiente_pago' => 'Cuentas por Pagar Pagadores',
+                    default => 'Revision',
+                },
                 'action' => $data['status'],
                 'comment' => ($request->rejection_reason ?? '') . ($request->rejection_comment ? " - " . $request->rejection_comment : ""),
                 'substituted_user_id' => $substitutedUserId
@@ -1738,11 +1719,24 @@ class ReimbursementController extends Controller
             if ($owner) {
                 NotificationBatchService::add($owner, $reimbursement);
             }
-        } elseif ($currentStatus === 'pendiente_pago') {
-            // Notificar a todos los contadores / CXP
-            $accountants = \App\Models\User::where('role', 'accountant')->get();
+        } elseif ($currentStatus === 'pendiente_revision_cxp') {
+            // Notificar a CXP Revisadores
+            $accountants = \App\Models\User::where('role', 'accountant')
+                ->orWhereHas('profile', fn($q) => $q->where('name', 'accountant'))
+                ->get();
             foreach ($accountants as $accountant) {
                 NotificationBatchService::add($accountant, $reimbursement);
+            }
+            if ($owner) {
+                NotificationBatchService::add($owner, $reimbursement);
+            }
+        } elseif ($currentStatus === 'pendiente_pago') {
+            // Notificar a CXP Pagadores
+            $payers = \App\Models\User::where('role', 'tesoreria')
+                ->orWhereHas('profile', fn($q) => $q->where('name', 'tesoreria'))
+                ->get();
+            foreach ($payers as $payer) {
+                NotificationBatchService::add($payer, $reimbursement);
             }
             if ($owner) {
                 NotificationBatchService::add($owner, $reimbursement);
@@ -1965,9 +1959,9 @@ class ReimbursementController extends Controller
                     $approvals[] = "Dir. Ejecutivo: Pendiente";
                 }
 
-                // SubdirecciÃƒÂ³n
+                // CXP Revisadores
                 if ($r->approved_by_cxp_at) {
-                    $approvals[] = "SubdirecciÃƒÂ³n: " . ($r->cxpApprover->name ?? 'N/A') . " (" . $r->approved_by_cxp_at->format('d/m/Y H:i') . ")";
+                    $approvals[] = "CXP Revisadores: " . ($r->cxpApprover->name ?? 'N/A') . " (" . $r->approved_by_cxp_at->format('d/m/Y H:i') . ")";
                 }
 
                 // DirecciÃƒÂ³n
@@ -1975,9 +1969,9 @@ class ReimbursementController extends Controller
                     $approvals[] = "DirecciÃƒÂ³n: " . ($r->direccionApprover->name ?? 'N/A') . " (" . $r->approved_by_direccion_at->format('d/m/Y H:i') . ")";
                 }
 
-                // Cuentas por Pagar
+                // CXP Pagadores
                 if ($r->approved_by_treasury_at) {
-                    $approvals[] = "Cuentas por Pagar: " . ($r->treasuryApprover->name ?? 'N/A') . " (" . $r->approved_by_treasury_at->format('d/m/Y H:i') . ")";
+                    $approvals[] = "CXP Pagadores: " . ($r->treasuryApprover->name ?? 'N/A') . " (" . $r->approved_by_treasury_at->format('d/m/Y H:i') . ")";
                 }
 
                 $approvalsStr = implode(" | ", $approvals);
@@ -2349,27 +2343,34 @@ class ReimbursementController extends Controller
                 }
 
                 // 3. Check workflow profile
-                // CXP and Treasury can approve records that are in the final payment funnel
-                $paymentFunnel = ['pendiente_pago', 'aprobado_ejecutivo', 'aprobado_cxp', 'aprobado_direccion'];
-                if (!$user->isAdmin() && !in_array($reimbursement->status, $paymentFunnel)) {
+                $canReviewCxp = $user->isAdmin() || ($user->isCxp() && $reimbursement->status === 'pendiente_revision_cxp');
+                $canPayCxp = $user->isAdmin() || ($user->isTreasury() && $reimbursement->status === 'pendiente_pago');
+                if (!$canReviewCxp && !$canPayCxp) {
                     $failed++;
                     $statusLabel = ucwords(str_replace('_', ' ', $reimbursement->status));
-                    $errors['invalid_status'][] = "Folio $folio: El estatus '$statusLabel' no está en el embudo de Cuentas por Pagar (requiere ser 'pendiente_pago').";
+                    $errors['invalid_status'][] = "Folio $folio: El estatus '$statusLabel' no corresponde a tu etapa de Cuentas por Pagar.";
                     continue;
                 }
 
-                // If we reach here, we can approve
-                $reimbursement->update([
-                    'status' => 'aprobado',
-                    'approved_by_cxp_id' => $user->id,
-                    'approved_by_cxp_at' => now(),
-                ]);
+                $updateData = $canReviewCxp && $reimbursement->status === 'pendiente_revision_cxp'
+                    ? [
+                        'status' => 'pendiente_pago',
+                        'approved_by_cxp_id' => $user->id,
+                        'approved_by_cxp_at' => now(),
+                    ]
+                    : [
+                        'status' => 'aprobado',
+                        'approved_by_treasury_id' => $user->id,
+                        'approved_by_treasury_at' => now(),
+                    ];
+
+                $reimbursement->update($updateData);
                 $processed++;
                 
                 // Add an audit approval trail entry just like the single approval
                 $reimbursement->approvals()->create([
                     'user_id' => $user->id,
-                    'step_name' => 'Cuentas por Pagar (Masivo)',
+                    'step_name' => $updateData['status'] === 'pendiente_pago' ? 'Cuentas por Pagar Revisadores (Masivo)' : 'Cuentas por Pagar Pagadores (Masivo)',
                     'action' => 'aprobado',
                     'comment' => 'Aprobación Masiva por CSV',
                     'is_bulk' => true
@@ -3017,6 +3018,66 @@ class ReimbursementController extends Controller
     }
 
     /**
+     * Build the initial custom approval step for a reimbursement.
+     *
+     * If the requester is already an approver in the cost center, lower/equal
+     * levels are considered covered and the workflow starts at the next level.
+     */
+    private function buildInitialApprovalState(CostCenter $costCenter, User $requester): array
+    {
+        $approvalData = [];
+        $autoNote = '';
+        $steps = $costCenter->approvalSteps()->orderBy('order', 'asc')->get();
+
+        if ($steps->isEmpty()) {
+            return [null, 'aprobado', $autoNote, $approvalData, collect()];
+        }
+
+        $requesterOrder = $steps
+            ->where('user_id', $requester->id)
+            ->max('order');
+
+        if (!$requesterOrder) {
+            $firstStep = $steps->first();
+
+            return [$firstStep->id, 'pendiente', $autoNote, $approvalData, collect()];
+        }
+
+        $skippedSteps = $steps->where('order', '<=', $requesterOrder)->values();
+        foreach ($skippedSteps as $step) {
+            $autoNote .= "\n[AUTO-APROBACIÓN: " . ($step->name ?? "Nivel {$step->order}") . "]";
+            $this->mapApprovalData($step->order, $requester->id, $approvalData);
+        }
+
+        $nextStep = $steps->firstWhere('order', '>', $requesterOrder);
+
+        if (!$nextStep) {
+            return [null, 'aprobado', $autoNote, $approvalData, $skippedSteps];
+        }
+
+        return [$nextStep->id, 'pendiente', $autoNote, $approvalData, $skippedSteps];
+    }
+
+    private function recordInitialApprovalHistory(Reimbursement $reimbursement, User $user, string $submitComment, $autoApprovedSteps): void
+    {
+        $reimbursement->approvals()->create([
+            'user_id' => $user->id,
+            'step_name' => 'Solicitante',
+            'action' => 'enviado',
+            'comment' => $submitComment,
+        ]);
+
+        foreach ($autoApprovedSteps as $step) {
+            $reimbursement->approvals()->create([
+                'user_id' => $user->id,
+                'step_name' => $step->name ?? "Nivel {$step->order}",
+                'action' => 'aprobado',
+                'comment' => 'Auto-aprobado por nivel jerárquico del solicitante.',
+            ]);
+        }
+    }
+
+    /**
      * Recursive/Iterative logic to handle auto-approvals based on historical or current user identity.
      */
     private function handleDynamicApprovals(\App\Models\Reimbursement $reimbursement, $user, $isBulk = false, $originalStatus = null, $stepAtActionTime = null)
@@ -3033,7 +3094,11 @@ class ReimbursementController extends Controller
 
         $reimbursement->approvals()->create([
             'user_id' => $user->id,
-            'step_name' => $stepAtActionTime->name ?? ($reimbursement->status === 'pendiente_pago' ? 'Cuentas por Pagar' : 'Proceso'),
+            'step_name' => $stepAtActionTime->name ?? match ($reimbursement->status) {
+                'pendiente_revision_cxp' => 'Cuentas por Pagar Revisadores',
+                'pendiente_pago' => 'Cuentas por Pagar Pagadores',
+                default => 'Proceso',
+            },
             'action' => 'aprobado',
             'comment' => $isBulk ? 'Aprobación Masiva' : 'Aprobación Manual',
             'is_bulk' => $isBulk,
@@ -3041,18 +3106,32 @@ class ReimbursementController extends Controller
         ]);
 
         // Record approval in legacy columns if possible (order 1-6) for old reports
-        $this->mapApprovalData($stepAtActionTime->order ?? 1, $user->id, $reimbursement);
+        if ($stepAtActionTime) {
+            $this->mapApprovalData($stepAtActionTime->order, $user->id, $reimbursement);
+        }
 
 
-        // 2. If it was in the CXP final funnel or already finished, this action finalizes the entire document
+        // 2. Accounts Payable has two pool stages: review first, payment second.
         $statusToCheck = $originalStatus ?? $reimbursement->status;
-        if (in_array($statusToCheck, ['pendiente_pago', 'aprobado'])) {
-            if ($statusToCheck === 'pendiente_pago') {
-                $reimbursement->update(['status' => 'aprobado', 'current_step_id' => null]);
+        if (in_array($statusToCheck, ['pendiente_revision_cxp', 'pendiente_pago', 'aprobado'])) {
+            if ($statusToCheck === 'pendiente_revision_cxp') {
+                $reimbursement->update([
+                    'status' => 'pendiente_pago',
+                    'current_step_id' => null,
+                    'approved_by_cxp_id' => $user->id,
+                    'approved_by_cxp_at' => now(),
+                ]);
+            } elseif ($statusToCheck === 'pendiente_pago') {
+                $reimbursement->update([
+                    'status' => 'aprobado',
+                    'current_step_id' => null,
+                    'approved_by_treasury_id' => $user->id,
+                    'approved_by_treasury_at' => now(),
+                ]);
             }
             
             // Notify owner of the final approved state
-            if ($reimbursement->status === 'aprobado' || $reimbursement->status === 'rechazado') {
+            if (in_array($reimbursement->status, ['aprobado', 'rechazado', 'pendiente_pago'])) {
                 $owner = $reimbursement->user;
                 if ($owner) {
                     \App\Services\NotificationBatchService::add($owner, $reimbursement);
@@ -3074,10 +3153,10 @@ class ReimbursementController extends Controller
                 ->first();
 
             if (!$nextStep) {
-                // Flow finished custom levels -> Move to CXP Pooling Funnel
+                // Flow finished custom levels -> Move to CXP reviewers first.
                 $reimbursement->update([
                     'current_step_id' => null,
-                    'status' => 'pendiente_pago'
+                    'status' => 'pendiente_revision_cxp'
                 ]);
                 break;
             }
@@ -3164,7 +3243,14 @@ class ReimbursementController extends Controller
                 }
             }
 
-            $mainId = null;
+            $mainId = $request->input('draft_id');
+            if ($mainId) {
+                $mainId = Reimbursement::whereIn('user_id', array_unique([$user->id, $targetUserId]))
+                    ->where('status', 'borrador')
+                    ->whereNull('parent_id')
+                    ->whereKey($mainId)
+                    ->value('id');
+            }
             foreach ($items as $index => $itemData) {
                 try {
                     $id = $itemData['draft_id'] ?? null;
@@ -3302,9 +3388,9 @@ class ReimbursementController extends Controller
                         $reimbursement->save();
                     }
 
-                    // Group items under the first item ONLY if it's a 'viaje'
-                    if ($index === 0) {
-                        $mainId = ($request->input('type') === 'viaje') ? $reimbursement->id : null;
+                    // Keep all slots in one draft session. The first saved slot becomes the parent.
+                    if (!$mainId || (int) $mainId === (int) $reimbursement->id) {
+                        $mainId = $reimbursement->id;
                         $reimbursement->parent_id = null;
                         $reimbursement->save();
                     } else {
@@ -3335,7 +3421,7 @@ class ReimbursementController extends Controller
             return response()->json([
                 'success' => true, 
                 'ids' => $draftIds,
-                'main_id' => !empty($draftIds) ? $draftIds[0]['id'] : null
+                'main_id' => $mainId ?: (!empty($draftIds) ? collect($draftIds)->first()['id'] : null)
             ]);
         } catch (\Exception $e) {
             Log::error('Draft Save Error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
@@ -3439,15 +3525,21 @@ class ReimbursementController extends Controller
                 // 1. Current Approver (including substitutes)
                 $q->whereHas('currentStep', function($sq) use ($identityIds) {
                     $sq->whereIn('user_id', $identityIds);
-                })->whereNotIn('status', ['aprobado', 'rechazado', 'borrador', 'pendiente_pago']);
+                })->whereNotIn('status', ['aprobado', 'rechazado', 'borrador', 'pendiente_revision_cxp', 'pendiente_pago']);
 
-                // 2. CXP / Treasury Funnel (Pending Payment)
-                $isCxpOrTreasury = $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.bulk_approve') || $identity->isCxp() || $identity->isTreasury());
-                if ($isCxpOrTreasury) {
+                // 2. CXP reviewer pool
+                $isCxpReviewer = $allIdentities->contains(fn($identity) => $identity->isCxp());
+                if ($isCxpReviewer) {
+                    $q->orWhere('status', 'pendiente_revision_cxp');
+                }
+
+                // 3. CXP payer pool
+                $isCxpPayer = $allIdentities->contains(fn($identity) => $identity->isTreasury());
+                if ($isCxpPayer) {
                     $q->orWhere('status', 'pendiente_pago');
                 }
 
-                // 2.5. CXP needs to see approved reimbursements that finished their Custom Approval Flow
+                // 3.5. CXP needs to see approved reimbursements that finished their Custom Approval Flow
                 $isCxp = $allIdentities->contains(fn($identity) => $identity->isCxp() || ($identity->profile && $identity->profile->name === 'accountant'));
                 if ($isCxp) {
                     $q->orWhere(function($subQ) {
@@ -3458,7 +3550,7 @@ class ReimbursementController extends Controller
                     });
                 }
 
-                // 3. Admin / Elevated roles see EVERYTHING pending in the system
+                // 4. Admin / Elevated roles see EVERYTHING pending in the system
                 $isAdmin = $allIdentities->contains(fn($identity) => $identity->canPerform('profiles.view') || $identity->isAdmin() || $identity->isAdminView());
                 if ($isAdmin) {
                     $q->orWhereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
@@ -3542,7 +3634,7 @@ class ReimbursementController extends Controller
 
             // 2. Current Approver (including substitutes) - Only if in approval phase
             $q->orWhere(function($sq) use ($identityIds) {
-                $sq->whereNotIn('status', ['pendiente_pago', 'aprobado', 'rechazado', 'borrador'])
+                $sq->whereNotIn('status', ['pendiente_revision_cxp', 'pendiente_pago', 'aprobado', 'rechazado', 'borrador'])
                    ->whereHas('currentStep', function($ssq) use ($identityIds) {
                         $ssq->whereIn('user_id', $identityIds);
                    });
@@ -3557,7 +3649,7 @@ class ReimbursementController extends Controller
                 $sub->whereHas('costCenter', function($cq) use ($user) {
                     $cq->whereHas('approvalSteps', fn($asq) => $asq->where('user_id', $user->id)->where('order', '>', 1));
                 })->where(function($rq) use ($user) {
-                    $rq->whereIn('status', ['aprobado', 'pendiente_pago'])
+                    $rq->whereIn('status', ['aprobado', 'pendiente_revision_cxp', 'pendiente_pago'])
                        ->orWhereHas('currentStep', function($csq) use ($user) {
                            $csq->whereRaw(
                                '`order` >= (SELECT MIN(`order`) FROM approval_steps WHERE cost_center_id = reimbursements.cost_center_id AND user_id = ?)',
@@ -3569,13 +3661,13 @@ class ReimbursementController extends Controller
 
             // 4. Centralized Roles (CXP, Treasury, Direccion) - Matching Sequential Logic
             if ($user->isCxp()) {
-                $q->orWhereNotIn('status', ['pendiente', 'requiere_correccion', 'borrador', 'aprobado_director', 'aprobado_control']);
+                $q->orWhereIn('status', ['pendiente_revision_cxp', 'pendiente_pago', 'aprobado']);
             }
             if ($user->isDireccion()) {
                 $q->orWhereNotIn('status', ['pendiente', 'requiere_correccion', 'borrador', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo']);
             }
             if ($user->isTreasury()) {
-                $q->orWhereNotIn('status', ['pendiente', 'requiere_correccion', 'borrador', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_cxp']);
+                $q->orWhereIn('status', ['pendiente_pago', 'aprobado']);
             }
         });
     }

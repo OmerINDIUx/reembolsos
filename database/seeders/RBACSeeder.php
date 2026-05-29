@@ -85,7 +85,7 @@ class RBACSeeder extends Seeder
                 'permissions' => ['reimbursements.view', 'reimbursements.approve', 'users.view', 'cost_centers.view', 'reimbursements.global_history'],
             ],
             'accountant' => [
-                'display_name' => 'Cuentas por Pagar N4',
+                'display_name' => 'Cuentas por Pagar Revisador',
                 'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.bulk_approve', 'reimbursements.export', 'users.view', 'cost_centers.view', 'reimbursements.global_history'],
             ],
             'direccion' => [
@@ -93,7 +93,7 @@ class RBACSeeder extends Seeder
                 'permissions' => ['reimbursements.view', 'reimbursements.approve', 'users.view', 'cost_centers.view', 'reimbursements.global_history'],
             ],
             'tesoreria' => [
-                'display_name' => 'Dirección N6',
+                'display_name' => 'Cuentas por Pagar Pagador',
                 'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.bulk_approve', 'reimbursements.export', 'reimbursements.global_history'],
             ],
             'user' => [

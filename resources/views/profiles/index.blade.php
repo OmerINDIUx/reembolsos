@@ -61,7 +61,7 @@
                                                 </svg>
                                             </a>
                                             
-                                            @if($profile->users_count == 0 && !in_array($profile->name, ['admin', 'director', 'accountant', 'user']))
+                                            @if($profile->users_count == 0 && !in_array($profile->name, ['admin', 'admin_view', 'director', 'control_obra', 'director_ejecutivo', 'accountant', 'direccion', 'tesoreria', 'user']))
                                             <form action="{{ route('profiles.destroy', $profile) }}" method="POST" class="inline"
                                                   data-confirm="Se eliminará el perfil y sus permisos asociados. Esta acción no se puede deshacer."
                                                   data-confirm-title="¿Eliminar perfil?"

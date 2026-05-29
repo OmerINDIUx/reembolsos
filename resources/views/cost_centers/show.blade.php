@@ -270,7 +270,7 @@
                                     </td>
                                     <td class="px-8 py-4 font-black text-gray-900 dark:text-white">${{ number_format($r->total, 2) }}</td>
                                     <td class="px-8 py-4 text-xs font-bold uppercase tracking-wider text-gray-500">
-                                        @if($r->status === 'aprobado') Pagado 
+                                        @if($r->status === 'aprobado') En proceso de pago 
                                         @elseif($r->status === 'pendiente') En Proceso
                                         @else {{ str_replace('_', ' ', $r->status) }} @endif
                                     </td>
@@ -408,7 +408,7 @@
             if (ctxStatus) {
                 const statusData = {!! json_encode($statusBreakdown) !!};
                 const statusConfig = {
-                    'aprobado': { label: 'Pagado', color: '#10b981' },
+                    'aprobado': { label: 'En proceso de pago', color: '#10b981' },
                     'rechazado': { label: 'Rechazado', color: '#ef4444' },
                     'requiere_correccion': { label: 'Corregir', color: '#f59e0b' },
                     'pendiente': { label: 'Pendiente', color: '#6366f1' },

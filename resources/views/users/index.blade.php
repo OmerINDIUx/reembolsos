@@ -37,9 +37,9 @@
                                     <option value="director" {{ request('role') == 'director' ? 'selected' : '' }}>Director</option>
                                     <option value="control_obra" {{ request('role') == 'control_obra' ? 'selected' : '' }}>Control de Obra</option>
                                     <option value="director_ejecutivo" {{ request('role') == 'director_ejecutivo' ? 'selected' : '' }}>Director Ejecutivo</option>
-                                    <option value="accountant" {{ request('role') == 'accountant' ? 'selected' : '' }}>Subdirección</option>
+                                    <option value="accountant" {{ request('role') == 'accountant' ? 'selected' : '' }}>CXP Revisador</option>
                                     <option value="direccion" {{ request('role') == 'direccion' ? 'selected' : '' }}>Dirección General</option>
-                                    <option value="tesoreria" {{ request('role') == 'tesoreria' ? 'selected' : '' }}>Cuentas por Pagar</option>
+                                    <option value="tesoreria" {{ request('role') == 'tesoreria' ? 'selected' : '' }}>CXP Pagador</option>
                                     <option value="user" {{ request('role') == 'user' ? 'selected' : '' }}>Usuario</option>
                                 </select>
                              </div>

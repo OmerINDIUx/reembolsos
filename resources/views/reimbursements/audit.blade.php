@@ -296,8 +296,11 @@
                                     $semaforoText = 'Error';
                                 }
                             @endphp
-                            <a href="{{ route('reimbursements.show', $r->id) }}"
-                               class="flex flex-col md:flex-row items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-lg transition-all group/item no-underline space-y-4 md:space-y-0">
+                            <div role="link"
+                               tabindex="0"
+                               onclick="window.location.href='{{ route('reimbursements.show', $r->id) }}'"
+                               onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.location.href='{{ route('reimbursements.show', $r->id) }}'; }"
+                               class="flex flex-col md:flex-row items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-lg transition-all group/item no-underline space-y-4 md:space-y-0 cursor-pointer">
                                 
                                 <div class="flex items-center space-x-5">
                                     <div class="flex items-center justify-center w-10 h-10 border border-transparent">
@@ -378,7 +381,7 @@
                                     </div>
 
                                 </div>
-                            </a>
+                            </div>
                         @empty
                             <div class="px-6 py-16 text-center text-sm text-gray-400 font-bold italic bg-gray-50/50 dark:bg-gray-800/20 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
                                 Sin reembolsos para este grupo.

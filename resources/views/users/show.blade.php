@@ -189,7 +189,7 @@
                                 <td class="px-8 py-5 font-black text-gray-900 dark:text-white">${{ number_format($r->total, 2) }}</td>
                                 <td class="px-8 py-5">
                                     @if($r->status === 'aprobado')
-                                        <span class="text-[10px] font-bold text-emerald-600">Liquidado / Pagado</span>
+                                        <span class="text-[10px] font-bold text-emerald-600">En proceso de pago</span>
                                     @elseif($r->status === 'rechazado')
                                         <span class="text-[10px] font-bold text-rose-600">Rechazado Definitivamente</span>
                                     @else
@@ -206,7 +206,7 @@
                                         {{ $r->status === 'rechazado' ? 'bg-rose-100 text-rose-800' : '' }}
                                         {{ !in_array($r->status, ['aprobado', 'requiere_correccion', 'rechazado']) ? 'bg-indigo-100 text-indigo-800' : '' }}
                                     ">
-                                        @if($r->status === 'aprobado') Pagado 
+                                        @if($r->status === 'aprobado') En proceso de pago 
                                         @elseif($r->status === 'pendiente') En Proceso
                                         @else {{ str_replace('_', ' ', $r->status) }} @endif
                                     </span>
