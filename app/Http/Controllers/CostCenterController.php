@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CostCenter;
+use App\Models\Company;
 use App\Models\User;
 use App\Models\BudgetRenewal;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ class CostCenterController extends Controller
         $user = Auth::user();
 
         // Base query
-        $query = CostCenter::with(['beneficiary', 'approvalSteps.user'])
+        $query = CostCenter::with(['beneficiary', 'company', 'approvalSteps.user'])
             ->withCount([
                 'reimbursements as pending_count' => function($q) {
                     $q->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
@@ -67,7 +68,11 @@ class CostCenterController extends Controller
             $query->where(function($q) use ($search) {
                 $q->where('code', 'like', "%{$search}%")
                   ->orWhere('name', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhereHas('company', function ($companyQuery) use ($search) {
+                      $companyQuery->where('name', 'like', "%{$search}%")
+                          ->orWhere('account', 'like', "%{$search}%");
+                  });
             });
         }
 
@@ -195,7 +200,8 @@ class CostCenterController extends Controller
         }
 
         $users = User::orderBy('name')->get();
-        return view('cost_centers.create', compact('users'));
+        $companies = Company::orderBy('name')->get();
+        return view('cost_centers.create', compact('users', 'companies'));
     }
 
     /**
@@ -212,6 +218,7 @@ class CostCenterController extends Controller
 
         $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:cost_centers,name'],
+            'company_id' => ['required', 'exists:companies,id'],
             'beneficiary_id' => ['nullable', 'exists:users,id'],
             'budget' => ['required', 'numeric', 'min:0'],
             'steps' => ['required', 'array', 'min:1'],
@@ -226,6 +233,7 @@ class CostCenterController extends Controller
 
         $cc = CostCenter::create([
             'name' => $request->name,
+            'company_id' => $request->company_id,
             'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
             'description' => $request->description,
             'menfis_email' => $request->menfis_email,
@@ -272,8 +280,9 @@ class CostCenterController extends Controller
         }
 
         $users = User::orderBy('name')->get();
+        $companies = Company::orderBy('name')->get();
         $costCenter->load('approvalSteps.user');
-        return view('cost_centers.edit', compact('costCenter', 'users'));
+        return view('cost_centers.edit', compact('costCenter', 'users', 'companies'));
     }
 
     /**
@@ -291,6 +300,7 @@ class CostCenterController extends Controller
 
         $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('cost_centers')->ignore($costCenter->id)],
+            'company_id' => ['required', 'exists:companies,id'],
             'beneficiary_id' => ['nullable', 'exists:users,id'],
             'budget' => ['required', 'numeric', 'min:0'],
             'steps' => ['required', 'array', 'min:1'],
@@ -317,6 +327,7 @@ class CostCenterController extends Controller
             // 2. Update CC Basic Info
             $costCenter->update([
                 'name' => $request->name,
+                'company_id' => $request->company_id,
                 'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
                 'description' => $request->description,
                 'menfis_email' => $request->menfis_email,

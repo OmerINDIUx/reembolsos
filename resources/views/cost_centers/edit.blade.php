@@ -13,17 +13,26 @@
                         @csrf
                         @method('PUT')
 
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                             <div>
                                 <label for="name" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Nombre del Centro de Costos *</label>
-                                <input type="text" name="name" id="name" value="{{ $costCenter->name }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3 uppercase" required>
+                                <input type="text" name="name" id="name" value="{{ old('name', $costCenter->name) }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3 uppercase" required>
+                            </div>
+                            <div>
+                                <label for="company_id" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Empresa *</label>
+                                <select name="company_id" id="company_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3" required>
+                                    <option value="">Seleccione Empresa...</option>
+                                    @foreach($companies as $company)
+                                        <option value="{{ $company->id }}" {{ old('company_id', $costCenter->company_id) == $company->id ? 'selected' : '' }}>{{ $company->name }} - {{ $company->account }}</option>
+                                    @endforeach
+                                </select>
                             </div>
                             <div>
                                 <label for="beneficiary_id" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Beneficiario *</label>
                                 <select name="beneficiary_id" id="beneficiary_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3" required>
                                     <option value="">Seleccione Beneficiario...</option>
                                     @foreach($users as $u)
-                                        <option value="{{ $u->id }}" {{ $costCenter->beneficiary_id == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
+                                        <option value="{{ $u->id }}" {{ old('beneficiary_id', $costCenter->beneficiary_id) == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -31,7 +40,7 @@
                                 <label for="budget" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Presupuesto Total *</label>
                                 <div class="relative">
                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                                    <input type="number" step="0.01" name="budget" id="budget" value="{{ $costCenter->budget }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3 pl-8" required>
+                                    <input type="number" step="0.01" name="budget" id="budget" value="{{ old('budget', $costCenter->budget) }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3 pl-8" required>
                                 </div>
                             </div>
                         </div>
@@ -39,11 +48,11 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             <div>
                                 <label for="menfis_email" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Correo de Menfis (Opcional)</label>
-                                <input type="email" name="menfis_email" id="menfis_email" value="{{ $costCenter->menfis_email }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3" placeholder="correo@ejemplo.com">
+                                <input type="email" name="menfis_email" id="menfis_email" value="{{ old('menfis_email', $costCenter->menfis_email) }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3" placeholder="correo@ejemplo.com">
                             </div>
                             <div>
                                 <label for="description" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Descripción (Opcional)</label>
-                                <input type="text" name="description" id="description" value="{{ $costCenter->description }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium py-3">
+                                <input type="text" name="description" id="description" value="{{ old('description', $costCenter->description) }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium py-3">
                             </div>
                         </div>
 

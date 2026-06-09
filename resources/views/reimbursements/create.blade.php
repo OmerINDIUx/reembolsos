@@ -1477,7 +1477,7 @@
                                     statusLabel = 'RECHAZADO';
                                 } else if (d.status === 'aprobado') {
                                     statusClasses = 'bg-green-100 text-green-800';
-                                    statusLabel = 'EN PROCESO DE PAGO';
+                                    statusLabel = 'PAGO APROBADO';
                                 } else if (d.status === 'pendiente') {
                                     statusClasses = 'bg-yellow-100 text-yellow-800';
                                     statusLabel = 'PENDIENTE';

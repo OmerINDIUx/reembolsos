@@ -66,7 +66,9 @@ class ReimbursementController extends Controller
 
         // TRACKER LOGIC: Global search bypasses tab scoping for management roles but respects general visibility
         if ($globalSearch && $canManage) {
-            if (!$user->isAdmin() && !$user->isAdminView()) {
+            if ($tab === 'payment') {
+                $this->applyTabScope($query, $tab, $user);
+            } elseif (!$user->isAdmin() && !$user->isAdminView()) {
                 $this->applyGeneralVisibilityScope($query, $user);
             }
             
@@ -131,7 +133,7 @@ class ReimbursementController extends Controller
             $query->reorder('created_at', 'desc');
         }
 
-        if ($tab === 'management' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history') {
+        if ($tab === 'management' || $tab === 'payment' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history') {
             // Paginate by weeks (5 weeks per page)
             $weeksQuery = clone $query;
             $weeksPaginator = $weeksQuery->reorder()
@@ -2014,6 +2016,230 @@ class ReimbursementController extends Controller
     }
 
     /**
+     * Export payment-ready CSV rows grouped by payee, cost center, and payment reason.
+     */
+    public function exportPaymentFile(Request $request)
+    {
+        set_time_limit(300);
+
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
+        $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());
+
+        abort_unless($canUsePaymentModule, 403, 'No tienes permiso para descargar el archivo de pago.');
+
+        $ids = collect(explode(',', (string) $request->input('ids')))
+            ->map(fn($id) => trim($id))
+            ->filter(fn($id) => ctype_digit($id))
+            ->unique()
+            ->values();
+
+        $query = Reimbursement::with(['user', 'payee', 'costCenter.company'])
+            ->where('status', 'pendiente_pago');
+
+        if ($ids->isNotEmpty()) {
+            $query->whereIn('id', $ids);
+        } else {
+            $paymentScope = Reimbursement::query()->where('status', '!=', 'borrador');
+            $this->applyTabScope($paymentScope, 'payment', $user);
+            $allowedWeeks = $this->availableWeeksForQuery($paymentScope);
+
+            if ($request->filled('week')) {
+                abort_unless($allowedWeeks->contains($request->week), 403, 'No puedes exportar una semana que no está disponible para pagos.');
+                $query->where('week', $request->week);
+            }
+
+            if ($request->filled('cc')) {
+                $query->whereHas('costCenter', fn($ccQuery) => $ccQuery->where('name', $request->cc));
+            }
+
+            if ($request->filled('payee')) {
+                $query->where(function ($payeeQuery) use ($request) {
+                    $payeeQuery->where('payee_id', $request->payee)
+                        ->orWhere(function ($fallbackQuery) use ($request) {
+                            $fallbackQuery->whereNull('payee_id')
+                                ->where('user_id', $request->payee);
+                        });
+                });
+            }
+
+            if ($request->filled('search_audit')) {
+                $search = $request->search_audit;
+                $query->where(function ($searchQuery) use ($search) {
+                    $searchQuery->where('folio', 'like', "%{$search}%")
+                        ->orWhere('uuid', 'like', "%{$search}%")
+                        ->orWhere('nombre_emisor', 'like', "%{$search}%")
+                        ->orWhere('rfc_emisor', 'like', "%{$search}%")
+                        ->orWhere('title', 'like', "%{$search}%")
+                        ->orWhere('category', 'like', "%{$search}%");
+                });
+            }
+
+            if ($request->filled('xml_audit')) {
+                if ($request->xml_audit === 'with_xml') {
+                    $query->whereNotNull('uuid')->where('uuid', '!=', '');
+                } elseif ($request->xml_audit === 'no_xml') {
+                    $query->where(function ($xmlQuery) {
+                        $xmlQuery->whereNull('uuid')->orWhere('uuid', '');
+                    });
+                }
+            }
+
+            if ($request->filled('method_audit')) {
+                $query->where('metodo_pago', $request->method_audit);
+            }
+
+            if ($request->filled('usage_audit')) {
+                $query->where('uso_cfdi', $request->usage_audit);
+            }
+
+            $this->applyExportFilters($query, $request, $allowedWeeks);
+
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('folio', 'like', "%{$search}%")
+                      ->orWhere('uuid', 'like', "%{$search}%")
+                      ->orWhere('nombre_emisor', 'like', "%{$search}%")
+                      ->orWhere('title', 'like', "%{$search}%");
+                });
+            }
+
+            if ($request->filled('cost_center_id')) {
+                $query->where('cost_center_id', $request->cost_center_id);
+            }
+
+            if ($request->filled('type')) {
+                $query->where('type', $request->type);
+            }
+        }
+
+        $reimbursements = $query->orderBy('created_at', 'asc')->get();
+
+        abort_if($reimbursements->isEmpty(), 404, 'No se encontraron reembolsos listos para pago en la selección.');
+
+        $paymentRows = $reimbursements
+            ->map(function ($reimbursement) {
+                $payee = $reimbursement->payee ?: $reimbursement->user;
+                $company = $reimbursement->costCenter?->company;
+                $amount = (float) $reimbursement->total + (float) ($reimbursement->propina ?? 0);
+
+                return [
+                    'deposit_account' => $company?->account ?? '',
+                    'charge_account' => $payee?->clabe ?? '',
+                    'currency' => 'MXP',
+                    'amount' => $amount,
+                    'payment_reason' => $this->paymentFileReason($reimbursement->type),
+                    'payee_name' => $payee?->name ?? 'Sin receptor',
+                    'account_type' => 'CLABE',
+                    'availability' => '',
+                    'company_rfc' => $company?->rfc ?? '',
+                    'vat' => (float) ($reimbursement->impuestos ?? 0),
+                    'internal_company' => $company?->name ?? '',
+                    'cost_center' => $reimbursement->costCenter?->name ?? '',
+                ];
+            })
+            ->groupBy(function ($row) {
+                return implode('|', [
+                    $row['payee_name'],
+                    $row['charge_account'],
+                    $row['cost_center'],
+                    $row['payment_reason'],
+                    $row['deposit_account'],
+                    $row['company_rfc'],
+                    $row['internal_company'],
+                ]);
+            })
+            ->map(function ($group) {
+                $first = $group->first();
+
+                return [
+                    'deposit_account' => $first['deposit_account'],
+                    'charge_account' => $first['charge_account'],
+                    'currency' => $first['currency'],
+                    'amount' => $group->sum('amount'),
+                    'payment_reason' => $first['payment_reason'],
+                    'payee_name' => $first['payee_name'],
+                    'account_type' => $first['account_type'],
+                    'availability' => $first['availability'],
+                    'company_rfc' => $first['company_rfc'],
+                    'vat' => $group->sum('vat'),
+                    'internal_company' => $first['internal_company'],
+                    'cost_center' => $first['cost_center'],
+                    'grouped_count' => $group->count(),
+                ];
+            })
+            ->sortBy([
+                ['payee_name', 'asc'],
+                ['cost_center', 'asc'],
+                ['payment_reason', 'asc'],
+            ])
+            ->values();
+
+        $fileName = 'archivo_pago_' . now()->format('Ymd_His') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"$fileName\"",
+        ];
+
+        return response()->streamDownload(function () use ($paymentRows) {
+            $file = fopen('php://output', 'w');
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+            fputcsv($file, [
+                'Cuenta de abono',
+                'Cuenta de cargo',
+                'Moneda',
+                'Importe de la operacion',
+                'Motivo de pago',
+                'Nombre de la persona que recibe el pago',
+                'Tipo de cuenta',
+                'Disponibilidad',
+                'RFC de la empresa',
+                'IVA',
+                'Empresa interna',
+                'Centro de costos',
+                'Comprobantes agrupados',
+            ]);
+
+            foreach ($paymentRows as $row) {
+                fputcsv($file, [
+                    $this->excelText($row['deposit_account']),
+                    $this->excelText($row['charge_account']),
+                    $row['currency'],
+                    number_format($row['amount'], 2, '.', ''),
+                    $row['payment_reason'],
+                    $row['payee_name'],
+                    $row['account_type'],
+                    $row['availability'],
+                    $row['company_rfc'],
+                    number_format($row['vat'], 2, '.', ''),
+                    $row['internal_company'],
+                    $row['cost_center'],
+                    $row['grouped_count'],
+                ]);
+            }
+
+            fclose($file);
+        }, $fileName, $headers);
+    }
+
+    private function paymentFileReason(?string $type): string
+    {
+        return match ($type) {
+            'fondo_fijo' => 'fondo fijo',
+            default => 'reembolso',
+        };
+    }
+
+    private function excelText(?string $value): string
+    {
+        $cleanValue = str_replace('"', '""', (string) $value);
+
+        return '="' . $cleanValue . '"';
+    }
+
+    /**
      * Export all XML files of the filtered reimbursements as a ZIP archive.
      */
     public function exportXml(Request $request)
@@ -2327,17 +2553,17 @@ class ReimbursementController extends Controller
                     continue;
                 }
 
-                $updateData = $canReviewCxp && $reimbursement->status === 'pendiente_revision_cxp'
-                    ? [
-                        'status' => 'pendiente_pago',
-                        'approved_by_cxp_id' => $user->id,
-                        'approved_by_cxp_at' => now(),
-                    ]
-                    : [
-                        'status' => 'aprobado',
-                        'approved_by_treasury_id' => $user->id,
-                        'approved_by_treasury_at' => now(),
-                    ];
+                $isCxpReviewAction = $canReviewCxp && $reimbursement->status === 'pendiente_revision_cxp';
+
+                $updateData = [
+                    'status' => 'pendiente_pago',
+                    'approved_by_cxp_id' => $isCxpReviewAction
+                        ? $user->id
+                        : $reimbursement->approved_by_cxp_id,
+                    'approved_by_cxp_at' => $isCxpReviewAction
+                        ? now()
+                        : $reimbursement->approved_by_cxp_at,
+                ];
 
                 $reimbursement->update($updateData);
                 $processed++;
@@ -2345,7 +2571,7 @@ class ReimbursementController extends Controller
                 // Add an audit approval trail entry just like the single approval
                 $reimbursement->approvals()->create([
                     'user_id' => $user->id,
-                    'step_name' => $updateData['status'] === 'pendiente_pago' ? 'Cuentas por Pagar Revisadores (Masivo)' : 'Cuentas por Pagar Pagadores (Masivo)',
+                    'step_name' => $isCxpReviewAction ? 'Cuentas por Pagar Revisadores (Masivo)' : 'Cuentas por Pagar Pagadores (Masivo)',
                     'action' => 'aprobado',
                     'comment' => 'Aprobación Masiva por CSV',
                     'is_bulk' => true
@@ -3086,7 +3312,8 @@ class ReimbursementController extends Controller
         }
 
 
-        // 2. Accounts Payable has two pool stages: review first, payment second.
+        // 2. Accounts Payable review sends the item to the payment module.
+        // Payment-module items stay in pendiente_pago so they remain available for payment files.
         $statusToCheck = $originalStatus ?? $reimbursement->status;
         if (in_array($statusToCheck, ['pendiente_revision_cxp', 'pendiente_pago', 'aprobado'])) {
             if ($statusToCheck === 'pendiente_revision_cxp') {
@@ -3098,10 +3325,8 @@ class ReimbursementController extends Controller
                 ]);
             } elseif ($statusToCheck === 'pendiente_pago') {
                 $reimbursement->update([
-                    'status' => 'aprobado',
+                    'status' => 'pendiente_pago',
                     'current_step_id' => null,
-                    'approved_by_treasury_id' => $user->id,
-                    'approved_by_treasury_at' => now(),
                 ]);
             }
             
@@ -3596,6 +3821,16 @@ class ReimbursementController extends Controller
                     $q->orWhereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
                 }
             });
+
+        } elseif ($tab === 'payment') {
+            $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());
+
+            if (!$canUsePaymentModule) {
+                $query->whereRaw('1 = 0');
+                return;
+            }
+
+            $query->where('status', 'pendiente_pago');
 
         } elseif ($tab === 'active') {
             // Personal & Substituted: Pending (My items that are still in process)

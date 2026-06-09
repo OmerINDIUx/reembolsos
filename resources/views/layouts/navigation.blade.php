@@ -32,6 +32,9 @@
                     <x-nav-link :href="route('cost_centers.index')" :active="request()->routeIs('cost_centers.*')">
                         {{ __('Centro de Costos') }}
                     </x-nav-link>
+                    <x-nav-link :href="route('companies.index')" :active="request()->routeIs('companies.*')">
+                        {{ __('Empresas') }}
+                    </x-nav-link>
                     @endif
                     @if(Auth::user()->canPerform('travel_events.view'))
                     <x-nav-link :href="route('travel_events.index')" :active="request()->routeIs('travel_events.*')">
@@ -178,6 +181,9 @@
             @if(Auth::user()->canPerform('cost_centers.view'))
             <x-responsive-nav-link :href="route('cost_centers.index')" :active="request()->routeIs('cost_centers.*')">
                 {{ __('Centro de Costos') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('companies.index')" :active="request()->routeIs('companies.*')">
+                {{ __('Empresas') }}
             </x-responsive-nav-link>
             @endif
             @if(Auth::user()->canPerform('travel_events.view'))

@@ -389,7 +389,7 @@
                                                         {{ $reimbursement->status === 'requiere_correccion' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300' : '' }}
                                                         {{ !in_array($reimbursement->status, ['aprobado', 'rechazado', 'requiere_correccion']) ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300' : '' }}
                                                     ">
-                                                        @if($reimbursement->status === 'aprobado') En proceso de pago 
+                                                        @if($reimbursement->status === 'aprobado') Pago aprobado 
                                                         @elseif($reimbursement->status === 'pendiente') En Proceso
                                                         @else {{ str_replace('_', ' ', $reimbursement->status) }} @endif
                                                     </span>
@@ -517,7 +517,7 @@
                 const detailedItems = {!! json_encode($analytics['detailed_items']) !!};
                 
                 const statusConfig = {
-                    'aprobado': { label: 'En proceso de pago', color: '#64b032' },
+                    'aprobado': { label: 'Pago aprobado', color: '#64b032' },
                     'rechazado': { label: 'Rechazado', color: '#ff3000' },
                     'requiere_correccion': { label: 'Corregir', color: '#ffa608' },
                     'pendiente': { label: 'N1: Pendiente', color: '#0066f9' },

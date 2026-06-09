@@ -12,6 +12,7 @@ class CostCenter extends Model
     protected $fillable = [
         'code',
         'name',
+        'company_id',
         'director_id',
         'control_obra_id',
         'director_ejecutivo_id',
@@ -37,6 +38,11 @@ class CostCenter extends Model
     public function director()
     {
         return $this->belongsTo(User::class, 'director_id');
+    }
+
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
     }
 
     public function controlObra()

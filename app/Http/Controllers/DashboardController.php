@@ -123,7 +123,7 @@ class DashboardController extends Controller
             'aprobado_direccion' => 'Aprob. Direcc. (Old)',
             'pendiente_revision_cxp' => 'CXP Revisadores',
             'pendiente_pago' => 'CXP Pagadores',
-            'aprobado' => 'En proceso de pago',
+            'aprobado' => 'Pago aprobado',
             'rechazado' => 'Rechazado',
             'requiere_correccion' => 'Para Corregir',
             'en_evento' => 'En Evento',

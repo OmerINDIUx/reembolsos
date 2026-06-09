@@ -25,7 +25,7 @@
                         <form id="filter-form" action="{{ route('cost_centers.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <!-- Search Input -->
                             <div class="col-span-1 md:col-span-3">
-                                <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar (Código, Nombre, Descripción)</label>
+                                <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar (Código, Nombre, Empresa, Descripción)</label>
                                 <input type="text" name="search" id="search" value="{{ request('search') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Buscar...">
                             </div>
 
@@ -102,6 +102,9 @@
                                             <div>
                                                 <div class="text-sm font-black text-gray-900 dark:text-white group-hover:text-indigo-600 transition-colors underline decoration-dotted decoration-indigo-200 underline-offset-4">{{ $cc->name }}</div>
                                                 <div class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{{ $cc->abbreviation }}</div>
+                                                @if($cc->company)
+                                                    <div class="text-[9px] text-gray-500 font-black uppercase mt-1">Empresa: {{ $cc->company->name }}</div>
+                                                @endif
                                                 <div class="text-[9px] text-indigo-500 font-black uppercase mt-1">Benef: {{ $cc->beneficiary->name ?? 'S/A' }}</div>
                                             </div>
                                         </a>

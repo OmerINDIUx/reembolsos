@@ -22,11 +22,18 @@
                         $user = Auth::user();
                         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
                         $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
+                        $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());
                         $defaultTab = $canManage ? 'management' : 'active';
                     @endphp
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
                         <h3 class="text-lg font-medium">Listado de Reembolsos</h3>
                         <div class="flex space-x-2">
+                            @if($canUsePaymentModule && request('tab') === 'payment')
+                            <button type="button" onclick="downloadPaymentFileFromFilters()" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:bg-blue-700 active:bg-blue-900 transition ease-in-out duration-150">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                                Descargar archivo de pago
+                            </button>
+                            @endif
                             @if($user->canPerform('reimbursements.export'))
                             <button type="button" x-data @click="$dispatch('open-caratula-pdf-modal')" class="inline-flex items-center px-4 py-2 bg-emerald-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-emerald-500 focus:bg-emerald-700 active:bg-emerald-900 transition ease-in-out duration-150">
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -58,6 +65,12 @@
                             </li>
                             @endif
 
+                            @if($canUsePaymentModule)
+                            <li class="mr-2" role="presentation">
+                                <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'payment'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'payment' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="payment-tab" type="button" role="tab" aria-controls="payment" aria-selected="false">Módulo de Pago</a>
+                            </li>
+                            @endif
+
                             @if($user->canPerform('reimbursements.global_history'))
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'global_history'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'global_history' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="global-history-tab" type="button" role="tab" aria-controls="global_history" aria-selected="false">
@@ -76,7 +89,7 @@
                     </div>
 
                     <!-- Global Folio Search (Rastreador) -->
-                    @if($canManage && (request('tab', $defaultTab) === 'management' || request('tab') === 'global_history'))
+                    @if($canManage && (request('tab', $defaultTab) === 'management' || request('tab') === 'payment' || request('tab') === 'global_history'))
                         <div class="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl flex flex-col md:flex-row items-center gap-4">
                             <div class="flex-shrink-0">
                                 <span class="text-indigo-600 dark:text-indigo-400 font-bold text-sm uppercase tracking-wider">Rastreador de Folio (Global):</span>
@@ -225,7 +238,7 @@
 
                     @php
                         $tab = request('tab', $defaultTab);
-                        $isGroupedView = ($tab === 'management' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history' || $tab === 'audit');
+                        $isGroupedView = ($tab === 'management' || $tab === 'payment' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history' || $tab === 'audit');
                     @endphp
 
                     <div x-data="bulkAuditIndex()" class="relative border-transparent">
@@ -247,7 +260,9 @@
                                             $targetUserId = $item->user_id;
                                         }
 
-                                        if ($targetUserId === $user->id) {
+                                        if ($tab === 'payment') {
+                                            $ctx = 'Listos para pago';
+                                        } elseif ($targetUserId === $user->id) {
                                             $ctx = ($tab === 'management' || $tab === 'weekly_summary') ? 'Mis Pendientes' : 'Mis Reembolsos';
                                         } elseif ($substitutes->has($targetUserId)) {
                                             $ctx = 'En sustitución de ' . ($substitutes[$targetUserId]->originalUser->name ?? 'Usuario');
@@ -288,15 +303,26 @@
                                             <span>Descargar Carátula</span>
                                         </button>
 
+                                        @if($tab !== 'payment')
                                         <button type="button" @click="downloadCSV()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                             <span>Descargar CSV</span>
                                         </button>
+                                        @endif
 
+                                        @if($tab === 'payment')
+                                        <button type="button" @click="downloadPaymentFile()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                                            <span>Archivo de Pago</span>
+                                        </button>
+                                        @endif
+
+                                        @if($tab !== 'payment')
                                         <button type="button" @click="openModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                                             <span>Acción Masiva</span>
                                         </button>
+                                        @endif
                                     </div>
                                 </div>
                                 @endif
@@ -534,7 +560,7 @@
                                                     {{ $r->status === 'borrador' ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' : '' }}
                                                     {{ !in_array($r->status, ['aprobado', 'rechazado', 'requiere_correccion', 'pendiente', 'pendiente_revision_cxp', 'pendiente_pago', 'borrador']) ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
                                                 ">
-                                                    @if($r->status === 'aprobado') En proceso de pago
+                                                    @if($r->status === 'aprobado') Pago aprobado
                                                     @elseif($r->status === 'pendiente') {{ $r->currentStep->name ?? 'En Proceso' }}
                                                     @elseif($r->status === 'pendiente_revision_cxp') CXP Revisadores
                                                     @elseif($r->status === 'pendiente_pago') CXP Pagadores
@@ -558,7 +584,7 @@
                                                     @elseif($r->status === 'pendiente_pago')
                                                         Listo para pago final
                                                     @elseif($r->status === 'aprobado') 
-                                                        En proceso de pago
+                                                        Pago aprobado
                                                     @elseif($r->status === 'requiere_correccion')
                                                         Esperando ajuste del solicitante
                                                     @elseif($r->status === 'rechazado')
@@ -572,7 +598,7 @@
                                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                             @php
                                                 $user = Auth::user();
-                                                $canApproveCurr = $r->canBeApprovedBy($user) && !in_array($r->status, ['aprobado', 'rechazado', 'borrador']);
+                                                $canApproveCurr = $r->canBeApprovedBy($user) && !in_array($r->status, ['aprobado', 'rechazado', 'borrador', 'pendiente_pago']);
                                             @endphp
 
                                             @if($user->id === $r->user_id || $user->isAdmin() || $user->isAdminView() || $canApproveCurr)
@@ -780,6 +806,12 @@
                 
                 const route = type === 'xml' ? "{{ route('reimbursements.export_xml') }}" : "{{ route('reimbursements.export') }}";
                 window.location.href = route + "?" + params.toString();
+            }
+
+            window.downloadPaymentFileFromFilters = function() {
+                const params = new URLSearchParams(new FormData(form));
+                params.set('tab', 'payment');
+                window.location.href = "{{ route('reimbursements.payment_file') }}?" + params.toString();
             }
             
             // Function to handle fetching and updating
@@ -1033,6 +1065,11 @@
                 downloadCSV() {
                     const ids = this.selectedIds.join(',');
                     window.location.href = `{{ route('reimbursements.export') }}?ids=${ids}`;
+                },
+
+                downloadPaymentFile() {
+                    const ids = this.selectedIds.join(',');
+                    window.location.href = `{{ route('reimbursements.payment_file') }}?ids=${ids}`;
                 },
                 
                 init() {

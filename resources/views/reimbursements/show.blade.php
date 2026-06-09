@@ -147,7 +147,7 @@
                             $statusClasses = $statusColors[$reimbursement->status] ?? 'text-gray-600 bg-gray-50 ring-gray-500/10';
                             
                             $statusLabel = match($reimbursement->status) {
-                                'aprobado' => 'EN PROCESO DE PAGO',
+                                'aprobado' => 'PAGO APROBADO',
                                 'pendiente_revision_cxp' => 'CXP REVISADORES',
                                 'pendiente_pago' => 'CXP PAGADORES',
                                 'rechazado' => 'RECHAZADO',
@@ -498,7 +498,7 @@
                     <!-- Acción de Aprobación -->
                     @php
                         $user = auth()->user();
-                        $canApproveAny = $reimbursement->canBeApprovedBy($user) && !in_array($reimbursement->status, ['aprobado', 'rechazado', 'borrador']);
+                        $canApproveAny = $reimbursement->canBeApprovedBy($user) && !in_array($reimbursement->status, ['aprobado', 'rechazado', 'borrador', 'pendiente_pago']);
                     @endphp
 
                     @if($canApproveAny)

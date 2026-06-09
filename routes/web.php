@@ -4,6 +4,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReimbursementController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\CostCenterController;
+use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 
@@ -32,6 +33,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('reimbursements/bulk/approve', [ReimbursementController::class, 'bulkApprove'])->name('reimbursements.bulk_approve');
     Route::post('reimbursements/bulk-audit', [ReimbursementController::class, 'bulkAuditAction'])->name('reimbursements.bulk_audit_action');
     Route::get('reimbursements/export', [ReimbursementController::class, 'export'])->name('reimbursements.export');
+    Route::get('reimbursements/payment-file', [ReimbursementController::class, 'exportPaymentFile'])->name('reimbursements.payment_file');
     Route::get('reimbursements/export/xml', [ReimbursementController::class, 'exportXml'])->name('reimbursements.export_xml');
     Route::get('reimbursements/audit', [ReimbursementController::class, 'audit'])->name('reimbursements.audit');
     Route::resource('reimbursements', ReimbursementController::class);
@@ -52,6 +54,7 @@ Route::middleware(['auth'])->group(function () {
     });
 
     Route::middleware('permission:cost_centers.view')->group(function() {
+        Route::resource('companies', CompanyController::class)->except(['show']);
         Route::resource('cost_centers', CostCenterController::class);
         Route::patch('cost_centers/{cost_center}/toggle-status', [CostCenterController::class, 'toggleStatus'])->name('cost_centers.toggle_status');
         Route::post('cost_centers/{cost_center}/renew-budget', [CostCenterController::class, 'renewBudget'])->name('cost_centers.renew_budget');
