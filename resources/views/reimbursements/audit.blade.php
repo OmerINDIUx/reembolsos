@@ -307,7 +307,7 @@
                                 
                                 <div class="flex items-center space-x-5">
                                     <div class="flex items-center justify-center w-10 h-10 border border-transparent">
-                                        <input type="checkbox" value="{{ $r->id }}" x-model="selectedIds" data-amount="{{ $r->total }}" data-has-uuid="{{ $r->uuid ? '1' : '0' }}" data-mismatch="{{ (!$uuidMatch || !$totalMatch) ? '1' : '0' }}" @click.stop class="reimbursement-checkbox w-6 h-6 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200 cursor-pointer" />
+                                        <input type="checkbox" value="{{ $r->id }}" x-model="selectedIds" data-amount="{{ (float) $r->total + (float) ($r->propina ?? 0) }}" data-has-uuid="{{ $r->uuid ? '1' : '0' }}" data-mismatch="{{ (!$uuidMatch || !$totalMatch) ? '1' : '0' }}" @click.stop class="reimbursement-checkbox w-6 h-6 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200 cursor-pointer" />
 
                                     </div>
                                     <div class="flex flex-col">
@@ -527,7 +527,7 @@
                                     </div>
                                     <div class="mt-4 md:mt-0 text-right">
                                         <span class="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">{{ $selectedCcName ? 'Subtotal Receptor' : 'Subtotal Proyecto' }}</span>
-                                        <span class="text-2xl font-black text-gray-900 dark:text-white">${{ number_format($batchItems->sum('total'), 2) }}</span>
+                                        <span class="text-2xl font-black text-gray-900 dark:text-white">${{ number_format($batchItems->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0)), 2) }}</span>
                                     </div>
                                 </div>
 
@@ -582,10 +582,10 @@
                                                 }
                                             }
                                             $idsJson = json_encode($typeItems->pluck('id'));
-                                            $totalTypeAmount = $typeItems->sum('total');
+                                            $totalTypeAmount = $typeItems->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0));
                                             
                                             $mainSolicitor = $typeItems->groupBy('user_id')
-                                                ->map(fn($group) => ['name' => $group->first()->user->name ?? 'N/A', 'total' => $group->sum('total')])
+                                                ->map(fn($group) => ['name' => $group->first()->user->name ?? 'N/A', 'total' => $group->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0))])
                                                 ->sortByDesc('total')
                                                 ->first();
                                         @endphp
@@ -627,7 +627,7 @@
                                                 </div>
                                                 <div class="text-right">
                                                     <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Total Lote</span>
-                                                    <span class="text-xl font-black text-gray-900 dark:text-white">${{ number_format($typeItems->sum('total'), 2) }}</span>
+                                                    <span class="text-xl font-black text-gray-900 dark:text-white">${{ number_format($totalTypeAmount, 2) }}</span>
                                                 </div>
                                                 <div class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 group-hover/type:bg-indigo-100 dark:group-hover/type:bg-indigo-900 transition-colors">
                                                     <svg class="w-4 h-4 text-gray-400 group-hover/type:text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>

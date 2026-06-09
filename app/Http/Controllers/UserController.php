@@ -114,9 +114,9 @@ class UserController extends Controller
 
         $stats = [
             'pending_count' => (clone $pendingQuery)->count(),
-            'pending_amount' => (clone $pendingQuery)->sum('total'),
+            'pending_amount' => (clone $pendingQuery)->sum(DB::raw('total + COALESCE(propina, 0)')),
             'approved_count' => (clone $approvedQuery)->count(),
-            'approved_amount' => (clone $approvedQuery)->sum('total'),
+            'approved_amount' => (clone $approvedQuery)->sum(DB::raw('total + COALESCE(propina, 0)')),
             'rejected_count' => $user->reimbursements()->applyTimeFilters($request)->where('status', 'rechazado')->count(),
         ];
 
@@ -124,7 +124,7 @@ class UserController extends Controller
         $categoryBreakdown = $user->reimbursements()
             ->applyTimeFilters($request)
             ->where('status', '!=', 'borrador')
-            ->select('category', DB::raw('sum(total) as amount'), DB::raw('count(*) as count'))
+            ->select('category', DB::raw('sum(total + COALESCE(propina, 0)) as amount'), DB::raw('count(*) as count'))
             ->groupBy('category')
             ->orderBy('amount', 'desc')
             ->get();
@@ -133,7 +133,7 @@ class UserController extends Controller
         $statusBreakdown = $user->reimbursements()
             ->applyTimeFilters($request)
             ->where('status', '!=', 'borrador')
-            ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total) as amount'))
+            ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total + COALESCE(propina, 0)) as amount'))
             ->groupBy('status')
             ->get();
 
@@ -142,7 +142,7 @@ class UserController extends Controller
             ->where('status', 'aprobado')
             ->select(
                 DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'),
-                DB::raw('sum(total) as amount')
+                DB::raw('sum(total + COALESCE(propina, 0)) as amount')
             )
             ->where('created_at', '>=', now()->subMonths(6))
             ->groupBy('month')

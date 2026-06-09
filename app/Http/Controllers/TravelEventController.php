@@ -106,11 +106,11 @@ class TravelEventController extends Controller
             ->get();
             
         $stats = [
-            'total_amount' => $reimbursements->sum('total'),
+            'total_amount' => $reimbursements->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0)),
             'count' => $reimbursements->count(),
-            'approved_amount' => $reimbursements->where('status', 'aprobado')->sum('total'),
-            'pending_amount' => $reimbursements->whereNotIn('status', ['aprobado', 'rechazado', 'borrador', 'en_evento'])->sum('total'),
-            'queued_amount' => $reimbursements->where('status', 'en_evento')->sum('total'),
+            'approved_amount' => $reimbursements->where('status', 'aprobado')->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0)),
+            'pending_amount' => $reimbursements->whereNotIn('status', ['aprobado', 'rechazado', 'borrador', 'en_evento'])->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0)),
+            'queued_amount' => $reimbursements->where('status', 'en_evento')->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0)),
         ];
 
         return view('travel_events.show', compact('travelEvent', 'reimbursements', 'stats', 'periods'));

@@ -114,9 +114,9 @@ class CostCenterController extends Controller
 
         $stats = [
             'pending_count' => (clone $pendingQuery)->count(),
-            'pending_amount' => (clone $pendingBudgetQuery)->sum('total'),
+            'pending_amount' => (clone $pendingBudgetQuery)->sum(DB::raw('total + COALESCE(propina, 0)')),
             'approved_count' => (clone $approvedQuery)->count(),
-            'approved_amount' => (clone $approvedBudgetQuery)->sum('total'),
+            'approved_amount' => (clone $approvedBudgetQuery)->sum(DB::raw('total + COALESCE(propina, 0)')),
             'correction_count' => $costCenter->reimbursements()->applyTimeFilters($request)->where('status', 'requiere_correccion')->count(),
             'rejected_count' => $costCenter->reimbursements()->applyTimeFilters($request)->where('status', 'rechazado')->count(),
             'avg_approval_days' => $approvedQuery->whereNotNull('approved_by_treasury_at')
@@ -127,7 +127,7 @@ class CostCenterController extends Controller
         $statusBreakdown = $costCenter->reimbursements()
             ->applyTimeFilters($request)
             ->where('status', '!=', 'borrador')
-            ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total) as amount'))
+            ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total + COALESCE(propina, 0)) as amount'))
             ->groupBy('status')
             ->get();
 
@@ -136,7 +136,7 @@ class CostCenterController extends Controller
             ->applyTimeFilters($request)
             ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])
             ->with('currentStep')
-            ->select('current_step_id', DB::raw('count(*) as count'), DB::raw('sum(total) as amount'))
+            ->select('current_step_id', DB::raw('count(*) as count'), DB::raw('sum(total + COALESCE(propina, 0)) as amount'))
             ->groupBy('current_step_id')
             ->get();
 
@@ -144,7 +144,7 @@ class CostCenterController extends Controller
         $categoryBreakdown = $costCenter->reimbursements()
             ->applyTimeFilters($request)
             ->where('status', '!=', 'borrador')
-            ->select('category', DB::raw('sum(total) as amount'), DB::raw('count(*) as count'))
+            ->select('category', DB::raw('sum(total + COALESCE(propina, 0)) as amount'), DB::raw('count(*) as count'))
             ->groupBy('category')
             ->orderBy('amount', 'desc')
             ->get();
@@ -154,7 +154,7 @@ class CostCenterController extends Controller
             ->where('status', 'aprobado')
             ->select(
                 DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'),
-                DB::raw('sum(total) as amount')
+                DB::raw('sum(total + COALESCE(propina, 0)) as amount')
             )
             ->where('created_at', '>=', now()->subMonths(6))
             ->groupBy('month')
@@ -164,7 +164,7 @@ class CostCenterController extends Controller
         // 6. Top Spenders in this CC
         $topSpenders = $costCenter->reimbursements()
             ->where('status', '!=', 'borrador')
-            ->select('user_id', DB::raw('sum(total) as amount'), DB::raw('count(*) as count'))
+            ->select('user_id', DB::raw('sum(total + COALESCE(propina, 0)) as amount'), DB::raw('count(*) as count'))
             ->with('user')
             ->groupBy('user_id')
             ->orderBy('amount', 'desc')

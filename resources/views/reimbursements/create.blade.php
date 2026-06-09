@@ -570,7 +570,7 @@
                                                 </template>
                                             </div>
 
-                                            <div x-show="hasInvoice && type === 'comida'">
+                                            <div x-show="type === 'comida'">
                                                 <label class="block text-[10px] font-black text-orange-500 dark:text-orange-400 uppercase tracking-widest mb-2">Propina Manual</label>
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-orange-400">$</span>
@@ -1599,7 +1599,8 @@
                 calculateTotal() { 
                     return this.items.reduce((acc, i) => {
                         const val = parseFloat(i.data.total) || 0;
-                        return acc + val;
+                        const propina = this.type === 'comida' ? (parseFloat(i.data.propina) || 0) : 0;
+                        return acc + val + propina;
                     }, 0);
                 },
                 countTotalFiles() {
@@ -1660,7 +1661,7 @@
                         return;
                     }
 
-                    if (this.type === 'comida' && this.hasInvoice) {
+                    if (this.type === 'comida') {
                         const hasExceededTip = this.items.some(i => {
                             const total = parseFloat(i.data.total) || 0;
                             const propina = parseFloat(i.data.propina) || 0;

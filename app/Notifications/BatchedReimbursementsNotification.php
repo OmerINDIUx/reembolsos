@@ -23,7 +23,7 @@ class BatchedReimbursementsNotification extends Notification
     {
         $this->reimbursements = $reimbursements;
         $this->count = $reimbursements->count();
-        $this->totalAmount = $reimbursements->sum('total');
+        $this->totalAmount = $reimbursements->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0));
         
         $this->breakdown = [];
         foreach ($reimbursements as $r) {
@@ -32,7 +32,7 @@ class BatchedReimbursementsNotification extends Notification
                 $this->breakdown[$ccName] = ['count' => 0, 'total' => 0];
             }
             $this->breakdown[$ccName]['count']++;
-            $this->breakdown[$ccName]['total'] += (float)$r->total;
+            $this->breakdown[$ccName]['total'] += (float)$r->total + (float)($r->propina ?? 0);
         }
     }
 

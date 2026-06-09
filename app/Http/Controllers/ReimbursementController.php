@@ -257,16 +257,16 @@ class ReimbursementController extends Controller
 
             if ($itemsForStats->count() > 0) {
                 $topPayee = $itemsForStats->groupBy(fn($r) => $r->payee_id ?: $r->user_id)
-                    ->map(fn($group) => ['user' => $group->first()->payee->name ?? ($group->first()->user->name ?? 'N/A'), 'total' => $group->sum('total')])
+                    ->map(fn($group) => ['user' => $group->first()->payee->name ?? ($group->first()->user->name ?? 'N/A'), 'total' => $group->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0))])
                     ->sortByDesc('total')
                     ->first();
 
                 $auditStats = [
-                    'total' => $itemsForStats->sum('total'),
+                    'total' => $itemsForStats->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0)),
                     'count' => $itemsForStats->count(),
-                    'avg' => $itemsForStats->avg('total'),
+                    'avg' => $itemsForStats->avg(fn($r) => (float) $r->total + (float) ($r->propina ?? 0)),
                     'status_counts' => $itemsForStats->groupBy('status')->map->count(),
-                    'category_totals' => $itemsForStats->groupBy('category')->map->sum('total'),
+                    'category_totals' => $itemsForStats->groupBy('category')->map(fn($group) => $group->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0))),
                     'validation_passed' => $itemsForStats->filter(fn($r) => ($r->validation_data['uuid_match'] ?? false) && ($r->validation_data['total_match'] ?? false))->count(),
                     'manual_count' => $itemsForStats->where('folio', 'SIN-FACTURA')->count(),
                     'top_solicitor' => $topPayee,
@@ -298,7 +298,7 @@ class ReimbursementController extends Controller
                 'cc_name' => $selectedCcName,
                 'type'    => $selectedType,
                 'payee'   => $payee,
-                'total'   => $typeItems->sum('total'),
+                'total'   => $typeItems->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0)),
                 'count'   => $typeItems->count(),
             ];
         }
@@ -1554,8 +1554,8 @@ class ReimbursementController extends Controller
                 'nombre_emisor', 'fecha', 'subtotal', 'total'
             ]), function($value) { return !is_null($value); });
 
-            // Persist propina if allowed (only for comida with invoice)
-            if ($reimbursement->type === 'comida' && !empty($reimbursement->uuid) && $request->has('propina')) {
+            // Persist propina for any meal reimbursement, with or without XML.
+            if ($reimbursement->type === 'comida' && $request->has('propina')) {
                 $data['propina'] = (float)$request->propina;
             }
 

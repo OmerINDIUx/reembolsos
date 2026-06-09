@@ -35,15 +35,15 @@ class DashboardController extends Controller
             'approved_count' => (clone $myRequestsQuery)->where('status', 'aprobado')->count(),
             'rejected_count' => (clone $myRequestsQuery)->where('status', 'rechazado')->count(),
             'correction_count' => (clone $myRequestsQuery)->where('status', 'requiere_correccion')->count(),
-            'pending_amount' => (clone $myRequestsQuery)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->sum('total'),
-            'approved_amount' => (clone $myRequestsQuery)->where('status', 'aprobado')->sum('total'),
+            'pending_amount' => (clone $myRequestsQuery)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->sum(DB::raw('total + COALESCE(propina, 0)')),
+            'approved_amount' => (clone $myRequestsQuery)->where('status', 'aprobado')->sum(DB::raw('total + COALESCE(propina, 0)')),
         ];
 
         // 2. MANAGEMENT STATS (For Approvers/Admins)
         if ($user->isAdmin() || $user->isAdminView()) {
             $stats['management'] = [
-                'pending_amount' => Reimbursement::applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->sum('total'),
-                'approved_amount' => Reimbursement::applyTimeFilters($request)->where('status', 'aprobado')->sum('total'),
+                'pending_amount' => Reimbursement::applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->sum(DB::raw('total + COALESCE(propina, 0)')),
+                'approved_amount' => Reimbursement::applyTimeFilters($request)->where('status', 'aprobado')->sum(DB::raw('total + COALESCE(propina, 0)')),
             ];
             $stats['management']['pending_count'] = Reimbursement::applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->count();
             $stats['management']['approved_count'] = Reimbursement::applyTimeFilters($request)->where('status', 'aprobado')->count();
@@ -66,9 +66,9 @@ class DashboardController extends Controller
 
                 $stats['management'] = [
                     'pending_count' => $pendingFlowQuery->count(),
-                    'pending_amount' => $pendingFlowQuery->sum('total'),
+                    'pending_amount' => $pendingFlowQuery->sum(DB::raw('total + COALESCE(propina, 0)')),
                     'approved_count' => $approvedFlowQuery->count(),
-                    'approved_amount' => $approvedFlowQuery->sum('total'),
+                    'approved_amount' => $approvedFlowQuery->sum(DB::raw('total + COALESCE(propina, 0)')),
                     'label' => 'Asignados',
                 ];
             }
@@ -109,7 +109,7 @@ class DashboardController extends Controller
         }
         
         $rawBreakdown = $statusQuery
-            ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total) as amount'))
+            ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total + COALESCE(propina, 0)) as amount'))
             ->groupBy('status')
             ->get()
             ->keyBy('status');
@@ -158,7 +158,7 @@ class DashboardController extends Controller
 
         // 2. Weekly Totals & Growth
         $weeklyTotals = (clone $queryBuilder)
-            ->select('week', DB::raw('sum(total) as amount'), DB::raw('count(*) as count'))
+            ->select('week', DB::raw('sum(total + COALESCE(propina, 0)) as amount'), DB::raw('count(*) as count'))
             ->whereNotNull('week')
             ->groupBy('week')
             ->orderBy('week', 'desc')
@@ -183,7 +183,7 @@ class DashboardController extends Controller
 
         // 4. Top Spenders (Users)
         $topSpenders = (clone $queryBuilder)
-            ->select('user_id', DB::raw('sum(total) as amount'), DB::raw('count(*) as count'))
+            ->select('user_id', DB::raw('sum(total + COALESCE(propina, 0)) as amount'), DB::raw('count(*) as count'))
             ->groupBy('user_id')
             ->with('user')
             ->orderBy('amount', 'desc')
@@ -192,7 +192,7 @@ class DashboardController extends Controller
 
         // 5. Category Breakdown
         $categoryBreakdown = (clone $queryBuilder)
-            ->select('category', DB::raw('sum(total) as amount'))
+            ->select('category', DB::raw('sum(total + COALESCE(propina, 0)) as amount'))
             ->groupBy('category')
             ->orderBy('amount', 'desc')
             ->limit(10)
@@ -217,7 +217,7 @@ class DashboardController extends Controller
 
         // 7. Last 14 Days Activity (Daily)
         $dailyActivity = (clone $queryBuilder)
-            ->select(DB::raw('DATE(created_at) as date'), DB::raw('sum(total) as amount'))
+            ->select(DB::raw('DATE(created_at) as date'), DB::raw('sum(total + COALESCE(propina, 0)) as amount'))
             ->where('created_at', '>=', now()->subDays(14))
             ->groupBy('date')
             ->orderBy('date', 'asc')
@@ -233,7 +233,7 @@ class DashboardController extends Controller
             'category_breakdown' => $categoryBreakdown,
             'tax_summary' => $taxSummary,
             'daily_activity' => $dailyActivity,
-            'avg_ticket' => (clone $queryBuilder)->avg('total') ?: 0
+            'avg_ticket' => (clone $queryBuilder)->avg(DB::raw('total + COALESCE(propina, 0)')) ?: 0
         ];
     }
 }
