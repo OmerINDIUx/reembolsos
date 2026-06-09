@@ -198,13 +198,20 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
-        // 6. Tax Recovery (Impuestos vs Subtotal)
-        // Fallback: If taxes are 0/null, calculate (total - subtotal)
+        // 6. Tax Recovery and XML Coverage
+        $ivaRate = 0.16;
+        $ivaFactor = $ivaRate / (1 + $ivaRate);
         $taxSummary = (clone $queryBuilder)
             ->select(
-                DB::raw('sum(subtotal) as subtotal'), 
-                DB::raw('sum(COALESCE(NULLIF(impuestos, 0), (total - subtotal))) as taxes'), 
-                DB::raw('sum(total) as total')
+                DB::raw('count(*) as total_count'),
+                DB::raw("sum(case when xml_path is not null and xml_path <> '' then 1 else 0 end) as with_xml_count"),
+                DB::raw("sum(case when xml_path is null or xml_path = '' then 1 else 0 end) as without_xml_count"),
+                DB::raw("sum(case when xml_path is not null and xml_path <> '' then coalesce(total, 0) else 0 end) as with_xml_total"),
+                DB::raw("sum(case when xml_path is null or xml_path = '' then coalesce(total, 0) else 0 end) as without_xml_total"),
+                DB::raw("sum(case when xml_path is not null and xml_path <> '' then coalesce(subtotal, 0) else 0 end) as subtotal"),
+                DB::raw("sum(case when xml_path is not null and xml_path <> '' then coalesce(nullif(impuestos, 0), coalesce(total, 0) - coalesce(subtotal, 0), 0) else 0 end) as taxes"),
+                DB::raw('sum(coalesce(total, 0)) as total'),
+                DB::raw("sum(case when xml_path is null or xml_path = '' then coalesce(total, 0) * {$ivaFactor} else 0 end) as lost_iva_estimate")
             )
             ->first();
 

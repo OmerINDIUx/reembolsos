@@ -166,13 +166,24 @@
                                 </select>
                             </div>
 
+                            @php
+                                $availableWeeksByYear = $availableWeeks->groupBy(function($week) {
+                                    $parts = explode('-', $week);
+                                    return $parts[1] ?? 'Sin año';
+                                });
+                            @endphp
+
                             <!-- Week From -->
                             <div class="col-span-1 md:col-span-2">
                                 <label for="from_week" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana Desde</label>
                                 <select name="from_week" id="from_week" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                     <option value="">Cualquiera</option>
-                                    @foreach($availableWeeks as $aw)
-                                        <option value="{{ $aw }}" {{ request('from_week') == $aw ? 'selected' : '' }}>Semana {{ $aw }}</option>
+                                    @foreach($availableWeeksByYear as $year => $weeks)
+                                        <optgroup label="{{ $year }}">
+                                            @foreach($weeks as $aw)
+                                                <option value="{{ $aw }}" {{ request('from_week') == $aw ? 'selected' : '' }}>Semana {{ $aw }}</option>
+                                            @endforeach
+                                        </optgroup>
                                     @endforeach
                                 </select>
                             </div>
@@ -182,8 +193,12 @@
                                 <label for="to_week" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana Hasta</label>
                                 <select name="to_week" id="to_week" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                     <option value="">Cualquiera</option>
-                                    @foreach($availableWeeks as $aw)
-                                        <option value="{{ $aw }}" {{ request('to_week') == $aw ? 'selected' : '' }}>Semana {{ $aw }}</option>
+                                    @foreach($availableWeeksByYear as $year => $weeks)
+                                        <optgroup label="{{ $year }}">
+                                            @foreach($weeks as $aw)
+                                                <option value="{{ $aw }}" {{ request('to_week') == $aw ? 'selected' : '' }}>Semana {{ $aw }}</option>
+                                            @endforeach
+                                        </optgroup>
                                     @endforeach
                                 </select>
                             </div>
@@ -874,7 +889,26 @@
 
     
     <!-- Export Modal -->
-    <div x-data="{ open: false, selectedWeek: '' }" 
+    @php
+        $exportWeekGroups = $availableWeeksByYear->map(function($weeks, $year) {
+            return [
+                'year' => (string) $year,
+                'weeks' => $weeks->values(),
+            ];
+        })->values();
+    @endphp
+    <div x-data="{
+            open: false,
+            selectedYear: '',
+            selectedWeek: '',
+            weekGroups: @js($exportWeekGroups),
+            init() {
+                this.selectedYear = this.weekGroups[0]?.year || '';
+            },
+            get weeksForYear() {
+                return this.weekGroups.find(group => group.year === this.selectedYear)?.weeks || [];
+            }
+        }" 
          @open-export-modal.window="open = true" 
          x-show="open" 
          class="fixed z-50 inset-0 overflow-y-auto" 
@@ -889,24 +923,34 @@
                         </div>
                         <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
                             <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-2">Exportar Reembolsos</h3>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Selecciona la semana fiscal que deseas exportar a Excel.</p>
-                            
-                            @php
-                                $exportWeeks = $availableWeeks;
-                            @endphp
-                            
-                            <select x-model="selectedWeek" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-green-500 focus:ring-green-500">
-                                <option value="">Selecciona una semana...</option>
-                                @foreach($exportWeeks as $ew)
-                                    <option value="{{ $ew }}">Semana {{ $ew }}</option>
-                                @endforeach
-                            </select>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Selecciona el año y después la semana fiscal que deseas exportar.</p>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Año</label>
+                                    <select x-model="selectedYear" @change="selectedWeek = ''" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-green-500 focus:ring-green-500">
+                                        <template x-for="group in weekGroups" :key="group.year">
+                                            <option :value="group.year" x-text="group.year"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Semana</label>
+                                    <select x-model="selectedWeek" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-green-500 focus:ring-green-500">
+                                        <option value="">Selecciona...</option>
+                                        <template x-for="week in weeksForYear" :key="week">
+                                            <option :value="week" x-text="'Semana ' + week"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                            <p class="mt-3 text-[11px] text-gray-400 dark:text-gray-500">Solo se muestran semanas disponibles en tu línea de aprobación.</p>
                         </div>
                     </div>
                 </div>
                 <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse dark:bg-gray-900/50">
-                    <button type="button" @click="exportData(selectedWeek, 'excel'); open = false" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">Excel (CSV)</button>
-                    <button type="button" @click="exportData(selectedWeek, 'xml'); open = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">XMLs (ZIP)</button>
+                    <button type="button" :disabled="!selectedWeek" @click="exportData(selectedWeek, 'excel'); open = false" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-40 disabled:cursor-not-allowed">Excel (CSV)</button>
+                    <button type="button" :disabled="!selectedWeek" @click="exportData(selectedWeek, 'xml'); open = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-40 disabled:cursor-not-allowed">XMLs (ZIP)</button>
                     <button type="button" @click="open = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">Cancelar</button>
                 </div>
             </div>

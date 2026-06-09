@@ -49,11 +49,14 @@
                                     <div class="h-px w-6 bg-indigo-200 dark:bg-indigo-700"></div>
                                 </div>
                                 <h3 class="text-2xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight leading-none">
-                                    {{ $auditMeta['cc_name'] }}
+                                    {{ $auditMeta['payee']->name ?? $auditMeta['cc_name'] }}
                                 </h3>
                                 <div class="flex items-center space-x-3 pt-1">
                                     <span class="px-2 py-0.5 bg-indigo-600 text-white rounded text-[8px] font-black uppercase tracking-widest">Semana {{ $auditMeta['week'] }}</span>
                                     <span class="px-2 py-0.5 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded text-[8px] font-black uppercase tracking-widest border border-gray-200 dark:border-gray-600">{{ ucfirst(str_replace('_', ' ', $auditMeta['type'])) }}</span>
+                                    @if(!empty($auditMeta['payee']))
+                                        <span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[8px] font-black uppercase tracking-widest border border-emerald-200">Recibe: {{ $auditMeta['payee']->name }}</span>
+                                    @endif
                                     @if(isset($auditItems) && $auditItems->count() > 0)
                                         @php 
                                             $ccModel = $auditItems->first()->costCenter;
@@ -121,7 +124,7 @@
                         <!-- Card 4: Top Solicitante -->
                         <div class="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
                              <div class="relative z-10">
-                                <span class="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1 block">Top Solicitante</span>
+                                <span class="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1 block">Top Receptor</span>
                                 @if(isset($auditStats['top_solicitor']))
                                     <span class="text-xl font-black text-gray-900 dark:text-white truncate block w-full tracking-tight">{{ $auditStats['top_solicitor']['user'] }}</span>
                                     <p class="text-[9px] text-indigo-500 font-black mt-2 uppercase tracking-tight italic">${{ number_format($auditStats['top_solicitor']['total'], 2) }} gastados</p>
@@ -223,7 +226,7 @@
                                 </div>
 
                                 <div class="col-span-1 md:col-span-4 flex justify-end items-end space-x-2">
-                                    <a href="{{ route('reimbursements.audit', request()->only(['tab', 'week', 'cc', 'type'])) }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
+                                    <a href="{{ route('reimbursements.audit', request()->only(['tab', 'week', 'cc', 'type', 'payee'])) }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
                                         Limpiar
                                     </a>
                                     <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
@@ -324,6 +327,7 @@
                                         <span class="text-sm font-black text-gray-700 dark:text-gray-300">{{ $r->nombre_emisor ?: 'S/N' }}</span>
                                         <div class="flex items-center space-x-1 mt-0.5">
                                             <span class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-800">De: {{ $r->user->name ?? 'N/A' }}</span>
+                                            <span class="text-[9px] font-black text-emerald-600 uppercase tracking-tighter bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded border border-emerald-100 dark:border-emerald-800">Recibe: {{ $r->payee->name ?? ($r->user->name ?? 'N/A') }}</span>
                                         </div>
                                         <div class="flex items-center space-x-1 mt-0.5">
                                             <span class="text-[8px] font-black text-gray-400 uppercase tracking-tighter">{{ $r->fecha ? $r->fecha->format('d/m/Y') : 'S/F' }}</span>
@@ -487,32 +491,43 @@
                          </div>
 
                         @php 
-                            $groupedByCC = $displayItems->groupBy(function($item) {
-                                return $item->costCenter->name ?? 'Sin Centro de Costos';
+                            $groupedAuditBatches = $displayItems->groupBy(function($item) use ($selectedCcName) {
+                                if ($selectedCcName) {
+                                    return 'payee:' . ($item->payee_id ?: $item->user_id);
+                                }
+
+                                return 'cc:' . ($item->cost_center_id ?: 'none');
                             });
                         @endphp
 
-                        @forelse($groupedByCC as $ccName => $ccItems)
+                        @forelse($groupedAuditBatches as $batchKey => $batchItems)
                             <div class="bg-white dark:bg-gray-800 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700 p-8 mb-6 last:mb-0 group hover:shadow-lg transition-all duration-300">
                                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 pb-6 border-b border-gray-50 dark:border-gray-700">
                                     <div>
-                                        <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 italic opacity-60">Centro de Costos / Proyecto</h4>
+                                        <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 italic opacity-60">{{ $selectedCcName ? 'Persona que recibe el reembolso' : 'Centro de Costos / Proyecto' }}</h4>
                                         <div class="flex flex-col">
                                             @php
-                                                $cc = $ccItems->first()->costCenter;
+                                                $payee = $batchItems->first()->payee ?: $batchItems->first()->user;
+                                                $payeeId = $batchItems->first()->payee_id ?: $batchItems->first()->user_id;
+                                                $cc = $batchItems->first()->costCenter;
+                                                $ccName = $cc->name ?? 'Sin Centro de Costos';
                                                 $internalId = ($cc->abbreviation ?? 'SCC') . '-' . $selectedWeek;
-                                                $invoices = $ccItems->whereNotNull('uuid')->count();
-                                                $tickets = $ccItems->whereNull('uuid')->count();
+                                                $invoices = $batchItems->whereNotNull('uuid')->count();
+                                                $tickets = $batchItems->whereNull('uuid')->count();
+                                                $batchTitle = $selectedCcName ? ($payee->name ?? 'Sin Receptor') : $ccName;
                                             @endphp
                                             <span class="text-[10px] font-black text-indigo-500 uppercase tracking-widest italic opacity-70 leading-none mb-1">{{ $internalId }}</span>
                                             <h2 class="text-3xl font-black text-gray-900 dark:text-white tracking-tight leading-none">
-                                                {{ $ccName }}
+                                                {{ $batchTitle }}
                                             </h2>
+                                            @if($selectedCcName)
+                                                <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-2">{{ $ccName }}</span>
+                                            @endif
                                         </div>
                                     </div>
                                     <div class="mt-4 md:mt-0 text-right">
-                                        <span class="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">Subtotal Proyecto</span>
-                                        <span class="text-2xl font-black text-gray-900 dark:text-white">${{ number_format($ccItems->sum('total'), 2) }}</span>
+                                        <span class="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">{{ $selectedCcName ? 'Subtotal Receptor' : 'Subtotal Proyecto' }}</span>
+                                        <span class="text-2xl font-black text-gray-900 dark:text-white">${{ number_format($batchItems->sum('total'), 2) }}</span>
                                     </div>
                                 </div>
 
@@ -549,7 +564,7 @@
                                 </div>
 
                                 <div class="space-y-3">
-                                    @php $groupedByType = $ccItems->groupBy('type'); @endphp
+                                    @php $groupedByType = $batchItems->groupBy('type'); @endphp
                                     @foreach($groupedByType as $type => $typeItems)
                                         @php
                                             $cc = $typeItems->first()->costCenter;
@@ -574,7 +589,7 @@
                                                 ->sortByDesc('total')
                                                 ->first();
                                         @endphp
-                                        <a href="{{ route('reimbursements.audit', ['week' => $selectedWeek, 'cc' => $ccName, 'type' => $type, 'tab' => request('tab')]) }}"
+                                        <a href="{{ route('reimbursements.audit', array_filter(['week' => $selectedWeek, 'cc' => $ccName, 'type' => $type, 'payee' => $selectedCcName ? $payeeId : null, 'tab' => request('tab')], fn($value) => $value !== null && $value !== '')) }}"
                                            class="flex flex-col md:flex-row items-center justify-between p-5 bg-gray-50 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-lg transition-all group/type no-underline space-y-4 md:space-y-0">
                                             <div class="flex items-center space-x-5">
                                                 <div class="flex items-center justify-center border-r border-gray-200 dark:border-gray-700 pr-4" @click.stop>

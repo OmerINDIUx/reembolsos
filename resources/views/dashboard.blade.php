@@ -128,7 +128,7 @@
             <!-- Enhanced Insights Section -->
             <div class="mb-12">
                 <!-- Row 1: High Level Metrics -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
                     @if($hasFullAccess)
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-[1.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
                         <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Crecimiento Semanal</p>
@@ -152,9 +152,19 @@
 
                     @if($hasFullAccess)
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-[1.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
-                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Recuperación de IVA/Imp</p>
-                        <h5 class="text-2xl font-black text-emerald-600">${{ number_format($analytics['tax_summary']->taxes ?? 0, 2) }}</h5>
-                        <p class="text-[9px] text-gray-400 mt-2">Deducible identificado</p>
+                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Con XML</p>
+                        <h5 class="text-2xl font-black text-emerald-600">${{ number_format($analytics['tax_summary']->with_xml_total ?? 0, 2) }}</h5>
+                        <p class="text-[9px] text-gray-400 mt-2">
+                            {{ number_format($analytics['tax_summary']->with_xml_count ?? 0) }} reembolsos · total cargado
+                        </p>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-[1.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Sin XML</p>
+                        <h5 class="text-2xl font-black text-rose-600">${{ number_format($analytics['tax_summary']->without_xml_total ?? 0, 2) }}</h5>
+                        <p class="text-[9px] text-gray-400 mt-2">
+                            {{ number_format($analytics['tax_summary']->without_xml_count ?? 0) }} reembolsos · total cargado
+                        </p>
                     </div>
                     @endif
 
@@ -297,21 +307,34 @@
                     <!-- Tax Snapshot -->
                     <div class="bg-emerald-600 rounded-[2rem] p-8 text-white">
                         <h4 class="text-xl font-black mb-1 uppercase tracking-tighter text-emerald-100">Capital Recuperable</h4>
-                        <p class="text-[10px] text-emerald-200 font-bold mb-8 uppercase tracking-widest">Identificación de Gastos Fiscales</p>
-                        
-                        <div class="mb-8">
-                            <h5 class="text-4xl font-black">${{ number_format($analytics['tax_summary']->taxes ?? 0, 2) }}</h5>
-                            <p class="text-[10px] font-bold text-emerald-100 mt-1 uppercase tracking-widest">Total IVA identificado en XMLs</p>
+                        <p class="text-[10px] text-emerald-200 font-bold mb-8 uppercase tracking-widest">Cobertura XML e IVA fiscal</p>
+
+                        <div class="grid grid-cols-1 gap-3 mb-8">
+                            <div class="rounded-2xl bg-white/12 border border-white/15 p-4">
+                                <p class="text-[10px] font-black text-emerald-100 uppercase tracking-widest">Con XML</p>
+                                <p class="text-3xl font-black mt-2 leading-none">{{ number_format($analytics['tax_summary']->with_xml_count ?? 0) }}</p>
+                                <p class="text-sm font-black mt-1">reembolsos</p>
+                                <div class="mt-4 pt-4 border-t border-white/15">
+                                    <p class="text-[9px] font-black text-emerald-100 uppercase tracking-widest">Capital recuperable</p>
+                                    <p class="text-2xl font-black leading-tight break-words">${{ number_format($analytics['tax_summary']->taxes ?? 0, 2) }}</p>
+                                </div>
+                            </div>
+
+                            <div class="rounded-2xl bg-white/12 border border-white/15 p-4">
+                                <p class="text-[10px] font-black text-emerald-100 uppercase tracking-widest">Sin XML</p>
+                                <p class="text-3xl font-black mt-2 leading-none">{{ number_format($analytics['tax_summary']->without_xml_count ?? 0) }}</p>
+                                <p class="text-sm font-black mt-1">reembolsos</p>
+                                <div class="mt-4 pt-4 border-t border-white/15">
+                                    <p class="text-[9px] font-black text-emerald-100 uppercase tracking-widest">Capital no recuperable</p>
+                                    <p class="text-2xl font-black leading-tight break-words">${{ number_format($analytics['tax_summary']->lost_iva_estimate ?? 0, 2) }}</p>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="space-y-3">
                             <div class="flex justify-between text-[10px] font-black border-b border-emerald-500/30 pb-2">
-                                <span class="text-emerald-100 uppercase">Subtotal</span>
-                                <span>${{ number_format($analytics['tax_summary']->subtotal ?? 0, 2) }}</span>
-                            </div>
-                            <div class="flex justify-between text-[10px] font-black border-b border-emerald-500/30 pb-2">
-                                <span class="text-emerald-100 uppercase">Impuestos</span>
-                                <span>${{ number_format($analytics['tax_summary']->taxes ?? 0, 2) }}</span>
+                                <span class="text-emerald-100 uppercase">Monto sin XML</span>
+                                <span>${{ number_format($analytics['tax_summary']->without_xml_total ?? 0, 2) }}</span>
                             </div>
                             <div class="flex justify-between text-[10px] font-black pt-2">
                                 <span class="text-emerald-100 uppercase">Impacto Total</span>

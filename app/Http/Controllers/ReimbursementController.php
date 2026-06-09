@@ -39,16 +39,6 @@ class ReimbursementController extends Controller
             ->where('status', '!=', 'borrador')
             ->orderBy('created_at', 'desc');
 
-        // Calculate available weeks based on scoped query
-        $availableWeeksQuery = clone $query;
-        $availableWeeks = $availableWeeksQuery->reorder()
-            ->select('week')
-            ->whereNotNull('week')
-            ->distinct()
-            ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
-            ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', 1) AS UNSIGNED) DESC")
-            ->pluck('week');
-
         // Authorized Cost Centers logic (Consolidated)
         $canSeeAllCCs = $allIdentities->contains(fn($identity) => $identity->canPerform('cost_centers.view') || $identity->canPerform('reimbursements.bulk_approve'));
         if ($canSeeAllCCs) {
@@ -84,12 +74,14 @@ class ReimbursementController extends Controller
                 $q->where('folio', 'like', "%{$globalSearch}%")
                   ->orWhere('uuid', 'like', "%{$globalSearch}%");
             });
+            $availableWeeks = $this->availableWeeksForQuery($query);
             $reimbursements = $query->paginate(10)->appends($request->all());
             return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'authorizedCCs', 'availableWeeks'));
         }
 
         // Apply Tab Scoping
         $this->applyTabScope($query, $tab, $user);
+        $availableWeeks = $this->availableWeeksForQuery($query);
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -179,7 +171,7 @@ class ReimbursementController extends Controller
 
         // Load reimbursements based on tab scope
         $tab = $request->input('tab', 'management');
-        $query = Reimbursement::with(['user', 'costCenter'])
+        $query = Reimbursement::with(['user', 'payee', 'costCenter'])
             ->where('status', '!=', 'borrador')
             ->orderBy('created_at', 'desc');
         $this->applyTabScope($query, $tab, $user);
@@ -193,6 +185,7 @@ class ReimbursementController extends Controller
         $selectedWeek    = $request->input('week');
         $selectedCcName  = $request->input('cc');
         $selectedType    = $request->input('type');
+        $selectedPayeeId = $request->input('payee');
 
         // Global Audit Filters
         if ($request->filled('search_audit') || $request->filled('type_audit') || $request->filled('category_audit') || $request->filled('xml_audit') || $request->filled('validation_audit') || $request->filled('method_audit') || $request->filled('usage_audit')) {
@@ -256,10 +249,15 @@ class ReimbursementController extends Controller
             if ($selectedType) {
                 $itemsForStats = $itemsForStats->where('type', $selectedType);
             }
+            if ($selectedPayeeId) {
+                $itemsForStats = $itemsForStats->filter(function ($r) use ($selectedPayeeId) {
+                    return (string) ($r->payee_id ?: $r->user_id) === (string) $selectedPayeeId;
+                });
+            }
 
             if ($itemsForStats->count() > 0) {
-                $topSolicitor = $itemsForStats->groupBy('user_id')
-                    ->map(fn($group) => ['user' => $group->first()->user->name ?? 'N/A', 'total' => $group->sum('total')])
+                $topPayee = $itemsForStats->groupBy(fn($r) => $r->payee_id ?: $r->user_id)
+                    ->map(fn($group) => ['user' => $group->first()->payee->name ?? ($group->first()->user->name ?? 'N/A'), 'total' => $group->sum('total')])
                     ->sortByDesc('total')
                     ->first();
 
@@ -271,7 +269,7 @@ class ReimbursementController extends Controller
                     'category_totals' => $itemsForStats->groupBy('category')->map->sum('total'),
                     'validation_passed' => $itemsForStats->filter(fn($r) => ($r->validation_data['uuid_match'] ?? false) && ($r->validation_data['total_match'] ?? false))->count(),
                     'manual_count' => $itemsForStats->where('folio', 'SIN-FACTURA')->count(),
-                    'top_solicitor' => $topSolicitor,
+                    'top_solicitor' => $topPayee,
                 ];
             }
         }
@@ -287,12 +285,19 @@ class ReimbursementController extends Controller
             $weekItems = $groupedByWeek->get($selectedWeek, collect());
             $ccItems   = $weekItems->filter(fn($r) => ($r->costCenter->name ?? 'Sin Centro de Costos') === $selectedCcName);
             $typeItems = $ccItems->where('type', $selectedType);
+            if ($selectedPayeeId) {
+                $typeItems = $typeItems->filter(function ($r) use ($selectedPayeeId) {
+                    return (string) ($r->payee_id ?: $r->user_id) === (string) $selectedPayeeId;
+                });
+            }
+            $payee = $typeItems->first()?->payee ?: $typeItems->first()?->user;
 
             $auditItems = $typeItems->sortByDesc('fecha');
             $auditMeta  = [
                 'week'    => $selectedWeek,
                 'cc_name' => $selectedCcName,
                 'type'    => $selectedType,
+                'payee'   => $payee,
                 'total'   => $typeItems->sum('total'),
                 'count'   => $typeItems->count(),
             ];
@@ -321,7 +326,8 @@ class ReimbursementController extends Controller
         return view('reimbursements.audit', compact(
             'groupedByWeek', 'auditItems', 'auditMeta', 'selectedWeek', 
             'selectedCcName', 'selectedType', 'auditStats', 'categories',
-            'availableWeeks', 'authorizedCCs', 'availableMethods', 'availableUsages'
+            'availableWeeks', 'authorizedCCs', 'availableMethods', 'availableUsages',
+            'selectedPayeeId'
         ));
     }
 
@@ -1838,6 +1844,7 @@ class ReimbursementController extends Controller
         
         // Synchronize with dashboard visibility logic
         $this->applyTabScope($query, $tab, $user);
+        $allowedWeeks = $this->availableWeeksForQuery($query);
 
         // Filter by specific IDs if provided
         if ($request->filled('ids')) {
@@ -1846,32 +1853,7 @@ class ReimbursementController extends Controller
         }
 
         // Mandatory filtering for export
-        if ($request->filled('export_week')) {
-            $query->where('week', $request->export_week);
-        } elseif ($request->filled('from_week') || $request->filled('to_week')) {
-            if ($request->filled('from_week')) {
-                $query->where('week', '>=', $request->from_week);
-            }
-            if ($request->filled('to_week')) {
-                $query->where('week', '<=', $request->to_week);
-            }
-        } elseif ($request->filled('from_date') || $request->filled('to_date')) {
-            $fromDate = $request->from_date;
-            $toDate = $request->to_date;
-
-            $query->where(function($q) use ($fromDate, $toDate) {
-                if ($fromDate && $toDate) {
-                    $q->whereBetween('created_at', [$fromDate . ' 00:00:00', $toDate . ' 23:59:59'])
-                      ->orWhereBetween('fecha', [$fromDate, $toDate]);
-                } elseif ($fromDate) {
-                    $q->whereDate('created_at', '>=', $fromDate)
-                      ->orWhereDate('fecha', '>=', $fromDate);
-                } elseif ($toDate) {
-                    $q->whereDate('created_at', '<=', $toDate)
-                      ->orWhereDate('fecha', '<=', $toDate);
-                }
-            });
-        }
+        $this->applyExportFilters($query, $request, $allowedWeeks);
 
         // Apply common filters
         if ($request->filled('search')) {
@@ -1927,6 +1909,9 @@ class ReimbursementController extends Controller
                 'Uso CFDI',
                 'CP ExpediciÃƒÂ³n',
                 'RÃƒÂ©gimen Fiscal Emisor',
+                'Subtotal',
+                'IVA %',
+                'IVA Monto',
                 'Total',
                 'Estatus',
                 'Aprobaciones',
@@ -1986,6 +1971,14 @@ class ReimbursementController extends Controller
                     if (isset($val['total_match'])) $totalMatch = $val['total_match'] ? "Coincide" : "No Coincide";
                 }
 
+                $subtotal = (float) ($r->subtotal ?? 0);
+                $total = (float) ($r->total ?? 0);
+                $ivaAmount = $r->impuestos !== null
+                    ? (float) $r->impuestos
+                    : max(0, $total - $subtotal);
+                $ivaPercent = $subtotal > 0 ? ($ivaAmount / $subtotal) * 100 : 0;
+                $currency = $r->moneda ?? 'MXN';
+
                 fputcsv($file, [
                     $r->true_folio ?? 'N/A',
                     $r->uuid ?? 'N/A',
@@ -2005,7 +1998,10 @@ class ReimbursementController extends Controller
                     $r->uso_cfdi ?? 'N/A',
                     $r->lugar_expedicion ?? 'N/A',
                     $r->regimen_fiscal_emisor ?? 'N/A',
-                    "$ " . number_format((float)$r->total, 2) . " " . ($r->moneda ?? 'MXN'),
+                    "$ " . number_format($subtotal, 2) . " " . $currency,
+                    number_format($ivaPercent, 2) . "%",
+                    "$ " . number_format($ivaAmount, 2) . " " . $currency,
+                    "$ " . number_format($total, 2) . " " . $currency,
                     ucwords(str_replace('_', ' ', $r->status)),
                     $approvalsStr,
                     $uuidMatch,
@@ -2024,7 +2020,9 @@ class ReimbursementController extends Controller
     {
         set_time_limit(600);
         $user = Auth::user();
-        
+        $accessQuery = Reimbursement::query()
+            ->where('status', '!=', 'borrador');
+
         $query = Reimbursement::with(['user', 'costCenter'])
             ->where('status', '!=', 'borrador')
             ->whereNotNull('xml_path');
@@ -2034,7 +2032,9 @@ class ReimbursementController extends Controller
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
         
         // Use the same scoping as the dashboard
+        $this->applyTabScope($accessQuery, $tab, $user);
         $this->applyTabScope($query, $tab, $user);
+        $allowedWeeks = $this->availableWeeksForQuery($accessQuery);
 
         // Filter by specific IDs if provided
         if ($request->filled('ids')) {
@@ -2043,32 +2043,7 @@ class ReimbursementController extends Controller
         }
 
         // Mandatory filtering for export (consistent with export method)
-        if ($request->filled('export_week')) {
-            $query->where('week', $request->export_week);
-        } elseif ($request->filled('from_week') || $request->filled('to_week')) {
-            if ($request->filled('from_week')) {
-                $query->where('week', '>=', $request->from_week);
-            }
-            if ($request->filled('to_week')) {
-                $query->where('week', '<=', $request->to_week);
-            }
-        } elseif ($request->filled('from_date') || $request->filled('to_date')) {
-            $fromDate = $request->from_date;
-            $toDate = $request->to_date;
-
-            $query->where(function($q) use ($fromDate, $toDate) {
-                if ($fromDate && $toDate) {
-                    $q->whereBetween('created_at', [$fromDate . ' 00:00:00', $toDate . ' 23:59:59'])
-                      ->orWhereBetween('fecha', [$fromDate, $toDate]);
-                } elseif ($fromDate) {
-                    $q->whereDate('created_at', '>=', $fromDate)
-                      ->orWhereDate('fecha', '>=', $fromDate);
-                } elseif ($toDate) {
-                    $q->whereDate('created_at', '<=', $toDate)
-                      ->orWhereDate('fecha', '<=', $toDate);
-                }
-            });
-        }
+        $this->applyExportFilters($query, $request, $allowedWeeks);
 
         // Apply common filters
         if ($request->filled('search')) {
@@ -3510,6 +3485,71 @@ class ReimbursementController extends Controller
 
         // Standard reimbursement: unmarked users can create as many as needed
         return true;
+    }
+
+    private function availableWeeksForQuery($query)
+    {
+        return (clone $query)->reorder()
+            ->select('week')
+            ->whereNotNull('week')
+            ->distinct()
+            ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', -1) AS UNSIGNED) DESC")
+            ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', 1) AS UNSIGNED) DESC")
+            ->pluck('week')
+            ->filter()
+            ->values();
+    }
+
+    private function applyExportFilters($query, Request $request, $allowedWeeks): void
+    {
+        if ($request->filled('export_week')) {
+            abort_unless($allowedWeeks->contains($request->export_week), 403, 'No puedes exportar una semana que no está en tu línea de aprobación.');
+            $query->where('week', $request->export_week);
+            return;
+        }
+
+        if ($request->filled('from_week') || $request->filled('to_week')) {
+            if ($request->filled('from_week')) {
+                abort_unless($allowedWeeks->contains($request->from_week), 403, 'La semana inicial no está disponible para tu línea de aprobación.');
+                $query->whereRaw("CONCAT(SUBSTRING_INDEX(week, '-', -1), LPAD(SUBSTRING_INDEX(week, '-', 1), 2, '0')) >= ?", [
+                    $this->normalizeWeekForComparison($request->from_week),
+                ]);
+            }
+
+            if ($request->filled('to_week')) {
+                abort_unless($allowedWeeks->contains($request->to_week), 403, 'La semana final no está disponible para tu línea de aprobación.');
+                $query->whereRaw("CONCAT(SUBSTRING_INDEX(week, '-', -1), LPAD(SUBSTRING_INDEX(week, '-', 1), 2, '0')) <= ?", [
+                    $this->normalizeWeekForComparison($request->to_week),
+                ]);
+            }
+
+            return;
+        }
+
+        if ($request->filled('from_date') || $request->filled('to_date')) {
+            $fromDate = $request->from_date;
+            $toDate = $request->to_date;
+
+            $query->where(function($q) use ($fromDate, $toDate) {
+                if ($fromDate && $toDate) {
+                    $q->whereBetween('created_at', [$fromDate . ' 00:00:00', $toDate . ' 23:59:59'])
+                      ->orWhereBetween('fecha', [$fromDate, $toDate]);
+                } elseif ($fromDate) {
+                    $q->whereDate('created_at', '>=', $fromDate)
+                      ->orWhereDate('fecha', '>=', $fromDate);
+                } elseif ($toDate) {
+                    $q->whereDate('created_at', '<=', $toDate)
+                      ->orWhereDate('fecha', '<=', $toDate);
+                }
+            });
+        }
+    }
+
+    private function normalizeWeekForComparison(string $week): string
+    {
+        [$weekNumber, $year] = array_pad(explode('-', $week, 2), 2, '0');
+
+        return $year . str_pad($weekNumber, 2, '0', STR_PAD_LEFT);
     }
 
     /**
