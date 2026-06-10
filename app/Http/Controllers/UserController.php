@@ -346,12 +346,13 @@ class UserController extends Controller
     {
         $query = Profile::orderBy('display_name');
 
-        if (!$actor->isAdmin()) {
+        if (!$actor->isAdmin() && $currentProfileId) {
+            $query->where(function ($profiles) use ($currentProfileId) {
+                $profiles->whereNotIn('name', ['admin', 'admin_view'])
+                    ->orWhere('id', $currentProfileId);
+            });
+        } elseif (!$actor->isAdmin()) {
             $query->whereNotIn('name', ['admin', 'admin_view']);
-        }
-
-        if ($currentProfileId) {
-            $query->orWhere('id', $currentProfileId);
         }
 
         return $query->get();

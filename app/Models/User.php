@@ -57,12 +57,12 @@ class User extends Authenticatable
 
     public function isAdmin()
     {
-        return $this->role === 'admin';
+        return $this->role === 'admin' || $this->profile?->name === 'admin';
     }
 
     public function isAdminView()
     {
-        return $this->role === 'admin_view';
+        return $this->role === 'admin_view' || $this->profile?->name === 'admin_view';
     }
 
     public function isDirector()
@@ -97,7 +97,7 @@ class User extends Authenticatable
 
     public function hasRole(...$roles)
     {
-        return in_array($this->role, $roles);
+        return in_array($this->role, $roles, true) || in_array($this->profile?->name, $roles, true);
     }
 
     /**
