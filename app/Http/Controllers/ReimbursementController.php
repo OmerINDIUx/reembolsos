@@ -2225,7 +2225,7 @@ class ReimbursementController extends Controller
                     'amount' => $amount,
                     'payment_reason' => $this->paymentFileReason($reimbursement->type),
                     'payee_name' => $payee?->name ?? 'Sin receptor',
-                    'account_type' => 'CLABE',
+                    'account_type' => $this->paymentFileAccountType($payee?->bank_name),
                     'availability' => '',
                     'company_rfc' => $company?->rfc ?? '',
                     'vat' => (float) ($reimbursement->impuestos ?? 0),
@@ -2323,6 +2323,17 @@ class ReimbursementController extends Controller
             'fondo_fijo' => 'fondo fijo',
             default => 'reembolso',
         };
+    }
+
+    private function paymentFileAccountType(?string $bankName): string
+    {
+        $normalizedBank = preg_replace('/[^a-z0-9]/', '', Str::lower(Str::ascii((string) $bankName)));
+
+        if (Str::contains($normalizedBank, ['bbva', 'bancomer', 'bamcomer'])) {
+            return '';
+        }
+
+        return '40';
     }
 
     private function excelText(?string $value): string
