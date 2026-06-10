@@ -13,6 +13,7 @@ class RBACSeeder extends Seeder
     {
         // Define Modules and Permissions
         $modules = [
+            'dashboard' => ['view_own', 'view_global'],
             'reimbursements' => ['view', 'create', 'create_special', 'create_on_behalf', 'create_all_cost_centers', 'edit', 'delete', 'approve', 'bulk_approve', 'export', 'global_history'],
             'users' => ['view', 'create', 'edit', 'delete'],
             'cost_centers' => ['view', 'create', 'edit', 'delete'],
@@ -52,8 +53,18 @@ class RBACSeeder extends Seeder
                 if ($action === 'create_all_cost_centers') {
                     $displayName = 'Reembolsar en todos los centros de costos';
                 }
+                if ($permissionName === 'dashboard.view_own') {
+                    $displayName = 'Puede ver panel propio';
+                }
+                if ($permissionName === 'dashboard.view_global') {
+                    $displayName = 'Puede ver panel general';
+                }
                 
-                $description = $descriptions[$action] ?? "Permite realizar la acción {$action} en el módulo {$module}.";
+                $description = match ($permissionName) {
+                    'dashboard.view_own' => 'Permite acceder al panel con datos personales y registros asignados al usuario.',
+                    'dashboard.view_global' => 'Permite ver métricas generales de toda la operación en el panel.',
+                    default => $descriptions[$action] ?? "Permite realizar la acción {$action} en el módulo {$module}.",
+                };
 
                 $allPermissions[$permissionName] = Permission::updateOrCreate(
                     ['name' => $permissionName],
@@ -70,35 +81,35 @@ class RBACSeeder extends Seeder
             ],
             'admin_view' => [
                 'display_name' => 'Administrador (Lectura)',
-                'permissions' => ['reimbursements.view', 'users.view', 'cost_centers.view', 'travel_events.view', 'profiles.view', 'reimbursements.global_history'],
+                'permissions' => ['dashboard.view_own', 'dashboard.view_global', 'reimbursements.view', 'users.view', 'cost_centers.view', 'travel_events.view', 'profiles.view', 'reimbursements.global_history'],
             ],
             'director' => [
                 'display_name' => 'Director N1',
-                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.global_history'],
+                'permissions' => ['dashboard.view_own', 'reimbursements.view', 'reimbursements.approve', 'reimbursements.global_history'],
             ],
             'control_obra' => [
                 'display_name' => 'Control de Obra N2',
-                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.global_history'],
+                'permissions' => ['dashboard.view_own', 'reimbursements.view', 'reimbursements.approve', 'reimbursements.global_history'],
             ],
             'director_ejecutivo' => [
                 'display_name' => 'Director Ejecutivo N3',
-                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'users.view', 'cost_centers.view', 'reimbursements.global_history'],
+                'permissions' => ['dashboard.view_own', 'reimbursements.view', 'reimbursements.approve', 'users.view', 'cost_centers.view', 'reimbursements.global_history'],
             ],
             'accountant' => [
                 'display_name' => 'Cuentas por Pagar Revisador',
-                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.bulk_approve', 'reimbursements.export', 'users.view', 'cost_centers.view', 'reimbursements.global_history'],
+                'permissions' => ['dashboard.view_own', 'dashboard.view_global', 'reimbursements.view', 'reimbursements.approve', 'reimbursements.bulk_approve', 'reimbursements.export', 'users.view', 'cost_centers.view', 'reimbursements.global_history'],
             ],
             'direccion' => [
                 'display_name' => 'Subdirección N5',
-                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'users.view', 'cost_centers.view', 'reimbursements.global_history'],
+                'permissions' => ['dashboard.view_own', 'dashboard.view_global', 'reimbursements.view', 'reimbursements.approve', 'users.view', 'cost_centers.view', 'reimbursements.global_history'],
             ],
             'tesoreria' => [
                 'display_name' => 'Cuentas por Pagar Pagador',
-                'permissions' => ['reimbursements.view', 'reimbursements.approve', 'reimbursements.bulk_approve', 'reimbursements.export', 'reimbursements.global_history'],
+                'permissions' => ['dashboard.view_own', 'dashboard.view_global', 'reimbursements.view', 'reimbursements.approve', 'reimbursements.bulk_approve', 'reimbursements.export', 'reimbursements.global_history'],
             ],
             'user' => [
                 'display_name' => 'Usuario General',
-                'permissions' => ['reimbursements.view', 'reimbursements.create'],
+                'permissions' => ['dashboard.view_own', 'reimbursements.view', 'reimbursements.create'],
             ],
         ];
 

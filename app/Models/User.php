@@ -221,6 +221,10 @@ class User extends Authenticatable
             return false;
         }
 
+        if ($permission === 'dashboard.view_own' && $this->profile->hasPermission('dashboard.view_global')) {
+            return true;
+        }
+
         return $this->profile->hasPermission($permission);
     }
 }

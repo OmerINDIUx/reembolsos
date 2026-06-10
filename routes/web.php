@@ -17,7 +17,7 @@ Route::get('invitation/accept/{token}', [\App\Http\Controllers\Auth\InvitationCo
 Route::post('invitation/complete', [\App\Http\Controllers\Auth\InvitationController::class, 'complete'])->name('invitation.complete');
 
 Route::get('/panel', [\App\Http\Controllers\DashboardController::class, 'index'])
-    ->middleware(['auth', 'verified'])
+    ->middleware(['auth', 'verified', 'permission:dashboard.view_own'])
     ->name('panel');
 
 Route::middleware('auth')->group(function () {
@@ -36,6 +36,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('reimbursements/payment-file', [ReimbursementController::class, 'exportPaymentFile'])->name('reimbursements.payment_file');
     Route::get('reimbursements/export/xml', [ReimbursementController::class, 'exportXml'])->name('reimbursements.export_xml');
     Route::get('reimbursements/audit', [ReimbursementController::class, 'audit'])->name('reimbursements.audit');
+    Route::patch('reimbursements/{reimbursement}/admin-flow', [ReimbursementController::class, 'adminFlowUpdate'])->name('reimbursements.admin_flow_update');
     Route::resource('reimbursements', ReimbursementController::class);
     Route::post('reimbursements/parse-xml', [ReimbursementController::class, 'parseCfdi'])->name('reimbursements.parse');
     Route::post('reimbursements/auto-save', [ReimbursementController::class, 'autoStore'])->name('reimbursements.auto_save');

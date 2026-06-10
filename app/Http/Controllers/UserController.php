@@ -53,7 +53,7 @@ class UserController extends Controller
     public function create()
     {
         $directors = User::whereIn('role', ['admin', 'director'])->get();
-        $profiles = Profile::orderBy('display_name')->get();
+        $profiles = $this->availableProfilesFor(Auth::user());
         return view('users.create', compact('directors', 'profiles'));
     }
 
@@ -78,7 +78,13 @@ class UserController extends Controller
             'profile_id' => ['required', 'exists:profiles,id'],
         ]);
 
-        $profile = Profile::find($request->profile_id);
+        $profile = Profile::findOrFail($request->profile_id);
+        if ($this->isAdminProfile($profile) && !Auth::user()->isAdmin()) {
+            return back()
+                ->withInput()
+                ->with('error', 'Solo un administrador puede crear otro usuario administrador.');
+        }
+
         $token = Str::random(64);
 
         $user = User::create([
@@ -220,8 +226,12 @@ class UserController extends Controller
      */
     public function edit(User $user)
     {
+        if ($this->isAdminUser($user) && !Auth::user()->isAdmin()) {
+            abort(403, 'Solo un administrador puede editar usuarios administradores.');
+        }
+
         $directors = User::whereIn('role', ['admin', 'director'])->where('id', '!=', $user->id)->get();
-        $profiles = Profile::orderBy('display_name')->get();
+        $profiles = $this->availableProfilesFor(Auth::user(), $user->profile_id);
         return view('users.edit', compact('user', 'directors', 'profiles'));
     }
 
@@ -230,6 +240,10 @@ class UserController extends Controller
      */
     public function update(Request $request, User $user)
     {
+        if ($this->isAdminUser($user) && !Auth::user()->isAdmin()) {
+            abort(403, 'Solo un administrador puede editar usuarios administradores.');
+        }
+
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => [
@@ -248,7 +262,12 @@ class UserController extends Controller
             'clabe' => ['nullable', 'string', 'size:18', 'regex:/^[0-9]+$/'],
         ]);
 
-        $profile = Profile::find($request->profile_id);
+        $profile = Profile::findOrFail($request->profile_id);
+        if ($this->isAdminProfile($profile) && !Auth::user()->isAdmin()) {
+            return back()
+                ->withInput()
+                ->with('error', 'Solo un administrador puede asignar un perfil administrador.');
+        }
 
         $data = [
             'name' => $request->name,
@@ -321,5 +340,31 @@ class UserController extends Controller
 
             return false;
         }
+    }
+
+    private function availableProfilesFor(User $actor, ?int $currentProfileId = null)
+    {
+        $query = Profile::orderBy('display_name');
+
+        if (!$actor->isAdmin()) {
+            $query->whereNotIn('name', ['admin', 'admin_view']);
+        }
+
+        if ($currentProfileId) {
+            $query->orWhere('id', $currentProfileId);
+        }
+
+        return $query->get();
+    }
+
+    private function isAdminProfile(Profile $profile): bool
+    {
+        return in_array($profile->name, ['admin', 'admin_view'], true);
+    }
+
+    private function isAdminUser(User $user): bool
+    {
+        return in_array($user->role, ['admin', 'admin_view'], true)
+            || ($user->profile && $this->isAdminProfile($user->profile));
     }
 }

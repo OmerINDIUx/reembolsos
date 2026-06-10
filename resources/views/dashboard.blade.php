@@ -10,9 +10,6 @@
             
     @php
         $user = Auth::user();
-        // Updated Full Access: Admin, CXP (N4), Subdir (N5), Direcc/Tes (N6)
-        // Removed N3 (Executive Director) from full global metrics
-        $hasFullAccess = $user->isAdmin() || $user->isAdminView() || $user->isCxp() || $user->isDireccion() || $user->isTreasury();
     @endphp
 
     <div class="py-12">
@@ -48,13 +45,14 @@
                     @php
                         $displayStats = isset($stats['management']) ? $stats['management'] : $stats['personal'];
                         $isManagement = isset($stats['management']);
+                        $managementLabel = $hasFullAccess ? 'General' : ($displayStats['label'] ?? 'Asignados');
                     @endphp
 
                     <!-- En Proceso / En Tránsito -->
                     <div class="bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-900/10 dark:to-gray-800 p-6 rounded-2xl shadow-sm border border-indigo-100 dark:border-indigo-900/30 relative overflow-hidden group">
                         <div class="relative z-10">
                             <p class="text-indigo-600 dark:text-indigo-400 text-xs font-black uppercase tracking-widest mb-1">
-                                {{ $isManagement ? 'En Tránsito (Global)' : 'Mis Pendientes' }}
+                                {{ $isManagement ? 'En Tránsito (' . $managementLabel . ')' : 'Mis Pendientes' }}
                             </p>
                             <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $displayStats['pending_count'] }}</h4>
                             <p class="text-indigo-700 dark:text-indigo-300 font-bold mt-1 text-sm truncate">
@@ -72,7 +70,7 @@
                     <div class="bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/10 dark:to-gray-800 p-6 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-900/30 relative overflow-hidden group">
                         <div class="relative z-10">
                             <p class="text-emerald-600 dark:text-emerald-400 text-xs font-black uppercase tracking-widest mb-1">
-                                {{ $isManagement ? 'Pagados (Global)' : 'Mis Pagados' }}
+                                {{ $isManagement ? 'Pagados (' . $managementLabel . ')' : 'Mis Pagados' }}
                             </p>
                             <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $displayStats['approved_count'] }}</h4>
                             <p class="text-emerald-700 dark:text-emerald-300 font-bold mt-1 text-sm truncate">
@@ -88,7 +86,7 @@
                     <div class="bg-gradient-to-br from-rose-50 to-white dark:from-rose-900/10 dark:to-gray-800 p-6 rounded-2xl shadow-sm border border-rose-100 dark:border-rose-900/30 relative overflow-hidden group">
                         <div class="relative z-10">
                             <p class="text-rose-600 dark:text-rose-400 text-xs font-black uppercase tracking-widest mb-1">
-                                {{ $isManagement ? 'Rechazados (Global)' : 'Mis Rechazados' }}
+                                {{ $isManagement ? 'Rechazados (' . $managementLabel . ')' : 'Mis Rechazados' }}
                             </p>
                             <h4 class="text-4xl font-black text-gray-900 dark:text-white">{{ $displayStats['rejected_count'] ?? 0 }}</h4>
                         </div>
@@ -116,8 +114,8 @@
                         <div class="bg-indigo-900 p-6 rounded-2xl relative overflow-hidden flex flex-col justify-center">
                             <p class="text-indigo-400 text-[10px] font-black uppercase tracking-widest mb-1">Alcance Actual</p>
                             <h4 class="text-xl font-black text-white leading-tight">
-                                {{ Auth::user()->role_name ?? 'Gestión' }} 
-                                <span class="text-indigo-500 text-xs block opacity-60">Nivel de Supervisión Activo</span>
+                                Panel {{ $managementLabel }}
+                                <span class="text-indigo-500 text-xs block opacity-60">{{ $hasFullAccess ? 'Toda la operación' : 'Datos asignados al usuario' }}</span>
                             </h4>
                         </div>
                     @endif

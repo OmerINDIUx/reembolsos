@@ -23,6 +23,7 @@ class DashboardController extends Controller
 
         $user = Auth::user();
         $periods = Reimbursement::getAvailableTimePeriods();
+        $hasFullAccess = $user->canPerform('dashboard.view_global');
 
         $stats = [];
         $recentReimbursements = collect();
@@ -39,15 +40,22 @@ class DashboardController extends Controller
             'approved_amount' => (clone $myRequestsQuery)->where('status', 'aprobado')->sum(DB::raw('total + COALESCE(propina, 0)')),
         ];
 
-        // 2. MANAGEMENT STATS (For Approvers/Admins)
-        if ($user->isAdmin() || $user->isAdminView()) {
+        // 2. Management stats. Global access sees the full operation; otherwise only assigned scope.
+        if ($hasFullAccess) {
             $stats['management'] = [
                 'pending_amount' => Reimbursement::applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->sum(DB::raw('total + COALESCE(propina, 0)')),
                 'approved_amount' => Reimbursement::applyTimeFilters($request)->where('status', 'aprobado')->sum(DB::raw('total + COALESCE(propina, 0)')),
+                'rejected_count' => Reimbursement::applyTimeFilters($request)->where('status', 'rechazado')->count(),
+                'label' => 'General',
             ];
             $stats['management']['pending_count'] = Reimbursement::applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])->count();
             $stats['management']['approved_count'] = Reimbursement::applyTimeFilters($request)->where('status', 'aprobado')->count();
-            $recentReimbursements = (clone $myRequestsQuery)->with('costCenter')->latest()->limit(10)->get();
+            $recentReimbursements = Reimbursement::with(['user', 'costCenter'])
+                ->applyTimeFilters($request)
+                ->where('status', '!=', 'borrador')
+                ->latest()
+                ->limit(10)
+                ->get();
 
         } else {
             // DYNAMIC MANAGEMENT STATS: For anyone assigned as an approver in any cost center step
@@ -77,18 +85,18 @@ class DashboardController extends Controller
         }
 
         // New Detailed Analytics (Available for Admins and Managers)
-        $analytics = $this->getAnalyticsData($user, $request);
+        $analytics = $this->getAnalyticsData($user, $request, $hasFullAccess);
         $notifications = $user->unreadNotifications()->latest()->take(5)->get();
 
-        return view('dashboard', compact('stats', 'recentReimbursements', 'notifications', 'analytics', 'periods'));
+        return view('dashboard', compact('stats', 'recentReimbursements', 'notifications', 'analytics', 'periods', 'hasFullAccess'));
     }
 
-    private function getAnalyticsData($user, Request $request)
+    private function getAnalyticsData($user, Request $request, bool $hasFullAccess)
     {
         $queryBuilder = Reimbursement::query()->applyTimeFilters($request)->whereNotIn('status', ['rechazado', 'borrador']);
 
-        // Limit scope if not admin
-        if (!$user->isAdmin() && !$user->isAdminView()) {
+        // Limit scope unless the profile explicitly has the general panel permission.
+        if (!$hasFullAccess) {
             $queryBuilder->where(function($q) use ($user) {
                 $q->where('user_id', $user->id)
                   ->orWhereHas('costCenter.approvalSteps', function($q2) use ($user) {
@@ -99,7 +107,7 @@ class DashboardController extends Controller
 
         // 1. Status Breakdown (Including all statuses for the doughnut chart)
         $statusQuery = Reimbursement::query()->applyTimeFilters($request)->where('status', '!=', 'borrador');
-        if (!$user->isAdmin() && !$user->isAdminView()) {
+        if (!$hasFullAccess) {
             $statusQuery->where(function($q) use ($user) {
                 $q->where('user_id', $user->id)
                   ->orWhereHas('costCenter.approvalSteps', function($q2) use ($user) {
@@ -143,7 +151,7 @@ class DashboardController extends Controller
         // 1.1 Detailed Items for Chart (Ungrouped)
         // Fetch up to 30 recent pending/in-process items to show individual slices
         $detailedItems = Reimbursement::query()->applyTimeFilters($request);
-        if (!$user->isAdmin() && !$user->isAdminView()) {
+        if (!$hasFullAccess) {
             $detailedItems->where(function($q) use ($user) {
                 $q->where('user_id', $user->id)
                   ->orWhereHas('costCenter.approvalSteps', function($q2) use ($user) {

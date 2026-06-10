@@ -70,10 +70,20 @@
 
                     <div class="divide-y divide-gray-100 dark:divide-gray-700">
                         @foreach($permissions as $module => $modulePermissions)
+                        @php
+                            $moduleLabel = [
+                                'dashboard' => 'Panel',
+                                'reimbursements' => 'Reembolsos',
+                                'users' => 'Usuarios',
+                                'cost_centers' => 'Centro de Costos',
+                                'travel_events' => 'Viajes y Eventos',
+                                'profiles' => 'Perfiles',
+                            ][$module] ?? str_replace('_', ' ', $module);
+                        @endphp
                         <div class="p-8">
                             <div class="flex items-center justify-between mb-4">
                                 <h4 class="text-sm font-black text-gray-900 dark:text-white uppercase tracking-[0.1em] flex items-center">
-                                    Módulo: {{ str_replace('_', ' ', $module) }}
+                                    Módulo: {{ $moduleLabel }}
                                 </h4>
                                 <label class="inline-flex items-center cursor-pointer group">
                                     <span class="mr-2 text-[10px] font-bold text-gray-400 group-hover:text-indigo-600 uppercase transition-colors">Marcar Módulo</span>
@@ -142,5 +152,4 @@
     </script>
     @endpush
 </x-app-layout>
-
 

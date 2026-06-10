@@ -246,6 +246,41 @@
                                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Categoría</dt>
                                     <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0 dark:text-gray-200 capitalize">{{ $reimbursement->category ?? 'N/A' }}</dd>
                                 </div>
+                                @php
+                                    $normalizeNoteText = function ($value) {
+                                        return str_replace(
+                                            ['Ã¡', 'Ã©', 'Ã­', 'Ã³', 'Ãº', 'Ã±', 'Ã', 'Ã‰', 'Ã', 'Ã“', 'Ãš', 'Ã‘'],
+                                            ['á', 'é', 'í', 'ó', 'ú', 'ñ', 'Á', 'É', 'Í', 'Ó', 'Ú', 'Ñ'],
+                                            (string) $value
+                                        );
+                                    };
+
+                                    $observationLines = collect(preg_split('/\R+/', trim((string) $reimbursement->observaciones)) ?: [])
+                                        ->map(fn($line) => trim($normalizeNoteText($line)))
+                                        ->filter();
+
+                                    $hiddenObservationPatterns = [
+                                        '/^\[\s*AUTO-/i',
+                                        '/AUTO-APROB/i',
+                                        '/^\[\s*REGISTRO POR TERCEROS/i',
+                                        '/^\[MASIVO\]/i',
+                                        '/^RECHAZADO por/i',
+                                        '/^REQUIERE CORRECCI[ÓO]N/i',
+                                        '/^CORREGIDO por/i',
+                                        '/^AJUSTE ADMINISTRATIVO/i',
+                                        '/^\w+\s+por\s+.+:/i',
+                                    ];
+
+                                    $userObservationLines = $observationLines->reject(function ($line) use ($hiddenObservationPatterns) {
+                                        foreach ($hiddenObservationPatterns as $pattern) {
+                                            if (preg_match($pattern, $line)) {
+                                                return true;
+                                            }
+                                        }
+
+                                        return false;
+                                    })->values();
+                                @endphp
                                 <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 bg-gray-50 dark:bg-gray-900/50">
                                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Emisor Comercial</dt>
                                     <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0 dark:text-gray-200">
@@ -267,6 +302,78 @@
                             </dl>
                         </div>
                     </div>
+
+                    @php
+                        $flowReasonLabels = [
+                            'rechazado' => 'Rechazo definitivo',
+                            'requiere_correccion' => 'Devuelto para corrección',
+                            'reenviado' => 'Corrección reenviada',
+                            'resubmitted' => 'Corrección reenviada',
+                        ];
+                        $flowReasonStyles = [
+                            'rechazado' => 'border-red-200 border-l-red-500 bg-red-50/70 text-red-700 dark:border-red-900/50 dark:border-l-red-400 dark:bg-red-900/15 dark:text-red-300',
+                            'requiere_correccion' => 'border-amber-200 border-l-amber-500 bg-amber-50/80 text-amber-700 dark:border-amber-900/50 dark:border-l-amber-400 dark:bg-amber-900/15 dark:text-amber-300',
+                            'reenviado' => 'border-indigo-200 border-l-indigo-500 bg-indigo-50/70 text-indigo-700 dark:border-indigo-900/50 dark:border-l-indigo-400 dark:bg-indigo-900/15 dark:text-indigo-300',
+                            'resubmitted' => 'border-indigo-200 border-l-indigo-500 bg-indigo-50/70 text-indigo-700 dark:border-indigo-900/50 dark:border-l-indigo-400 dark:bg-indigo-900/15 dark:text-indigo-300',
+                        ];
+                        $flowReasonLogs = $reimbursement->approvals
+                            ->filter(fn($approval) => isset($flowReasonLabels[$approval->action]) && filled($approval->comment))
+                            ->values();
+                    @endphp
+                    @if($userObservationLines->isNotEmpty() || $flowReasonLogs->isNotEmpty())
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/30">
+                            <h3 class="text-base font-bold leading-6 text-gray-900 dark:text-white">Notas del trámite</h3>
+                        </div>
+                        <div class="p-6 space-y-3">
+                            @foreach($userObservationLines as $line)
+                                <div class="rounded-xl border border-l-4 border-sky-200 border-l-sky-500 bg-sky-50/70 p-4 dark:border-sky-900/50 dark:border-l-sky-400 dark:bg-sky-900/15">
+                                    <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white text-sky-700 shadow-sm ring-1 ring-sky-100 dark:bg-gray-950/30 dark:text-sky-300 dark:ring-sky-900/50">
+                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h6m-6 4h8M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"></path></svg>
+                                            </span>
+                                            <div>
+                                                <p class="text-[10px] font-black uppercase tracking-widest text-sky-700 dark:text-sky-300">Justificación</p>
+                                                <p class="text-xs font-semibold text-sky-700/70 dark:text-sky-300/70">{{ $reimbursement->user->name ?? 'Solicitante' }}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="pl-10 text-sm leading-6 text-gray-900 dark:text-gray-100">{{ $line }}</p>
+                                </div>
+                            @endforeach
+
+                            @foreach($flowReasonLogs as $reasonLog)
+                                @php
+                                    $reasonComment = $normalizeNoteText($reasonLog->comment);
+                                @endphp
+                                <div class="rounded-xl border border-l-4 {{ $flowReasonStyles[$reasonLog->action] ?? 'border-gray-200 border-l-gray-400 bg-gray-50 text-gray-700 dark:border-gray-700 dark:border-l-gray-500 dark:bg-gray-900 dark:text-gray-300' }} p-4 shadow-sm">
+                                    <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-black/5 dark:bg-gray-950/30 dark:ring-white/10">
+                                                @if($reasonLog->action === 'rechazado')
+                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                                @elseif($reasonLog->action === 'requiere_correccion')
+                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"></path></svg>
+                                                @else
+                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                                @endif
+                                            </span>
+                                            <div>
+                                                <p class="text-[10px] font-black uppercase tracking-widest">{{ $flowReasonLabels[$reasonLog->action] }}</p>
+                                                <p class="text-xs font-semibold opacity-75">{{ $reasonLog->user->name ?? 'Sistema' }}</p>
+                                            </div>
+                                        </div>
+                                        <time datetime="{{ $reasonLog->created_at }}" class="pl-10 text-[11px] font-semibold opacity-70 sm:pl-0">
+                                            {{ $reasonLog->created_at->timezone('America/Mexico_City')->format('d/m/Y H:i') }}
+                                        </time>
+                                    </div>
+                                    <p class="pl-10 text-sm leading-6 text-gray-900 dark:text-gray-100 whitespace-pre-line">{{ $reasonComment }}</p>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                    @endif
 
                     <!-- Atributos CFDI -->
                     @if($reimbursement->uuid)
@@ -372,17 +479,23 @@
                             <div>
                                 <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Método de Pago</p>
                                 <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $mp ?? 'N/A' }}</p>
-                                @if($mpDesc)<p class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 leading-tight">{{ $mpDesc }}</p>@endif
+                                @if($mpDesc)
+                                    <p class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 leading-tight">{{ $mpDesc }}</p>
+                                @endif
                             </div>
                             <div>
                                 <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Forma de Pago</p>
                                 <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $fp ?? 'N/A' }}</p>
-                                @if($fpDesc)<p class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 leading-tight">{{ $fpDesc }}</p>@endif
+                                @if($fpDesc)
+                                    <p class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 leading-tight">{{ $fpDesc }}</p>
+                                @endif
                             </div>
                             <div>
                                 <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Uso de CFDI</p>
                                 <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $uso ?? 'N/A' }}</p>
-                                @if($usoDesc)<p class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 leading-tight">{{ $usoDesc }}</p>@endif
+                                @if($usoDesc)
+                                    <p class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 leading-tight">{{ $usoDesc }}</p>
+                                @endif
                             </div>
                             <div>
                                 <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">CP Expedición</p>
@@ -392,7 +505,9 @@
                             <div class="col-span-2 md:col-span-4 border-t border-gray-100 pt-4 dark:border-gray-700">
                                 <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Régimen Fiscal Emisor</p>
                                 <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $reg ?? 'S/N' }}</p>
-                                @if($regDesc)<p class="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 mt-0.5 leading-tight">{{ $regDesc }}</p>@endif
+                                @if($regDesc)
+                                    <p class="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 mt-0.5 leading-tight">{{ $regDesc }}</p>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -495,29 +610,57 @@
                 <!-- Right Column: Sidebar -->
                 <div class="space-y-6">
                     
+                    @php
+                        $adminFlowStatusOptions = [
+                            'pendiente' => 'Activo en flujo de operación',
+                            'requiere_correccion' => 'Devuelto para cambio',
+                            'rechazado' => 'Rechazo definitivo',
+                        ];
+                        $adminFlowTypeOptions = [
+                            'reembolso' => 'Reembolso',
+                            'fondo_fijo' => 'Fondo fijo',
+                        ];
+                    @endphp
+
                     <!-- Acción de Aprobación -->
                     @php
                         $user = auth()->user();
                         $canApproveAny = $reimbursement->canBeApprovedBy($user) && !in_array($reimbursement->status, ['aprobado', 'rechazado', 'borrador', 'pendiente_pago']);
+                        $canEditFlow = !$user->isAdminView() && $user->canPerform('reimbursements.edit');
                     @endphp
 
-                    @if($canApproveAny)
+                    @if($canApproveAny || $canEditFlow)
                     <div class="bg-indigo-600 rounded-xl p-6 text-white shadow-sm">
                         <h4 class="font-semibold mb-4 text-indigo-50">Acciones Disponibles</h4>
                         <div class="space-y-3">
-                            <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST">
+                            @if($canApproveAny)
+                            <form action="{{ route('reimbursements.update', $reimbursement->id) }}" method="POST" x-data="{ submitting: false }" x-on:submit="if (submitting) { $event.preventDefault(); return; } submitting = true">
                                 @csrf
                                 @method('PUT')
                                 <input type="hidden" name="status" value="aprobado">
-                                <button type="submit" class="w-full flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-indigo-700 bg-white hover:bg-indigo-50 focus:outline-none">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                    Aprobar Solicitud
+                                <input type="hidden" name="approval_token" value="{{ \Illuminate\Support\Str::uuid() }}">
+                                <button type="submit" :disabled="submitting" :class="submitting ? 'opacity-75 cursor-not-allowed' : 'hover:bg-indigo-50'" class="w-full flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-indigo-700 bg-white focus:outline-none">
+                                    <svg x-show="!submitting" class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    <svg x-show="submitting" x-cloak class="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                    </svg>
+                                    <span x-show="!submitting">Aprobar Solicitud</span>
+                                    <span x-show="submitting" x-cloak>Aprobando...</span>
                                 </button>
                             </form>
                             <button type="button" x-data @click="$dispatch('open-rejection-modal')" class="w-full flex justify-center items-center px-4 py-2 border border-indigo-400 shadow-sm text-sm font-medium rounded-md text-white bg-indigo-700 hover:bg-indigo-800 hover:text-red-300 hover:border-red-400 focus:outline-none transition-colors">
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                                 Rechazar o Devolver
                             </button>
+                            @endif
+
+                            @if($canEditFlow)
+                            <button type="button" x-data @click="$dispatch('open-admin-flow-modal')" class="w-full flex justify-center items-center px-4 py-2 border border-indigo-300 shadow-sm text-sm font-medium rounded-md text-white bg-indigo-700 hover:bg-indigo-800 hover:border-white focus:outline-none transition-colors">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                Editar flujo
+                            </button>
+                            @endif
                         </div>
                     </div>
                     @endif
@@ -768,6 +911,61 @@
     </script>
     @endpush
 </x-app-layout>
+
+<!-- Administrative Flow Modal -->
+<div x-data="{ open: false }"
+     @open-admin-flow-modal.window="open = true"
+     x-show="open"
+     class="fixed z-50 inset-0 overflow-y-auto"
+     style="display: none;">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="open = false" aria-hidden="true"></div>
+        <div class="inline-block bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full dark:bg-gray-800">
+            <form action="{{ route('reimbursements.admin_flow_update', $reimbursement) }}" method="POST">
+                @csrf
+                @method('PATCH')
+                <div class="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 sm:mx-0 sm:h-10 sm:w-10 dark:bg-indigo-900/50">
+                            <svg class="h-6 w-6 text-indigo-600 dark:text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Editar flujo</h3>
+                            <div class="mt-4 space-y-4 text-sm text-gray-500 dark:text-gray-400">
+                                <div>
+                                    <label class="block mb-1 font-medium text-gray-700 dark:text-gray-300">Estatus operativo</label>
+                                    <select name="status" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>
+                                        @foreach($adminFlowStatusOptions as $value => $label)
+                                            <option value="{{ $value }}" @selected(old('status', $reimbursement->status) === $value)>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="block mb-1 font-medium text-gray-700 dark:text-gray-300">Tipo de solicitud</label>
+                                    <select name="type" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>
+                                        @foreach($adminFlowTypeOptions as $value => $label)
+                                            <option value="{{ $value }}" @selected(old('type', $reimbursement->type) === $value)>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="block mb-1 font-medium text-gray-700 dark:text-gray-300">Motivo del ajuste</label>
+                                    <textarea name="admin_comment" rows="3" required class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Explica por qué se cambia el estado o tipo.">{{ old('admin_comment') }}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse dark:bg-gray-900/50">
+                    <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">Guardar ajuste</button>
+                    <button type="button" @click="open = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <!-- Rejection Modal -->
 <div x-data="{ open: false, reasons: [

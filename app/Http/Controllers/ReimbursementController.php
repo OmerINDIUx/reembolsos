@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
@@ -1646,6 +1647,14 @@ class ReimbursementController extends Controller
 
             $data = [];
 
+            if ($request->status === 'aprobado' && $request->filled('approval_token')) {
+                $approvalCacheKey = 'reimbursement-approval:' . $reimbursement->id . ':' . $request->input('approval_token');
+
+                if (! Cache::add($approvalCacheKey, true, now()->addMinutes(10))) {
+                    return back()->with('error', 'Esta aprobación ya está en proceso. Actualiza la pantalla antes de intentar de nuevo.');
+                }
+            }
+
             if (!$reimbursement->canBeApprovedBy($user)) {
                 return back()->with('error', 'No tienes permiso para realizar esta acciÃƒÂ³n en este momento.');
             }
@@ -1771,6 +1780,90 @@ class ReimbursementController extends Controller
         \App\Services\NotificationBatchService::process();
 
         return back()->with('success', 'Actualización guardada con éxito.');
+    }
+
+    /**
+     * Administrative flow adjustment for users with reimbursement edit permission.
+     */
+    public function adminFlowUpdate(Request $request, Reimbursement $reimbursement)
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+        if ($user->isAdminView()) {
+            abort(403, 'Tu rol es de solo consulta y no puede realizar modificaciones.');
+        }
+
+        if (!$user->canPerform('reimbursements.edit')) {
+            abort(403, 'No tienes permiso para editar el flujo de reembolsos.');
+        }
+
+        $validated = $request->validate([
+            'status' => [
+                'required',
+                Rule::in([
+                    'pendiente',
+                    'requiere_correccion',
+                    'rechazado',
+                ]),
+            ],
+            'type' => ['required', Rule::in(['reembolso', 'fondo_fijo'])],
+            'admin_comment' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $oldStatus = $reimbursement->status;
+        $oldType = $reimbursement->type;
+
+        $data = [
+            'status' => $validated['status'],
+            'type' => $validated['type'],
+        ];
+
+        $data['travel_event_id'] = null;
+
+        if ($validated['status'] === 'pendiente') {
+            $data['current_step_id'] = $reimbursement->costCenter?->approvalSteps()->orderBy('order')->first()?->id;
+        } elseif (in_array($validated['status'], ['requiere_correccion', 'rechazado'], true)) {
+            $data['current_step_id'] = null;
+        }
+
+        $statusLabels = $this->adminFlowStatusLabels();
+        $typeLabels = $this->adminFlowTypeLabels();
+
+        $changeLines = [];
+        if ($oldStatus !== $validated['status']) {
+            $changeLines[] = 'estado de ' . ($statusLabels[$oldStatus] ?? $oldStatus) . ' a ' . $statusLabels[$validated['status']];
+        }
+        if ($oldType !== $validated['type']) {
+            $changeLines[] = 'tipo de ' . ($typeLabels[$oldType] ?? $oldType) . ' a ' . $typeLabels[$validated['type']];
+        }
+
+        if (empty($changeLines)) {
+            return back()->with('warning', 'No hubo cambios de estado o tipo para guardar.');
+        }
+
+        $note = 'AJUSTE ADMINISTRATIVO por ' . $user->name . ' el ' . now()->format('d/m/Y H:i') . ': '
+            . implode('; ', $changeLines) . '. Motivo: ' . $validated['admin_comment'];
+        $data['observaciones'] = $reimbursement->observaciones
+            ? ($reimbursement->observaciones . "\n" . $note)
+            : $note;
+
+        $reimbursement->update($data);
+
+        $reimbursement->approvals()->create([
+            'user_id' => $user->id,
+            'step_name' => 'Ajuste administrativo',
+            'action' => 'ajuste_flujo',
+            'comment' => implode('; ', $changeLines) . '. ' . $validated['admin_comment'],
+        ]);
+
+        $owner = $reimbursement->user;
+        if ($owner && $oldStatus !== $validated['status']) {
+            NotificationBatchService::add($owner, $reimbursement);
+            NotificationBatchService::process();
+        }
+
+        return back()->with('success', 'Flujo del reembolso actualizado correctamente.');
     }
 
     public function validatePdfCorrection(Request $request, Reimbursement $reimbursement)
@@ -3946,6 +4039,24 @@ class ReimbursementController extends Controller
             }
         });
     }
+
+    private function adminFlowStatusLabels(): array
+    {
+        return [
+            'pendiente' => 'Activo en flujo de operacion',
+            'requiere_correccion' => 'Devuelto para cambio',
+            'rechazado' => 'Rechazo definitivo',
+        ];
+    }
+
+    private function adminFlowTypeLabels(): array
+    {
+        return [
+            'reembolso' => 'Reembolso',
+            'fondo_fijo' => 'Fondo fijo',
+        ];
+    }
+
     protected function canSendMenfisEmail(Reimbursement $reimbursement): bool
     {
         $reimbursement->loadMissing('costCenter');

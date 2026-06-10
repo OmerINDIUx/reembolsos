@@ -599,17 +599,25 @@
                                             @php
                                                 $user = Auth::user();
                                                 $canApproveCurr = $r->canBeApprovedBy($user) && !in_array($r->status, ['aprobado', 'rechazado', 'borrador', 'pendiente_pago']);
+                                                $canEditFlow = !$user->isAdminView() && $user->canPerform('reimbursements.edit');
                                             @endphp
 
-                                            @if($user->id === $r->user_id || $user->isAdmin() || $user->isAdminView() || $canApproveCurr)
+                                            @if($user->id === $r->user_id || $user->isAdmin() || $user->isAdminView() || $canApproveCurr || $canEditFlow)
                                                 <a href="{{ route('reimbursements.show', $r->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Ver</a>
+                                                @if($canEditFlow)
+                                                    <a href="{{ route('reimbursements.show', $r->id) }}" class="text-gray-700 hover:text-indigo-900 dark:text-gray-300 dark:hover:text-indigo-400 ml-2">Editar flujo</a>
+                                                @endif
                                                 
                                                 @if($canApproveCurr)
-                                                    <form action="{{ route('reimbursements.update', $r->id) }}" method="POST" class="inline">
+                                                    <form action="{{ route('reimbursements.update', $r->id) }}" method="POST" class="inline" x-data="{ submitting: false }" x-on:submit="if (submitting) { $event.preventDefault(); return; } submitting = true">
                                                         @csrf
                                                         @method('PUT')
                                                         <input type="hidden" name="status" value="aprobado">
-                                                        <button type="submit" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-600 ml-2">Aprobar</button>
+                                                        <input type="hidden" name="approval_token" value="{{ \Illuminate\Support\Str::uuid() }}">
+                                                        <button type="submit" :disabled="submitting" :class="submitting ? 'opacity-60 cursor-not-allowed' : 'hover:text-green-900 dark:hover:text-green-600'" class="text-green-600 dark:text-green-400 ml-2">
+                                                            <span x-show="!submitting">Aprobar</span>
+                                                            <span x-show="submitting" x-cloak>Aprobando...</span>
+                                                        </button>
                                                     </form>
                                                     <button type="button" x-data @click="$dispatch('open-rejection-modal', { url: '{{ route('reimbursements.update', $r->id) }}' })" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Rechazar</button>
                                                 @endif
