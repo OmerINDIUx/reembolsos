@@ -58,9 +58,9 @@
 
                         <!-- Dynamic Steps with Alpine.js -->
                         <div x-data="{ 
-                            steps: {{ $costCenter->approvalSteps->map(fn($s) => ['user_id' => $s->user_id, 'name' => $s->name])->toJson() }},
+                            steps: {{ $costCenter->approvalSteps->map(fn($s) => ['id' => $s->id, 'user_id' => $s->user_id, 'name' => $s->name])->toJson() }},
                             addStep() {
-                                this.steps.push({ user_id: '', name: 'Aprobador N' + (this.steps.length + 1) });
+                                this.steps.push({ id: null, user_id: '', name: 'Aprobador N' + (this.steps.length + 1) });
                             },
                             removeStep(index) {
                                 this.steps.splice(index, 1);
@@ -78,7 +78,8 @@
                                 <template x-for="(step, index) in steps" :key="index">
                                     <div class="group flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 transition-all hover:border-indigo-200">
                                         <div class="flex-none flex items-center justify-center w-8 h-8 rounded-full bg-indigo-600 text-white font-black text-xs" x-text="index + 1"></div>
-                                        
+                                        <input type="hidden" :name="'steps['+index+'][id]'" :value="step.id ?? ''">
+                                         
                                         <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                                             <div>
                                                 <input type="text" :name="'steps['+index+'][name]'" x-model="step.name" placeholder="Nombre del Nivel (ej: Director)" class="block w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" required>

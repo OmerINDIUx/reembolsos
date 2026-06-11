@@ -346,9 +346,16 @@ class ReimbursementController extends Controller
 
         $drafts = Reimbursement::where('user_id', $user->id)
                                 ->where('status', 'borrador')
-                                ->whereNull('parent_id')
-                                ->with('children')
-                                ->orderBy('updated_at', 'desc')
+                                ->where(function ($query) use ($user) {
+                                    $query->whereNull('parent_id')
+                                        ->orWhereDoesntHave('parent', function ($parentQuery) use ($user) {
+                                            $parentQuery->where('status', 'borrador')
+                                                ->where('user_id', $user->id);
+                                        });
+                                })
+                                ->with(['children' => fn ($query) => $query->where('status', 'borrador')->orderBy('created_at')])
+                                ->withMax('children as latest_child_update', 'updated_at')
+                                ->orderByRaw('GREATEST(reimbursements.updated_at, COALESCE(latest_child_update, reimbursements.updated_at)) DESC')
                                 ->get();
 
         if (!$type || !in_array($type, $allowedTypes)) {
@@ -3700,6 +3707,8 @@ class ReimbursementController extends Controller
                     } else {
                         $reimbursement->parent_id = $mainId;
                         $reimbursement->save();
+
+                        Reimbursement::whereKey($mainId)->update(['updated_at' => now()]);
                     }
 
                     $draftIds[$index] = [

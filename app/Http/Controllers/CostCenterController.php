@@ -304,6 +304,11 @@ class CostCenterController extends Controller
             'beneficiary_id' => ['nullable', 'exists:users,id'],
             'budget' => ['required', 'numeric', 'min:0'],
             'steps' => ['required', 'array', 'min:1'],
+            'steps.*.id' => [
+                'nullable',
+                'integer',
+                Rule::exists('approval_steps', 'id')->where(fn ($query) => $query->where('cost_center_id', $costCenter->id)),
+            ],
             'steps.*.user_id' => ['required', 'exists:users,id'],
             'steps.*.name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -314,15 +319,25 @@ class CostCenterController extends Controller
         ]);
 
         DB::transaction(function() use ($request, $costCenter) {
-            // 1. Capture pending reimbursements and their current relative progress
+            // 1. Capture the current approval chain before any deletion can null current_step_id.
+            $existingSteps = $costCenter->approvalSteps()
+                ->orderBy('order')
+                ->get();
+            $existingStepsById = $existingSteps->keyBy('id');
+            $oldSteps = $existingSteps
+                ->map(fn ($step) => (object) [
+                    'id' => $step->id,
+                    'user_id' => $step->user_id,
+                    'name' => $step->name,
+                    'order' => $step->order,
+                ]);
+            $oldStepsById = $oldSteps->keyBy('id');
+
             $pendingReimbursements = $costCenter->reimbursements()
-                ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])
+                ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador', 'pendiente_revision_cxp', 'pendiente_pago', 'pagado'])
+                ->whereNotNull('current_step_id')
                 ->with('currentStep')
                 ->get();
-
-            $oldProgressMap = $pendingReimbursements->mapWithKeys(function($r) {
-                return [$r->id => $r->currentStep->order ?? 1];
-            });
 
             // 2. Update CC Basic Info
             $costCenter->update([
@@ -335,40 +350,93 @@ class CostCenterController extends Controller
                 'beneficiary_id' => $request->beneficiary_id,
             ]);
 
-            // 3. Rebuild steps (Delete and Recreate)
-            $costCenter->approvalSteps()->delete();
+            // 3. Update existing steps, create new ones, and only delete removed levels.
+            $submittedStepIds = collect($request->steps)
+                ->pluck('id')
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->values();
+            $submittedHasExistingIds = $submittedStepIds->isNotEmpty();
+            $savedSteps = collect();
+
             foreach ($request->steps as $index => $step) {
-                $costCenter->approvalSteps()->create([
-                    'user_id' => $step['user_id'],
-                    'name' => $step['name'],
-                    'order' => $index + 1,
-                ]);
+                $approvalStep = null;
+
+                if (!empty($step['id'])) {
+                    $approvalStep = $existingStepsById->get((int) $step['id']);
+                }
+
+                if ($approvalStep) {
+                    $approvalStep->update([
+                        'user_id' => $step['user_id'],
+                        'name' => $step['name'],
+                        'order' => $index + 1,
+                    ]);
+                } else {
+                    $approvalStep = $costCenter->approvalSteps()->create([
+                        'user_id' => $step['user_id'],
+                        'name' => $step['name'],
+                        'order' => $index + 1,
+                    ]);
+                }
+
+                $savedSteps->push($approvalStep->fresh());
             }
 
-            // 4. Rescue pending reimbursements
-            // We refresh the CC steps to ensure we match against the new DB records
-            $costCenter->load('approvalSteps');
-            
+            $keptOldStepIds = $savedSteps
+                ->pluck('id')
+                ->intersect($oldSteps->pluck('id'))
+                ->values();
+            $keptOldStepIdList = $keptOldStepIds->all();
+
+            // 4. Rescue pending reimbursements before deleting removed steps.
             foreach ($pendingReimbursements as $r) {
-                $oldOrder = $oldProgressMap[$r->id];
-                
-                // Find the closest equivalent step (same order or next available)
-                $newStep = $costCenter->approvalSteps
-                    ->where('order', '>=', $oldOrder)
-                    ->sortBy('order')
-                    ->first();
+                $oldStep = $oldStepsById->get($r->current_step_id);
+
+                if (!$oldStep || in_array($oldStep->id, $keptOldStepIdList, false)) {
+                    continue;
+                }
+
+                $newStep = null;
+
+                if ($submittedHasExistingIds) {
+                    $nextKeptOldStep = $oldSteps
+                        ->whereIn('id', $keptOldStepIdList)
+                        ->where('order', '>', $oldStep->order)
+                        ->sortBy('order')
+                        ->first();
+
+                    $newStep = $nextKeptOldStep
+                        ? $savedSteps->firstWhere('id', $nextKeptOldStep->id)
+                        : null;
+                } else {
+                    $newStep = $savedSteps
+                        ->first(fn ($step) => $step->user_id == $oldStep->user_id && $step->name === $oldStep->name);
+
+                    if (!$newStep) {
+                        $nextOldStep = $oldSteps
+                            ->where('order', '>', $oldStep->order)
+                            ->first(fn ($step) => $savedSteps->contains(fn ($saved) => $saved->user_id == $step->user_id && $saved->name === $step->name));
+
+                        $newStep = $nextOldStep
+                            ? $savedSteps->first(fn ($saved) => $saved->user_id == $nextOldStep->user_id && $saved->name === $nextOldStep->name)
+                            : null;
+                    }
+                }
 
                 if ($newStep) {
                     $r->update(['current_step_id' => $newStep->id]);
                 } else {
-                    // If no subsequent step exists, it means the entire remaining chain was deleted
-                    // In this case, we consider it approved as there are no more hurdles
                     $r->update([
-                        'current_step_id' => null, 
-                        'status' => 'aprobado'
+                        'current_step_id' => null,
+                        'status' => 'pendiente_revision_cxp',
                     ]);
                 }
             }
+
+            $costCenter->approvalSteps()
+                ->whereNotIn('id', $savedSteps->pluck('id'))
+                ->delete();
 
             // 5. Sync authorized users
             if ($request->has('allowed_users')) {

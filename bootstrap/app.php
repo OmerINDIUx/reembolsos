@@ -21,7 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
         $schedule->call(function () {
-            $drafts = \App\Models\Reimbursement::where('status', 'borrador')->get();
+            $drafts = \App\Models\Reimbursement::where('status', 'borrador')
+                ->where('updated_at', '<', now()->subDays(30))
+                ->get();
+
             foreach ($drafts as $draft) {
                 if ($draft->xml_path) \Illuminate\Support\Facades\Storage::delete($draft->xml_path);
                 if ($draft->pdf_path) \Illuminate\Support\Facades\Storage::delete($draft->pdf_path);
