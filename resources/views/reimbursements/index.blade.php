@@ -602,7 +602,7 @@
                                                 $canEditFlow = !$user->isAdminView() && $user->canPerform('reimbursements.edit');
                                             @endphp
 
-                                            @if($user->id === $r->user_id || $user->isAdmin() || $user->isAdminView() || $canApproveCurr || $canEditFlow)
+                                            @if($r->isManagedByRequester($user) || $user->isAdmin() || $user->isAdminView() || $canApproveCurr || $canEditFlow)
                                                 <a href="{{ route('reimbursements.show', $r->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Ver</a>
                                                 @if($canEditFlow)
                                                     <a href="{{ route('reimbursements.show', $r->id) }}" class="text-gray-700 hover:text-indigo-900 dark:text-gray-300 dark:hover:text-indigo-400 ml-2">Editar flujo</a>

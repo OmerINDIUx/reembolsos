@@ -68,6 +68,7 @@ class Reimbursement extends Model
         'company_confirmed',
         'validation_data',
         'user_id',
+        'created_by_id',
         'payee_id',
         'propina',
         'approved_by_director_id',
@@ -133,6 +134,11 @@ class Reimbursement extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by_id');
+    }
+
     public function payee()
     {
         return $this->belongsTo(User::class, 'payee_id');
@@ -166,6 +172,28 @@ class Reimbursement extends Model
     public function children()
     {
         return $this->hasMany(Reimbursement::class, 'parent_id');
+    }
+
+    public function isManagedByRequester(User $user): bool
+    {
+        if ((int) $this->user_id === (int) $user->id) {
+            return true;
+        }
+
+        if ($this->created_by_id && (int) $this->created_by_id === (int) $user->id) {
+            return true;
+        }
+
+        if (!$user->canPerform('reimbursements.create_on_behalf')) {
+            return false;
+        }
+
+        return $this->approvals()
+            ->where('user_id', $user->id)
+            ->where('step_name', 'Solicitante')
+            ->where('action', 'enviado')
+            ->where('comment', 'like', 'REGISTRO POR TERCEROS%')
+            ->exists();
     }
 
     /**

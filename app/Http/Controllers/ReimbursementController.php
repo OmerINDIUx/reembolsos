@@ -344,13 +344,17 @@ class ReimbursementController extends Controller
         $hasInvoice = $request->input('has_invoice', '1') !== '0';
         $allowedTypes = ['reembolso', 'fondo_fijo', 'comida', 'viaje'];
 
-        $drafts = Reimbursement::where('user_id', $user->id)
-                                ->where('status', 'borrador')
+        $drafts = Reimbursement::where('status', 'borrador')
+                                ->where(function ($query) use ($user) {
+                                    $this->applyRequesterManagedScope($query, $user);
+                                })
                                 ->where(function ($query) use ($user) {
                                     $query->whereNull('parent_id')
                                         ->orWhereDoesntHave('parent', function ($parentQuery) use ($user) {
                                             $parentQuery->where('status', 'borrador')
-                                                ->where('user_id', $user->id);
+                                                ->where(function ($query) use ($user) {
+                                                    $this->applyRequesterManagedScope($query, $user);
+                                                });
                                         });
                                 })
                                 ->with(['children' => fn ($query) => $query->where('status', 'borrador')->orderBy('created_at')])
@@ -704,8 +708,10 @@ class ReimbursementController extends Controller
                     }
 
                     // Check for duplicate in DB or current batch
-                    $existing = Reimbursement::where('uuid', $uuid)->first();
-                    if ($existing && $existing->status !== 'borrador') {
+                    $existing = Reimbursement::where('uuid', $uuid)
+                        ->when($existingDraft, fn ($query) => $query->whereKeyNot($existingDraft->id))
+                        ->first();
+                    if ($existing && ($existing->status !== 'borrador' || !$this->canRequesterManageReimbursement($existing, $user))) {
                         $errors[] = "ÃƒÂ tem #" . ($index + 1) . ": El CFDI con UUID {$uuid} ya estÃƒÂ¡ registrado.";
                         $failedCount++;
                         continue;
@@ -810,6 +816,7 @@ class ReimbursementController extends Controller
                     'company_confirmed' => isset($item['confirm_company']),
                     'validation_data' => $validationData,
                 ], $approvalData);
+                $this->setCreatedByData($reimbursementData, $existingDraft, $user);
 
                 // FINAL SAFETY CHECK
                 if ($hasInvoice && empty($reimbursementData['uuid'])) {
@@ -904,6 +911,8 @@ class ReimbursementController extends Controller
     public function parseCfdi(Request $request)
     {
         set_time_limit(120);
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
 
         $request->validate([
             'xml_file' => 'required_without:draft_id|file|nullable',
@@ -940,9 +949,17 @@ class ReimbursementController extends Controller
                 ->when($request->draft_id, function($q) use ($request) {
                     return $q->where('id', '!=', $request->draft_id);
                 })
-                ->where(function($q) {
+                ->where(function($q) use ($user) {
                     $q->where('status', '!=', 'borrador')
-                      ->orWhere('user_id', '!=', auth()->id());
+                      ->orWhere(function ($draftQuery) use ($user) {
+                          $draftQuery->where('user_id', '!=', $user->id)
+                              ->when($this->reimbursementsHaveCreatedByColumn(), function ($draftQuery) use ($user) {
+                                  $draftQuery->where(function ($managedQuery) use ($user) {
+                                      $managedQuery->whereNull('created_by_id')
+                                          ->orWhere('created_by_id', '!=', $user->id);
+                                  });
+                              });
+                      });
                 })
                 ->first();
 
@@ -1142,6 +1159,17 @@ class ReimbursementController extends Controller
             'confirm_company' => 'required',
         ]);
         
+        $draftId = $request->draft_id;
+        $existingDraft = null;
+        if ($draftId) {
+            $existingDraft = Reimbursement::where('id', $draftId)
+                ->where(function ($query) use ($user) {
+                    $this->applyRequesterManagedScope($query, $user);
+                })
+                ->where('status', 'borrador')
+                ->first();
+        }
+
         if ($request->type !== 'viaje') {
             $request->validate([
                 'xml_file' => 'required',
@@ -1150,7 +1178,10 @@ class ReimbursementController extends Controller
             ]);
 
             // Duplicity check
-            if (Reimbursement::where('uuid', $request->uuid)->exists()) {
+            $duplicate = Reimbursement::where('uuid', $request->uuid)
+                ->when($existingDraft, fn ($query) => $query->whereKeyNot($existingDraft->id))
+                ->first();
+            if ($duplicate && ($duplicate->status !== 'borrador' || !$this->canRequesterManageReimbursement($duplicate, $user))) {
                 return back()->withInput()->with('error', 'AtenciÃƒÂ³n: Este CFDI (UUID: ' . $request->uuid . ') ya se encuentra registrado en el sistema.');
             }
         }
@@ -1160,12 +1191,6 @@ class ReimbursementController extends Controller
         
 
 
-        $draftId = $request->draft_id;
-        $existingDraft = null;
-        if ($draftId) {
-            $existingDraft = Reimbursement::where('id', $draftId)->where('user_id', Auth::id())->where('status', 'borrador')->first();
-        }
-        
         $xmlPath = $request->file('xml_file') ? $request->file('xml_file')->store('xmls') : ($existingDraft ? $existingDraft->xml_path : null);
         $pdfPath = $request->file('pdf_file') ? $request->file('pdf_file')->store('pdfs') : ($existingDraft ? $existingDraft->pdf_path : null);
         $ticketPath = $request->file('ticket_file') ? $request->file('ticket_file')->store('tickets') : ($existingDraft ? $existingDraft->ticket_path : null);
@@ -1284,6 +1309,7 @@ class ReimbursementController extends Controller
             'user_id' => $targetUserId,
             'payee_id' => $payeeId,
         ], $approvalData);
+        $this->setCreatedByData($reimbursementData, $existingDraft, $user);
 
         if ($existingDraft) {
             $existingDraft->update($reimbursementData);
@@ -1352,7 +1378,7 @@ class ReimbursementController extends Controller
     public function edit(Reimbursement $reimbursement)
     {
         $user = Auth::user();
-        if ($reimbursement->user_id !== $user->id && !$user->isAdmin()) {
+        if (!$this->canRequesterManageReimbursement($reimbursement, $user) && !$user->isAdmin()) {
             abort(403);
         }
 
@@ -1410,7 +1436,7 @@ class ReimbursementController extends Controller
         $user = Auth::user();
 
         // 1. Admin, AdminView, Subdirección (N4), Dirección General (N5) & Owner always see
-        if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion') || $user->id === $reimbursement->user_id) {
+        if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion') || $this->canRequesterManageReimbursement($reimbursement, $user)) {
             return view('reimbursements.show', compact('reimbursement'));
         }
 
@@ -1523,7 +1549,7 @@ class ReimbursementController extends Controller
         }
 
         // Owner can update if it requires correction
-        $isOwnerCorrecting = $user->id === $reimbursement->user_id && $reimbursement->status === 'requiere_correccion';
+        $isOwnerCorrecting = $this->canRequesterManageReimbursement($reimbursement, $user) && $reimbursement->status === 'requiere_correccion';
 
         if (!$canApprove && !$isOwnerCorrecting) {
             abort(403, 'No tienes permiso para gestionar este reembolso en su etapa actual.');
@@ -1776,6 +1802,10 @@ class ReimbursementController extends Controller
         } elseif ($currentStatus === 'requiere_correccion') {
             if ($owner) {
                 NotificationBatchService::add($owner, $reimbursement);
+            }
+            $creator = $reimbursement->createdBy ?: $this->thirdPartyCaptureUser($reimbursement);
+            if ($creator && (!$owner || (int) $creator->id !== (int) $owner->id)) {
+                NotificationBatchService::add($creator, $reimbursement);
             }
         }
 
@@ -3579,10 +3609,6 @@ class ReimbursementController extends Controller
                         }
                     }
 
-                    $data = [
-                        'user_id' => $targetUserId,
-                    ];
-
                     // Find existing to check status and preserve data
                     $reimbursement = null;
                     if ($id) {
@@ -3595,6 +3621,11 @@ class ReimbursementController extends Controller
                                                     ->where('status', 'borrador')
                                                     ->first();
                     }
+
+                    $data = [
+                        'user_id' => $targetUserId,
+                    ];
+                    $this->setCreatedByData($data, $reimbursement, $user);
 
                     // PREVENT DATA LOSS: Only update global fields if they are NOT empty in the request
                     // Or if we are creating a brand new record
@@ -3762,6 +3793,81 @@ class ReimbursementController extends Controller
             || $cc->beneficiary_id === $candidate->id;
     }
 
+    private function applyRequesterManagedScope($query, User $user): void
+    {
+        $query->where('user_id', $user->id);
+
+        if ($this->reimbursementsHaveCreatedByColumn()) {
+            $query->orWhere('created_by_id', $user->id);
+        }
+
+        if ($user->canPerform('reimbursements.create_on_behalf')) {
+            $query->orWhereHas('approvals', function ($approvalQuery) use ($user) {
+                $approvalQuery->where('user_id', $user->id)
+                    ->where('step_name', 'Solicitante')
+                    ->where('action', 'enviado')
+                    ->where('comment', 'like', 'REGISTRO POR TERCEROS%');
+            });
+        }
+    }
+
+    private function applyRequesterManagedScopeForIdentities($query, $identityIds, User $user): void
+    {
+        $query->whereIn('user_id', $identityIds);
+
+        if ($this->reimbursementsHaveCreatedByColumn()) {
+            $query->orWhereIn('created_by_id', $identityIds);
+        }
+
+        if ($user->canPerform('reimbursements.create_on_behalf')) {
+            $query->orWhereHas('approvals', function ($approvalQuery) use ($user) {
+                $approvalQuery->where('user_id', $user->id)
+                    ->where('step_name', 'Solicitante')
+                    ->where('action', 'enviado')
+                    ->where('comment', 'like', 'REGISTRO POR TERCEROS%');
+            });
+        }
+    }
+
+    private function canRequesterManageReimbursement(Reimbursement $reimbursement, User $user): bool
+    {
+        return $reimbursement->isManagedByRequester($user);
+    }
+
+    private function thirdPartyCaptureUser(Reimbursement $reimbursement): ?User
+    {
+        $approval = $reimbursement->approvals()
+            ->where('step_name', 'Solicitante')
+            ->where('action', 'enviado')
+            ->where('comment', 'like', 'REGISTRO POR TERCEROS%')
+            ->latest()
+            ->first();
+
+        return $approval?->user;
+    }
+
+    private function setCreatedByData(array &$data, ?Reimbursement $existingReimbursement, User $user): void
+    {
+        if (!$this->reimbursementsHaveCreatedByColumn()) {
+            return;
+        }
+
+        $data['created_by_id'] = $existingReimbursement
+            ? ($existingReimbursement->created_by_id ?: $user->id)
+            : $user->id;
+    }
+
+    private function reimbursementsHaveCreatedByColumn(): bool
+    {
+        static $hasColumn = null;
+
+        if ($hasColumn === null) {
+            $hasColumn = \Illuminate\Support\Facades\Schema::hasColumn('reimbursements', 'created_by_id');
+        }
+
+        return $hasColumn;
+    }
+
     private function canCreateReimbursement(\App\Models\User $user, $type, $costCenterId, $travelEventId = null)
     {
         // Auto-resolve CC if missing but event is provided
@@ -3899,7 +4005,7 @@ class ReimbursementController extends Controller
         $identityIds = $allIdentities->pluck('id')->unique();
 
         if ($tab === 'management') {
-            $query->where(function($q) use ($allIdentities, $identityIds) {
+            $query->where(function($q) use ($allIdentities, $identityIds, $user) {
                 // 1. Current Approver (including substitutes)
                 $q->whereHas('currentStep', function($sq) use ($identityIds) {
                     $sq->whereIn('user_id', $identityIds);
@@ -3933,6 +4039,11 @@ class ReimbursementController extends Controller
                 if ($isAdmin) {
                     $q->orWhereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
                 }
+
+                $q->orWhere(function ($requesterQuery) use ($identityIds, $user) {
+                    $this->applyRequesterManagedScopeForIdentities($requesterQuery, $identityIds, $user);
+                    $requesterQuery->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
+                });
             });
 
         } elseif ($tab === 'payment') {
@@ -3947,20 +4058,23 @@ class ReimbursementController extends Controller
 
         } elseif ($tab === 'active') {
             // Personal & Substituted: Pending (My items that are still in process)
-            $query->whereIn('user_id', $identityIds)
-                  ->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
+            $query->where(function ($q) use ($identityIds, $user) {
+                $this->applyRequesterManagedScopeForIdentities($q, $identityIds, $user);
+            })->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
 
         } elseif ($tab === 'history') {
             // Personal & Substituted: Finished (My items that are already paid or rejected)
-            $query->whereIn('user_id', $identityIds)
-                  ->whereIn('status', ['aprobado', 'rechazado']);
+            $query->where(function ($q) use ($identityIds, $user) {
+                $this->applyRequesterManagedScopeForIdentities($q, $identityIds, $user);
+            })->whereIn('status', ['aprobado', 'rechazado']);
 
         } elseif ($tab === 'global_history') {
             // Check permission dynamically
             if (!$user->canPerform('reimbursements.global_history')) {
                 // If they don't have permission, restrict to their own items
-                $query->whereIn('user_id', $identityIds)
-                      ->whereIn('status', ['aprobado', 'rechazado']);
+                $query->where(function ($q) use ($identityIds, $user) {
+                    $this->applyRequesterManagedScopeForIdentities($q, $identityIds, $user);
+                })->whereIn('status', ['aprobado', 'rechazado']);
                 return;
             }
 
@@ -3999,7 +4113,9 @@ class ReimbursementController extends Controller
             }
         } else {
             // DEFAULT FALLBACK: Personal Scope (including substituted)
-            $query->whereIn('user_id', $identityIds);
+            $query->where(function ($q) use ($identityIds, $user) {
+                $this->applyRequesterManagedScopeForIdentities($q, $identityIds, $user);
+            });
         }
     }
 
@@ -4019,6 +4135,19 @@ class ReimbursementController extends Controller
         $query->where(function($q) use ($user, $identityIds) {
             // 1. Owner or Substituted Owner
             $q->whereIn('user_id', $identityIds);
+
+            if (\Illuminate\Support\Facades\Schema::hasColumn('reimbursements', 'created_by_id')) {
+                $q->orWhereIn('created_by_id', $identityIds);
+            }
+
+            if ($user->canPerform('reimbursements.create_on_behalf')) {
+                $q->orWhereHas('approvals', function ($approvalQuery) use ($user) {
+                    $approvalQuery->where('user_id', $user->id)
+                        ->where('step_name', 'Solicitante')
+                        ->where('action', 'enviado')
+                        ->where('comment', 'like', 'REGISTRO POR TERCEROS%');
+                });
+            }
 
             // 2. Current Approver (including substitutes) - Only if in approval phase
             $q->orWhere(function($sq) use ($identityIds) {

@@ -9,7 +9,7 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             
             <!-- User Correction Panel (High Priority) -->
-            @if(!Auth::user()->isAdminView() && Auth::user()->id === $reimbursement->user_id && $reimbursement->status === 'requiere_correccion')
+            @if(!Auth::user()->isAdminView() && $reimbursement->isManagedByRequester(Auth::user()) && $reimbursement->status === 'requiere_correccion')
                 <div class="mb-8 rounded-xl border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700/50 shadow-sm">
                     <div class="p-6 md:p-8">
                         <div class="flex items-start gap-4">
