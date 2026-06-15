@@ -4005,45 +4005,17 @@ class ReimbursementController extends Controller
         $identityIds = $allIdentities->pluck('id')->unique();
 
         if ($tab === 'management') {
-            $query->where(function($q) use ($allIdentities, $identityIds, $user) {
-                // 1. Current Approver (including substitutes)
+            $query->where(function($q) use ($allIdentities, $identityIds) {
+                // Management is an action queue: only items waiting on the current user
+                // or an identity they are actively substituting.
                 $q->whereHas('currentStep', function($sq) use ($identityIds) {
                     $sq->whereIn('user_id', $identityIds);
                 })->whereNotIn('status', ['aprobado', 'rechazado', 'borrador', 'pendiente_revision_cxp', 'pendiente_pago']);
 
-                // 2. CXP reviewer pool
                 $isCxpReviewer = $allIdentities->contains(fn($identity) => $identity->isCxp());
                 if ($isCxpReviewer) {
                     $q->orWhere('status', 'pendiente_revision_cxp');
                 }
-
-                // 3. CXP payer pool
-                $isCxpPayer = $allIdentities->contains(fn($identity) => $identity->isTreasury());
-                if ($isCxpPayer) {
-                    $q->orWhere('status', 'pendiente_pago');
-                }
-
-                // 3.5. CXP needs to see approved reimbursements that finished their Custom Approval Flow
-                $isCxp = $allIdentities->contains(fn($identity) => $identity->isCxp() || ($identity->profile && $identity->profile->name === 'accountant'));
-                if ($isCxp) {
-                    $q->orWhere(function($subQ) {
-                        $subQ->where('status', 'aprobado')
-                             ->whereHas('costCenter', function($ccQ) {
-                                 $ccQ->has('approvalSteps');
-                             });
-                    });
-                }
-
-                // 4. Admin / Elevated roles see EVERYTHING pending in the system
-                $isAdmin = $allIdentities->contains(fn($identity) => $identity->canPerform('profiles.view') || $identity->isAdmin() || $identity->isAdminView());
-                if ($isAdmin) {
-                    $q->orWhereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
-                }
-
-                $q->orWhere(function ($requesterQuery) use ($identityIds, $user) {
-                    $this->applyRequesterManagedScopeForIdentities($requesterQuery, $identityIds, $user);
-                    $requesterQuery->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
-                });
             });
 
         } elseif ($tab === 'payment') {
