@@ -55,9 +55,11 @@
                                             <div class="md:col-span-2 space-y-2">
                                                 <label class="text-sm font-semibold text-indigo-700 dark:text-indigo-400">Destinatario del Pago</label>
                                                 <select name="payee_id" class="w-full rounded-lg border-indigo-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:border-indigo-900/50 dark:text-gray-200">
-                                                    @php($currentPayeeId = old('payee_id', $reimbursement->payee_id ?: $reimbursement->user_id))
+                                                    @php
+                                                        $currentPayeeId = old('payee_id', $reimbursement->payee_id ?: $reimbursement->user_id);
+                                                    @endphp
                                                     @foreach($correctionPayeeOptions as $payeeOption)
-                                                        <option value="{{ $payeeOption->id }}" @selected((int) $currentPayeeId === (int) $payeeOption->id)>
+                                                        <option value="{{ $payeeOption->id }}" {{ (int) $currentPayeeId === (int) $payeeOption->id ? 'selected' : '' }}>
                                                             {{ $payeeOption->name }}
                                                             @if($payeeOption->clabe)
                                                                 - CLABE **** {{ substr($payeeOption->clabe, -4) }}
