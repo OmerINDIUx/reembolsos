@@ -1437,7 +1437,7 @@ class ReimbursementController extends Controller
 
         // 1. Admin, AdminView, Subdirección (N4), Dirección General (N5) & Owner always see
         if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion') || $this->canRequesterManageReimbursement($reimbursement, $user)) {
-            return view('reimbursements.show', compact('reimbursement'));
+            return $this->showReimbursementView($reimbursement);
         }
 
         // 2. Identify all identities this user can act as (themselves + active substitutes)
@@ -1515,21 +1515,75 @@ class ReimbursementController extends Controller
             abort(403, 'Aún no tienes permiso para ver este reembolso. Se encuentra en una etapa de aprobación fuera de tu alcance actual.');
         }
 
+        return $this->showReimbursementView($reimbursement);
+    }
+
+    private function showReimbursementView(Reimbursement $reimbursement)
+    {
         $reimbursement->load([
-            'files', 
-            'children', 
-            'parent', 
-            'costCenter.director', 
-            'costCenter.controlObra', 
-            'costCenter.directorEjecutivo', 
-            'directorApprover', 
-            'controlApprover', 
-            'executiveApprover', 
-            'cxpApprover', 
-            'direccionApprover', 
+            'files',
+            'children',
+            'parent',
+            'payee',
+            'user',
+            'costCenter.director',
+            'costCenter.controlObra',
+            'costCenter.directorEjecutivo',
+            'costCenter.accountant',
+            'costCenter.direccion',
+            'costCenter.tesoreria',
+            'costCenter.beneficiary',
+            'costCenter.approvalSteps.user',
+            'directorApprover',
+            'controlApprover',
+            'executiveApprover',
+            'cxpApprover',
+            'direccionApprover',
             'treasuryApprover'
         ]);
-        return view('reimbursements.show', compact('reimbursement'));
+
+        $correctionPayeeOptions = $this->correctionPayeeOptions($reimbursement, Auth::user());
+
+        return view('reimbursements.show', compact('reimbursement', 'correctionPayeeOptions'));
+    }
+
+    private function correctionPayeeOptions(Reimbursement $reimbursement, User $user)
+    {
+        if (
+            $reimbursement->status !== 'requiere_correccion'
+            || !$this->canRequesterManageReimbursement($reimbursement, $user)
+            || !$user->canPerform('reimbursements.create_on_behalf')
+            || !in_array($reimbursement->type, ['reembolso', 'comida'], true)
+            || !$reimbursement->costCenter
+        ) {
+            return collect();
+        }
+
+        $costCenter = $reimbursement->costCenter;
+        $ids = collect([
+            $reimbursement->user_id,
+            $reimbursement->payee_id,
+            $costCenter->beneficiary_id,
+            $costCenter->director_id,
+            $costCenter->control_obra_id,
+            $costCenter->director_ejecutivo_id,
+            $costCenter->accountant_id,
+            $costCenter->direccion_id,
+            $costCenter->tesoreria_id,
+        ]);
+
+        $ids = $ids
+            ->merge($costCenter->authorizedUsers()->pluck('users.id'))
+            ->merge($costCenter->approvalSteps->pluck('user_id'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        return User::whereIn('id', $ids)
+            ->orderBy('name')
+            ->get(['id', 'name', 'clabe', 'bank_name'])
+            ->filter(fn (User $candidate) => $this->canRegisterOnBehalfInCostCenter($user, $candidate, $reimbursement->cost_center_id))
+            ->values();
     }
 
     /**
@@ -1559,6 +1613,7 @@ class ReimbursementController extends Controller
             $request->validate([
                 'pdf_file' => 'nullable|file',
                 'user_correction_comment' => 'required|string',
+                'payee_id' => 'nullable|exists:users,id',
                 'attendees_count' => 'nullable|integer',
                 'location' => 'nullable|string',
                 'attendees_names' => 'nullable|string',
@@ -1593,6 +1648,24 @@ class ReimbursementController extends Controller
             // Persist propina for any meal reimbursement, with or without XML.
             if ($reimbursement->type === 'comida' && $request->has('propina')) {
                 $data['propina'] = (float)$request->propina;
+            }
+
+            if ($request->filled('payee_id')) {
+                $requestedPayeeId = (int) $request->input('payee_id');
+                $currentPayeeId = (int) ($reimbursement->payee_id ?: $reimbursement->user_id);
+
+                if ($requestedPayeeId !== $currentPayeeId) {
+                    if (!$user->canPerform('reimbursements.create_on_behalf') || !in_array($reimbursement->type, ['reembolso', 'comida'], true)) {
+                        return back()->withInput()->with('error', 'No tienes permiso para cambiar el destinatario del pago.');
+                    }
+
+                    $requestedPayee = User::findOrFail($requestedPayeeId);
+                    if (!$this->canRegisterOnBehalfInCostCenter($user, $requestedPayee, $reimbursement->cost_center_id)) {
+                        return back()->withInput()->with('error', 'El destinatario del pago debe pertenecer al mismo Centro de Costos.');
+                    }
+
+                    $data['payee_id'] = $requestedPayeeId;
+                }
             }
 
             // Safety: If reimbursement has a UUID, we MUST NOT allow changing core fiscal fields manually
@@ -1645,6 +1718,11 @@ class ReimbursementController extends Controller
             // Append correction note
             $currentObs = $reimbursement->observaciones;
             $newObs = "CORREGIDO por " . $user->name . " el " . now()->format('d/m/Y H:i') . ": " . $request->user_correction_comment;
+            if (isset($data['payee_id'])) {
+                $previousPayeeName = $reimbursement->payee->name ?? ($reimbursement->user->name ?? 'N/A');
+                $newPayeeName = User::find($data['payee_id'])?->name ?? 'N/A';
+                $newObs .= " [Destinatario del pago actualizado: {$previousPayeeName} -> {$newPayeeName}]";
+            }
             $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
 
             // Direct routing rule: return to the stage that requested the correction.
