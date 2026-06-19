@@ -248,8 +248,17 @@
                                 <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Seleccionar Todos</span>
                             </label>
                             
-                            <div x-show="selectedCount > 0" x-transition.opacity class="flex items-center space-x-4">
+                            <div x-show="selectedCount > 0" x-transition.opacity class="flex flex-wrap items-center justify-end gap-2">
                                 <span class="text-xs font-black text-indigo-600 uppercase tracking-widest" x-text="selectedCount + ' Seleccionados'"></span>
+
+                                @if(Auth::user()->isAdmin())
+                                    <button type="button"
+                                        @click="bulkDeleteSelected()"
+                                        class="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-red-200 flex items-center space-x-2">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0H7m3 0V5a2 2 0 012-2h0a2 2 0 012 2v2"/></svg>
+                                        <span>Eliminar</span>
+                                    </button>
+                                @endif
                                 
                                 <button type="button"
                                     @click="downloadCaratulaSelected()"
@@ -881,6 +890,53 @@
                 if (this.selectedIds.length === 0) return;
                 const ids = this.selectedIds.join(',');
                 window.location.href = `{{ route('reimbursements.payment_file') }}?ids=${ids}`;
+            },
+
+            async bulkDeleteSelected() {
+                if (this.selectedIds.length === 0) return;
+
+                const selectedCount = this.selectedIds.length;
+                const reimbursementLabel = selectedCount === 1 ? 'reembolso' : 'reembolsos';
+                const selectedLabel = selectedCount === 1 ? 'seleccionado' : 'seleccionados';
+                const result = await AppDialog.confirm({
+                    type: 'danger',
+                    title: selectedCount === 1 ? 'Eliminar reembolso' : 'Eliminar reembolsos',
+                    html: `
+                        <div class="mt-3 space-y-3 text-left">
+                            <p class="text-sm leading-6 text-gray-600 dark:text-gray-300">
+                                Estás por eliminar
+                                <strong class="font-black text-gray-900 dark:text-white">${selectedCount} ${reimbursementLabel} ${selectedLabel}</strong>.
+                            </p>
+                            <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/60 dark:bg-red-950/30">
+                                <p class="text-xs font-black uppercase text-red-700 dark:text-red-300">Esta acción no se puede deshacer</p>
+                                <p class="mt-1 text-xs leading-5 text-red-600 dark:text-red-400">Se eliminarán los registros y sus archivos asociados.</p>
+                            </div>
+                            <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+                                <p class="text-xs font-bold leading-5 text-emerald-700 dark:text-emerald-300">Los XML quedarán disponibles para volver a subirlos.</p>
+                            </div>
+                        </div>
+                    `,
+                    confirmText: `ELIMINAR ${selectedCount}`,
+                    cancelText: 'CONSERVAR',
+                });
+
+                if (!result.isConfirmed) return;
+
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = `{{ route('reimbursements.bulk_destroy') }}`;
+                form.innerHTML = `<input type="hidden" name="_token" value="{{ csrf_token() }}">`;
+
+                this.selectedIds.forEach(id => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'ids[]';
+                    input.value = id;
+                    form.appendChild(input);
+                });
+
+                document.body.appendChild(form);
+                form.submit();
             },
 
             async downloadCaratulaSelected() {

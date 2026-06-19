@@ -59,7 +59,9 @@
                                 // User and permissions already defined above
                             @endphp
 
-                            @if($canManage && $user->canPerform('reimbursements.approve'))
+                            {{-- Active substitutes inherit access to the approval queue from the
+                                 identity they are replacing, even if their own profile is "user". --}}
+                            @if($canManage)
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'management'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab', $defaultTab) == 'management' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="management-tab" type="button" role="tab" aria-controls="management" aria-selected="false">Módulo de Gestión</a>
                             </li>
@@ -287,7 +289,7 @@
                                 @endphp
 
                             <div class="space-y-6">
-                                @if($tab !== 'management')
+                                @if($tab !== 'management' || $user->isAdmin())
                                 <!-- Action Bar for Group (Inline) -->
                                 <div class="flex justify-between items-center px-4 mb-4 bg-gray-50/80 dark:bg-gray-800/50 p-2 rounded-xl border border-gray-200 dark:border-gray-700">
                                     <label class="flex items-center space-x-3 cursor-pointer select-none">
@@ -380,7 +382,7 @@
                                                 <a href="{{ route('reimbursements.audit', ['week' => $week, 'cc' => $ccName, 'tab' => $tab]) }}" 
                                                    class="flex flex-col md:flex-row items-start md:items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/30 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-md transition-all group no-underline space-y-3 md:space-y-0">
                                                     <div class="flex items-center space-x-4">
-                                                        @if($tab !== 'management')
+                                                        @if($tab !== 'management' || $user->isAdmin())
                                                         <div class="flex items-center justify-center border-r border-gray-200 dark:border-gray-700 pr-4" @click.stop>
                                                             <input type="checkbox"
                                                                    data-ids="{{ $idsJson }}"
@@ -1079,7 +1081,7 @@
                     const ids = this.selectedIds.join(',');
                     window.location.href = `{{ route('reimbursements.payment_file') }}?ids=${ids}`;
                 },
-                
+
                 init() {
                     // Modal now handled inline with the partial.
                 }

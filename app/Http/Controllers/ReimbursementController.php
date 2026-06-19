@@ -2025,17 +2025,76 @@ class ReimbursementController extends Controller
      */
     public function destroy(Reimbursement $reimbursement)
     {
-        if (Auth::user()->isAdminView()) {
-            abort(403, 'Tu rol es de solo consulta.');
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+
+        if (!$user || !$user->isAdmin()) {
+            abort(403, 'Solo un administrador puede eliminar reembolsos.');
         }
 
-        if ($reimbursement->xml_path) Storage::delete($reimbursement->xml_path);
-        if ($reimbursement->pdf_path) Storage::delete($reimbursement->pdf_path);
-        
-        $reimbursement->delete();
+        $this->deleteReimbursementWithFiles($reimbursement);
 
         return redirect()->back()
-                         ->with('success', 'Borrador eliminado.');
+                         ->with('success', 'Reembolso eliminado correctamente.');
+    }
+
+    /**
+     * Admin-only bulk delete to free uploaded XML UUIDs for a clean re-upload.
+     */
+    public function bulkDestroy(Request $request)
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        if (!$user || !$user->isAdmin()) {
+            abort(403, 'Solo un administrador puede eliminar reembolsos de forma masiva.');
+        }
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:reimbursements,id'],
+        ]);
+
+        $reimbursements = Reimbursement::with(['files', 'children.files', 'children.children'])
+            ->whereIn('id', array_unique($validated['ids']))
+            ->get();
+
+        $deleted = 0;
+        DB::transaction(function () use ($reimbursements, &$deleted) {
+            foreach ($reimbursements as $reimbursement) {
+                if (!Reimbursement::whereKey($reimbursement->id)->exists()) {
+                    continue;
+                }
+
+                $this->deleteReimbursementWithFiles($reimbursement);
+                $deleted++;
+            }
+        });
+
+        return redirect()->back()
+            ->with('success', "Se eliminaron {$deleted} reembolso(s). Los XML correspondientes ya pueden volver a subirse.");
+    }
+
+    private function deleteReimbursementWithFiles(Reimbursement $reimbursement): void
+    {
+        $reimbursement->loadMissing(['files', 'children.files', 'children.children']);
+
+        foreach ($reimbursement->children as $child) {
+            $this->deleteReimbursementWithFiles($child);
+        }
+
+        $paths = collect([
+            $reimbursement->xml_path,
+            $reimbursement->pdf_path,
+            $reimbursement->ticket_path,
+        ])->merge($reimbursement->files->pluck('file_path'))
+            ->filter()
+            ->unique();
+
+        foreach ($paths as $path) {
+            Storage::delete($path);
+        }
+
+        $reimbursement->delete();
     }
 
     /**

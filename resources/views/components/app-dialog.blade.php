@@ -21,9 +21,9 @@
 
                 return Swal.fire({
                     title: `<span class="text-xl font-black uppercase tracking-tight ${titleClass}">${titleText}</span>`,
-                    html: options.message
+                    html: options.html || (options.message
                         ? `<p class="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">${options.message}</p>`
-                        : '',
+                        : ''),
                     icon: options.icon || preset.icon,
                     showCancelButton: true,
                     confirmButtonText: options.confirmText || 'SÍ, CONFIRMAR',
