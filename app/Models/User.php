@@ -55,6 +55,11 @@ class User extends Authenticatable
         return $this->hasMany(Reimbursement::class);
     }
 
+    public function deviceLogins()
+    {
+        return $this->hasMany(DeviceLogin::class);
+    }
+
     public function isAdmin()
     {
         return $this->role === 'admin' || $this->profile?->name === 'admin';
@@ -121,6 +126,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'invitation_sent_at' => 'datetime',
             'password' => 'hashed',
+            'blocked_at' => 'datetime',
         ];
     }
 
@@ -226,5 +232,20 @@ class User extends Authenticatable
         }
 
         return $this->profile->hasPermission($permission);
+    }
+
+    public function isBlocked(): bool
+    {
+        return $this->blocked_at !== null;
+    }
+
+    public function blockedByUser()
+    {
+        return $this->belongsTo(User::class, 'blocked_by');
+    }
+
+    public function accountBlockEvents()
+    {
+        return $this->hasMany(AccountBlockEvent::class);
     }
 }

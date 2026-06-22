@@ -49,6 +49,15 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        if (Auth::user()->isBlocked()) {
+            $message = Auth::user()->blocked_reason_message ?: 'Tu cuenta está suspendida por revisión administrativa.';
+            Auth::logout();
+
+            throw ValidationException::withMessages([
+                'email' => "Tu cuenta está bloqueada. Motivo: {$message} Contacta a un administrador.",
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
     }
 

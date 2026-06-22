@@ -7,6 +7,7 @@ use App\Http\Controllers\CostCenterController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Admin\DeviceAuditController;
 
 Route::get('/', function () {
     return redirect()->route('panel');
@@ -25,6 +26,15 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('/admin/device-audit', [DeviceAuditController::class, 'index'])
+        ->middleware('admin')
+        ->name('admin.device-audit.index');
+    Route::post('/admin/device-audit/users/{user}/block', [DeviceAuditController::class, 'block'])
+        ->middleware('admin')
+        ->name('admin.device-audit.block');
+    Route::delete('/admin/device-audit/users/{user}/block', [DeviceAuditController::class, 'unblock'])
+        ->middleware('admin')
+        ->name('admin.device-audit.unblock');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

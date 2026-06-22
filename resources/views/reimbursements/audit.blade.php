@@ -877,19 +877,28 @@
             downloadXMLSelected() {
                 if (this.selectedIds.length === 0) return;
                 const ids = this.selectedIds.join(',');
-                window.location.href = `{{ route('reimbursements.export_xml') }}?ids=${ids}`;
+                const params = new URLSearchParams(window.location.search);
+                params.set('ids', ids);
+                params.set('tab', '{{ request('tab', 'management') }}');
+                window.location.href = `{{ route('reimbursements.export_xml') }}?${params.toString()}`;
             },
 
             downloadCSVSelected() {
                 if (this.selectedIds.length === 0) return;
                 const ids = this.selectedIds.join(',');
-                window.location.href = `{{ route('reimbursements.export') }}?ids=${ids}`;
+                const params = new URLSearchParams(window.location.search);
+                params.set('ids', ids);
+                params.set('tab', '{{ request('tab', 'management') }}');
+                window.location.href = `{{ route('reimbursements.export') }}?${params.toString()}`;
             },
 
             downloadPaymentFileSelected() {
                 if (this.selectedIds.length === 0) return;
                 const ids = this.selectedIds.join(',');
-                window.location.href = `{{ route('reimbursements.payment_file') }}?ids=${ids}`;
+                const params = new URLSearchParams(window.location.search);
+                params.set('ids', ids);
+                params.set('tab', 'payment');
+                window.location.href = `{{ route('reimbursements.payment_file') }}?${params.toString()}`;
             },
 
             async bulkDeleteSelected() {
@@ -1085,19 +1094,28 @@
                 downloadXML() {
                     if (this.selectedIds.length === 0) return;
                     const ids = this.selectedIds.join(',');
-                    window.location.href = `{{ route('reimbursements.export_xml') }}?ids=${ids}`;
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('ids', ids);
+                    params.set('tab', '{{ request('tab', 'management') }}');
+                    window.location.href = `{{ route('reimbursements.export_xml') }}?${params.toString()}`;
                 },
                 
                 downloadCSV() {
                     if (this.selectedIds.length === 0) return;
                     const ids = this.selectedIds.join(',');
-                    window.location.href = `{{ route('reimbursements.export') }}?ids=${ids}`;
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('ids', ids);
+                    params.set('tab', '{{ request('tab', 'management') }}');
+                    window.location.href = `{{ route('reimbursements.export') }}?${params.toString()}`;
                 },
 
                 downloadPaymentFile() {
                     if (this.selectedIds.length === 0) return;
                     const ids = this.selectedIds.join(',');
-                    window.location.href = `{{ route('reimbursements.payment_file') }}?ids=${ids}`;
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('ids', ids);
+                    params.set('tab', 'payment');
+                    window.location.href = `{{ route('reimbursements.payment_file') }}?${params.toString()}`;
                 },
                 
                 async downloadCaratula() {

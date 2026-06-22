@@ -1069,17 +1069,26 @@
 
                 downloadCaratula() {
                     const ids = this.selectedIds.join(',');
-                    window.location.href = `{{ route('reimbursements.download_caratula') }}?ids=${ids}`;
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('ids', ids);
+                    params.set('tab', '{{ request('tab', $defaultTab) }}');
+                    window.location.href = `{{ route('reimbursements.download_caratula') }}?${params.toString()}`;
                 },
                 
                 downloadCSV() {
                     const ids = this.selectedIds.join(',');
-                    window.location.href = `{{ route('reimbursements.export') }}?ids=${ids}`;
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('ids', ids);
+                    params.set('tab', '{{ request('tab', $defaultTab) }}');
+                    window.location.href = `{{ route('reimbursements.export') }}?${params.toString()}`;
                 },
 
                 downloadPaymentFile() {
                     const ids = this.selectedIds.join(',');
-                    window.location.href = `{{ route('reimbursements.payment_file') }}?ids=${ids}`;
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('ids', ids);
+                    params.set('tab', 'payment');
+                    window.location.href = `{{ route('reimbursements.payment_file') }}?${params.toString()}`;
                 },
 
                 init() {
