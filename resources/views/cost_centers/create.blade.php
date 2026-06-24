@@ -12,7 +12,7 @@
                     <form action="{{ route('cost_centers.store') }}" method="POST">
                         @csrf
 
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             <div>
                                 <label for="name" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Nombre del Centro de Costos *</label>
                                 <input type="text" name="name" id="name" value="{{ old('name') }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3 uppercase" required>
@@ -26,21 +26,22 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div>
-                                <label for="beneficiary_id" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Beneficiario *</label>
-                                <select name="beneficiary_id" id="beneficiary_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3" required>
-                                    <option value="">Seleccione Beneficiario...</option>
-                                    @foreach($users as $u)
-                                        <option value="{{ $u->id }}" {{ old('beneficiary_id') == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
-                                    @endforeach
-                                </select>
+                        </div>
+
+                        <div x-data="{ funds: @js(old('fixed_funds', [['user_id' => '', 'name' => 'Fondo fijo', 'budget' => '']])) }" class="mb-8 p-6 rounded-[2rem] bg-emerald-50/40 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800">
+                            <div class="flex justify-between items-center mb-5">
+                                <div><h3 class="font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Fondos fijos asignados</h3><p class="text-[10px] font-bold text-gray-500 uppercase mt-1">Cada responsable conserva su propio presupuesto.</p></div>
+                                <button type="button" @click="funds.push({user_id:'', name:'Fondo fijo', budget:''})" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase">Añadir fondo</button>
                             </div>
-                            <div>
-                                <label for="budget" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Presupuesto Inicial *</label>
-                                <div class="relative">
-                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                                    <input type="number" step="0.01" name="budget" id="budget" value="{{ old('budget') }}" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold py-3 pl-8" required placeholder="0.00">
-                                </div>
+                            <div class="space-y-3">
+                                <template x-for="(fund, index) in funds" :key="index">
+                                    <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr_180px_auto] gap-3 bg-white dark:bg-gray-900 p-4 rounded-2xl">
+                                        <select :name="`fixed_funds[${index}][user_id]`" x-model="fund.user_id" class="rounded-xl dark:bg-gray-800" required><option value="">Responsable...</option>@foreach($users as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach</select>
+                                        <input :name="`fixed_funds[${index}][name]`" x-model="fund.name" class="rounded-xl dark:bg-gray-800" placeholder="Nombre del fondo" required>
+                                        <input type="number" step="0.01" min="0" :name="`fixed_funds[${index}][budget]`" x-model="fund.budget" class="rounded-xl dark:bg-gray-800" placeholder="Presupuesto" required>
+                                        <button type="button" @click="if(funds.length > 1) funds.splice(index,1)" class="px-3 text-red-500 font-black">×</button>
+                                    </div>
+                                </template>
                             </div>
                         </div>
 

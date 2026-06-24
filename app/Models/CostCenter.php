@@ -75,6 +75,11 @@ class CostCenter extends Model
         return $this->belongsTo(User::class, 'beneficiary_id');
     }
 
+    public function fixedFunds()
+    {
+        return $this->hasMany(FixedFund::class)->orderBy('name');
+    }
+
     public function approvalSteps()
     {
         return $this->hasMany(ApprovalStep::class)->orderBy('order');

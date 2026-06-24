@@ -6,11 +6,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -27,6 +28,8 @@ class User extends Authenticatable
         'invitation_sent_at',
         'bank_name',
         'clabe',
+        'rfc',
+        'personal_info_confirmed_at',
         'profile_id',
     ];
 
@@ -87,17 +90,17 @@ class User extends Authenticatable
 
     public function isControlObra()
     {
-        return $this->role === 'control_obra';
+        return $this->role === 'control_obra' || $this->profile?->name === 'control_obra';
     }
 
     public function isExecutiveDirector()
     {
-        return $this->role === 'director_ejecutivo';
+        return $this->role === 'director_ejecutivo' || $this->profile?->name === 'director_ejecutivo';
     }
 
     public function isDireccion()
     {
-        return $this->role === 'direccion';
+        return $this->role === 'direccion' || $this->profile?->name === 'direccion';
     }
 
     public function hasRole(...$roles)
@@ -125,9 +128,22 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'invitation_sent_at' => 'datetime',
+            'personal_info_confirmed_at' => 'datetime',
             'password' => 'hashed',
             'blocked_at' => 'datetime',
         ];
+    }
+
+    public function needsPersonalReimbursementInfo(): bool
+    {
+        $nameParts = preg_split('/\s+/u', trim((string) $this->name), -1, PREG_SPLIT_NO_EMPTY);
+
+        return blank($this->name)
+            || count($nameParts) < 3
+            || blank($this->bank_name)
+            || blank($this->clabe)
+            || blank($this->rfc)
+            || $this->personal_info_confirmed_at === null;
     }
 
     public function getRoleNameAttribute()
@@ -159,6 +175,11 @@ class User extends Authenticatable
         return $this->belongsToMany(CostCenter::class, 'cost_center_user')
                     ->withPivot('can_do_special')
                     ->withTimestamps();
+    }
+
+    public function fixedFunds()
+    {
+        return $this->hasMany(FixedFund::class);
     }
 
     public function reimbursementApprovals()
@@ -208,6 +229,7 @@ class User extends Authenticatable
             ->orWhere('direccion_id', $this->id)
             ->orWhere('tesoreria_id', $this->id)
             ->orWhere('beneficiary_id', $this->id)
+            ->orWhereHas('fixedFunds', fn ($query) => $query->where('user_id', $this->id)->where('is_active', true))
             ->exists();
     }
 

@@ -22,17 +22,28 @@
                         $user = Auth::user();
                         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
                         $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
-                        $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());
+                        $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury() || $identity->isCxp());
+                        $canDownloadPaymentFile = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());
                         $defaultTab = $canManage ? 'management' : 'active';
                     @endphp
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
                         <h3 class="text-lg font-medium">Listado de Reembolsos</h3>
                         <div class="flex space-x-2">
                             @if($canUsePaymentModule && request('tab') === 'payment')
-                            <button type="button" onclick="downloadPaymentFileFromFilters()" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:bg-blue-700 active:bg-blue-900 transition ease-in-out duration-150">
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
-                                Descargar archivo de pago
+                            <button type="button" onclick="downloadCsvFromFilters()" class="inline-flex items-center px-4 py-2 bg-sky-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-sky-500 focus:bg-sky-700 active:bg-sky-900 transition ease-in-out duration-150">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                Descargar CSV
                             </button>
+                            <button type="button" onclick="downloadXmlFromFilters()" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 transition ease-in-out duration-150">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                Descargar XML
+                            </button>
+                            @if($canDownloadPaymentFile)
+                                <button type="button" onclick="downloadPaymentFileFromFilters()" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:bg-blue-700 active:bg-blue-900 transition ease-in-out duration-150">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                                    Descargar archivo de pago
+                                </button>
+                            @endif
                             @endif
                             @if($user->canPerform('reimbursements.export'))
                             <button type="button" x-data @click="$dispatch('open-caratula-pdf-modal')" class="inline-flex items-center px-4 py-2 bg-emerald-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-emerald-500 focus:bg-emerald-700 active:bg-emerald-900 transition ease-in-out duration-150">
@@ -255,7 +266,7 @@
                                     
                                     $groupedData = [];
                                     foreach($reimbursements as $item) {
-                                        $week = $item->week;
+                                        $week = $item->operational_week ?? $item->week;
                                         if ($tab === 'management' || $tab === 'weekly_summary') {
                                             $targetUserId = $item->currentStep->user_id ?? null;
                                         } else {
@@ -305,14 +316,19 @@
                                             <span>Descargar Carátula</span>
                                         </button>
 
-                                        @if($tab !== 'payment')
                                         <button type="button" @click="downloadCSV()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                             <span>Descargar CSV</span>
                                         </button>
-                                        @endif
 
                                         @if($tab === 'payment')
+                                        <button type="button" @click="downloadXML()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                            <span>Descargar XML</span>
+                                        </button>
+                                        @endif
+
+                                        @if($tab === 'payment' && $canDownloadPaymentFile)
                                         <button type="button" @click="downloadPaymentFile()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                                             <span>Archivo de Pago</span>
@@ -362,7 +378,7 @@
                                             @foreach($groupedByBatch as $batchName => $batchItems)
                                                 @php
                                                     $first = $batchItems->first();
-                                                    $week = $first->week;
+                                                    $week = $first->operational_week ?? $first->week;
                                                     $ccName = $first->costCenter->name ?? 'Sin Centro de Costos';
                                                     $cc = $first->costCenter;
                                                     $internalId = ($cc->abbreviation ?? 'SCC') . '-' . $week;
@@ -823,6 +839,18 @@
                 params.set('tab', 'payment');
                 window.location.href = "{{ route('reimbursements.payment_file') }}?" + params.toString();
             }
+
+            window.downloadCsvFromFilters = function() {
+                const params = new URLSearchParams(new FormData(form));
+                params.set('tab', 'payment');
+                window.location.href = "{{ route('reimbursements.export') }}?" + params.toString();
+            }
+
+            window.downloadXmlFromFilters = function() {
+                const params = new URLSearchParams(new FormData(form));
+                params.set('tab', 'payment');
+                window.location.href = "{{ route('reimbursements.export_xml') }}?" + params.toString();
+            }
             
             // Function to handle fetching and updating
             function fetchResults(url) {
@@ -1081,6 +1109,14 @@
                     params.set('ids', ids);
                     params.set('tab', '{{ request('tab', $defaultTab) }}');
                     window.location.href = `{{ route('reimbursements.export') }}?${params.toString()}`;
+                },
+
+                downloadXML() {
+                    const ids = this.selectedIds.join(',');
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('ids', ids);
+                    params.set('tab', '{{ request('tab', $defaultTab) }}');
+                    window.location.href = `{{ route('reimbursements.export_xml') }}?${params.toString()}`;
                 },
 
                 downloadPaymentFile() {

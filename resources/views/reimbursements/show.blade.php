@@ -251,6 +251,12 @@
                                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Centro de Costos</dt>
                                     <dd class="mt-1 text-sm font-semibold text-gray-900 sm:col-span-2 sm:mt-0 dark:text-gray-200">{{ $reimbursement->costCenter->name ?? 'N/A' }}</dd>
                                 </div>
+                                @if($reimbursement->fixedFund)
+                                <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Fondo fijo cargado</dt>
+                                    <dd class="mt-1 text-sm font-semibold text-emerald-700 sm:col-span-2 sm:mt-0 dark:text-emerald-400">{{ $reimbursement->fixedFund->name }} — {{ $reimbursement->fixedFund->user->name ?? 'Sin responsable' }}</dd>
+                                </div>
+                                @endif
                                 <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 bg-indigo-50/30 dark:bg-indigo-900/10">
                                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Destinatario del Pago</dt>
                                     <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0 dark:text-gray-200">

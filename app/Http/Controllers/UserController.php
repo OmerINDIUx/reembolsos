@@ -21,7 +21,9 @@ class UserController extends Controller
      */
     public function index(Request $request)
     {
-        $query = User::with('director')->orderBy('name');
+        $query = User::with(['director', 'profile'])
+            ->withCount(['fixedFunds as active_fixed_funds_count' => fn ($funds) => $funds->where('is_active', true)])
+            ->orderBy('name');
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -44,7 +46,16 @@ class UserController extends Controller
         }
 
         $users = $query->paginate(10)->appends($request->all());
-        return view('users.index', compact('users'));
+        $fixedFundTransferCandidates = User::with('profile')
+            ->whereNull('invitation_token')
+            ->where(function ($candidate) {
+                $candidate->where('role', '!=', 'tesoreria')
+                    ->whereDoesntHave('profile', fn ($profile) => $profile->where('name', 'tesoreria'));
+            })
+            ->orderBy('name')
+            ->get(['id', 'name', 'profile_id']);
+
+        return view('users.index', compact('users', 'fixedFundTransferCandidates'));
     }
 
     /**
@@ -260,6 +271,7 @@ class UserController extends Controller
             'profile_id' => ['required', 'exists:profiles,id'],
             'bank_name' => ['nullable', 'string', 'max:255'],
             'clabe' => ['nullable', 'string', 'size:18', 'regex:/^[0-9]+$/'],
+            'rfc' => ['nullable', 'string', 'min:12', 'max:13', 'regex:/^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/i'],
         ]);
 
         $profile = Profile::findOrFail($request->profile_id);
@@ -274,8 +286,9 @@ class UserController extends Controller
             'email' => $request->email,
             'role' => in_array($profile->name, ['admin', 'admin_view', 'director', 'control_obra', 'director_ejecutivo', 'accountant', 'direccion', 'tesoreria', 'user']) ? $profile->name : 'user',
             'profile_id' => $request->profile_id,
-            'bank_name' => $request->bank_name,
+            'bank_name' => $request->filled('bank_name') ? strtoupper(trim($request->bank_name)) : null,
             'clabe' => $request->clabe,
+            'rfc' => $request->filled('rfc') ? strtoupper(trim($request->rfc)) : null,
         ];
 
         if ($request->filled('password')) {
@@ -299,9 +312,50 @@ class UserController extends Controller
             return back()->with('error', 'No puedes eliminar tu propia cuenta.');
         }
 
-        $user->delete();
+        $activeFunds = \App\Models\FixedFund::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->get();
 
-        return redirect()->route('users.index')->with('success', 'Usuario eliminado.');
+        $replacement = null;
+        if ($activeFunds->isNotEmpty()) {
+            $request = request();
+            $request->validate([
+                'transfer_to_user_id' => ['required', 'integer', 'different:' . $user->id, 'exists:users,id'],
+            ], [
+                'transfer_to_user_id.required' => 'Selecciona quién recibirá los fondos fijos antes de eliminar al usuario.',
+            ]);
+
+            $replacement = User::with('profile')->findOrFail($request->integer('transfer_to_user_id'));
+            if ($replacement->hasRole('tesoreria')) {
+                return back()->with('error', 'Cuentas por Pagar Pagadores no puede recibir la asignación de un fondo fijo.');
+            }
+        }
+
+        DB::transaction(function () use ($user, $replacement) {
+            $funds = \App\Models\FixedFund::where('user_id', $user->id)
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->get();
+            $affectedCostCenterIds = $funds->pluck('cost_center_id')->unique();
+
+            if ($funds->isNotEmpty()) {
+                $funds->each(fn ($fund) => $fund->update(['user_id' => $replacement->id]));
+
+                \App\Models\CostCenter::whereIn('id', $affectedCostCenterIds)->get()->each(function ($costCenter) {
+                    $firstActiveFund = $costCenter->fixedFunds()->where('is_active', true)->orderBy('id')->first();
+                    $costCenter->update([
+                        'beneficiary_id' => $firstActiveFund?->user_id,
+                        'budget' => $costCenter->fixedFunds()->where('is_active', true)->sum('budget'),
+                    ]);
+                });
+            }
+
+            $user->delete();
+        });
+
+        return redirect()->route('users.index')->with('success', $replacement
+            ? "Usuario eliminado y fondos fijos transferidos a {$replacement->name}."
+            : 'Usuario eliminado.');
     }
 
     /**

@@ -77,14 +77,19 @@ class ReimbursementController extends Controller
                 $q->where('folio', 'like', "%{$globalSearch}%")
                   ->orWhere('uuid', 'like', "%{$globalSearch}%");
             });
-            $availableWeeks = $this->availableWeeksForQuery($query);
+            $availableWeeks = $this->usesOperationalWeek($tab)
+                ? collect([$this->currentProcessingWeek()])
+                : $this->availableWeeksForQuery($query);
             $reimbursements = $query->paginate(10)->appends($request->all());
+            $this->attachOperationalWeek($reimbursements->getCollection(), $tab);
             return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'authorizedCCs', 'availableWeeks'));
         }
 
         // Apply Tab Scoping
         $this->applyTabScope($query, $tab, $user);
-        $availableWeeks = $this->availableWeeksForQuery($query);
+        $availableWeeks = $this->usesOperationalWeek($tab)
+            ? collect([$this->currentProcessingWeek()])
+            : $this->availableWeeksForQuery($query);
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -107,7 +112,7 @@ class ReimbursementController extends Controller
             $query->where('type', $request->type);
         }
 
-        if ($request->filled('from_week') || $request->filled('to_week')) {
+        if (!$this->usesOperationalWeek($tab) && ($request->filled('from_week') || $request->filled('to_week'))) {
             $fromWeek = $request->from_week;
             $toWeek = $request->to_week;
 
@@ -134,7 +139,18 @@ class ReimbursementController extends Controller
             $query->reorder('created_at', 'desc');
         }
 
-        if ($tab === 'management' || $tab === 'payment' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history') {
+        if ($this->usesOperationalWeek($tab)) {
+            // Gestión y Pagos son colas de trabajo vivas. Conservamos `week` como
+            // semana fiscal del comprobante y agrupamos visualmente en la semana actual.
+            $reimbursements = $query->reorder()
+                ->orderBy('created_at', 'desc')
+                ->get();
+            $this->attachOperationalWeek($reimbursements, $tab);
+
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'authorizedCCs'));
+        }
+
+        if ($tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history') {
             // Paginate by weeks (5 weeks per page)
             $weeksQuery = clone $query;
             $weeksPaginator = $weeksQuery->reorder()
@@ -183,6 +199,7 @@ class ReimbursementController extends Controller
             ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
             ->orderByRaw("CAST(SUBSTRING_INDEX(week, '-', 1) AS UNSIGNED) DESC")
             ->get();
+        $this->attachOperationalWeek($allReimbursements, $tab);
 
         // Filter parameters from the request
         $selectedWeek    = $request->input('week');
@@ -245,7 +262,10 @@ class ReimbursementController extends Controller
         // Build stats for dashboard panels
         $auditStats = null;
         if ($selectedWeek) {
-            $itemsForStats = $allReimbursements->where('week', $selectedWeek);
+            $itemsForStats = $allReimbursements->where(
+                $this->usesOperationalWeek($tab) ? 'operational_week' : 'week',
+                $selectedWeek
+            );
             if ($selectedCcName) {
                 $itemsForStats = $itemsForStats->filter(fn($r) => ($r->costCenter->name ?? 'Sin Centro de Costos') === $selectedCcName);
             }
@@ -278,7 +298,9 @@ class ReimbursementController extends Controller
         }
 
         // Build grouped data
-        $groupedByWeek = $allReimbursements->groupBy('week');
+        $groupedByWeek = $allReimbursements->groupBy(
+            $this->usesOperationalWeek($tab) ? 'operational_week' : 'week'
+        );
 
         // If all three params exist, resolve the specific items
         $auditItems = null;
@@ -309,12 +331,14 @@ class ReimbursementController extends Controller
         $categories = $this->getCategories();
 
         // Data for Global Filters (matching index)
-        $availableWeeks = Reimbursement::select('week')
-            ->whereNotNull('week')
-            ->distinct()
-            ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
-            ->orderByRaw("SUBSTRING_INDEX(week, '-', 1) DESC")
-            ->pluck('week');
+        $availableWeeks = $this->usesOperationalWeek($tab)
+            ? collect([$this->currentProcessingWeek()])
+            : Reimbursement::select('week')
+                ->whereNotNull('week')
+                ->distinct()
+                ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
+                ->orderByRaw("SUBSTRING_INDEX(week, '-', 1) DESC")
+                ->pluck('week');
 
         if ($user->isAdmin() || $user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
             $authorizedCCs = \App\Models\CostCenter::orderBy('name')->get();
@@ -410,6 +434,7 @@ class ReimbursementController extends Controller
                     ->orWhere('tesoreria_id', $user->id)
                     ->orWhere('beneficiary_id', $user->id)
                     ->pluck('id'))
+                ->concat(CostCenter::whereHas('fixedFunds', fn ($q) => $q->where('user_id', $user->id)->where('is_active', true))->pluck('id'))
                 ->unique();
 
             if ($extraCCIds->isNotEmpty()) {
@@ -498,6 +523,18 @@ class ReimbursementController extends Controller
         }
 
         $currentWeek = $currentProcessWeek; // For backward compatibility in view if needed
+
+        $costCenters->load(['fixedFunds' => fn ($query) => $query->where('is_active', true)->with('user')]);
+        $fixedFundMapping = $costCenters->mapWithKeys(fn ($cc) => [
+            $cc->id => $cc->fixedFunds->map(fn ($fund) => [
+                'id' => $fund->id,
+                'name' => $fund->name,
+                'budget' => (float) $fund->budget,
+                'user_id' => $fund->user_id,
+                'user_name' => $fund->user?->name,
+                'clabe' => $fund->user?->clabe ? '**** ' . substr($fund->user->clabe, -4) : null,
+            ])->values(),
+        ]);
         
         $categories = $this->getCategoriesForType($type);
 
@@ -508,7 +545,17 @@ class ReimbursementController extends Controller
                 $q->where('users.id', $user->id);
             });
         }
-        $travelEvents = $travelEventsQuery->orderBy('name')->get();
+        $travelEvents = $travelEventsQuery->with('costCenter')->orderBy('name')->get();
+        $eventCostCenters = CostCenter::whereIn('id', $travelEvents->pluck('cost_center_id')->filter()->unique())
+            ->with(['fixedFunds' => fn ($query) => $query->where('is_active', true)->with('user')])
+            ->get();
+        foreach ($eventCostCenters as $eventCostCenter) {
+            $fixedFundMapping[$eventCostCenter->id] = $eventCostCenter->fixedFunds->map(fn ($fund) => [
+                'id' => $fund->id, 'name' => $fund->name, 'budget' => (float) $fund->budget,
+                'user_id' => $fund->user_id, 'user_name' => $fund->user?->name,
+                'clabe' => $fund->user?->clabe ? '**** ' . substr($fund->user->clabe, -4) : null,
+            ])->values();
+        }
 
         // Colleagues per cost center (only for create_on_behalf; must belong to that CC)
         $ccUserMapping = [];
@@ -538,7 +585,7 @@ class ReimbursementController extends Controller
             $parentReimbursement = Reimbursement::find($request->trip_id);
         }
 
-        return view('reimbursements.create', compact('type', 'costCenters', 'travelEvents', 'currentWeek', 'availableWeeks', 'categories', 'parentReimbursement', 'hasInvoice', 'ccUserMapping'));
+        return view('reimbursements.create', compact('type', 'costCenters', 'travelEvents', 'currentWeek', 'availableWeeks', 'categories', 'parentReimbursement', 'hasInvoice', 'ccUserMapping', 'fixedFundMapping'));
     }
 
     /**
@@ -606,6 +653,16 @@ class ReimbursementController extends Controller
         $week = $request->week ?: now()->addDays(2)->format('W-Y');
         
         $costCenter = $costCenterId ? CostCenter::find($costCenterId) : null;
+        $fixedFund = null;
+        if (in_array($type, ['fondo_fijo', 'comida', 'viaje'], true)) {
+            $fixedFund = \App\Models\FixedFund::whereKey($request->input('fixed_fund_id'))
+                ->where('cost_center_id', $costCenterId)
+                ->where('is_active', true)
+                ->first();
+            if (!$fixedFund) {
+                return back()->withInput()->with('error', 'Selecciona un fondo fijo activo del Centro de Costos elegido.');
+            }
+        }
         
         // Target User Logic (On Behalf)
         $targetUserId = Auth::id();
@@ -621,7 +678,7 @@ class ReimbursementController extends Controller
         // Payee Logic
         $payeeId = $targetUserId;
         if ($type === 'fondo_fijo') {
-            $payeeId = $costCenter ? ($costCenter->beneficiary_id ?? $targetUserId) : $targetUserId;
+            $payeeId = $fixedFund?->user_id ?? $targetUserId;
         } else {
             $requestedPayeeId = $request->input('payee_id', $targetUserId);
             // If requesting a different payee, verify create_on_behalf permission
@@ -643,7 +700,10 @@ class ReimbursementController extends Controller
             $initialStatus = 'en_evento';
             $currentStepId = null;
         } elseif ($costCenter) {
-            [$currentStepId, $initialStatus, $autoNote, $approvalData, $autoApprovedSteps] = $this->buildInitialApprovalState($costCenter, $user);
+            $workflowOwner = $targetUserId === $user->id
+                ? $user
+                : User::with('profile')->findOrFail($targetUserId);
+            [$currentStepId, $initialStatus, $autoNote, $approvalData, $autoApprovedSteps] = $this->buildInitialApprovalState($costCenter, $workflowOwner);
         }
 
         $createdCount = 0;
@@ -780,6 +840,7 @@ class ReimbursementController extends Controller
                 $reimbursementData = array_merge([
                     'type' => $type,
                     'cost_center_id' => $itemCostCenterId,
+                    'fixed_fund_id' => $fixedFund?->id,
                     'travel_event_id' => $travelEventId,
                     'title' => $travelEvent ? $travelEvent->name : ($item['title'] ?? ($existingDraft ? $existingDraft->title : null)),
                     'week' => $week,
@@ -1201,6 +1262,16 @@ class ReimbursementController extends Controller
         // Inherit cost center from travel event if applicable
         $effectiveCostCenterId = $travelEvent ? $travelEvent->cost_center_id : $request->cost_center_id;
         $costCenter = $effectiveCostCenterId ? CostCenter::findOrFail($effectiveCostCenterId) : null;
+        $fixedFund = null;
+        if (in_array($request->type, ['fondo_fijo', 'comida', 'viaje'], true)) {
+            $fixedFund = \App\Models\FixedFund::whereKey($request->input('fixed_fund_id'))
+                ->where('cost_center_id', $effectiveCostCenterId)
+                ->where('is_active', true)
+                ->first();
+            if (!$fixedFund) {
+                return back()->withInput()->with('error', 'Selecciona un fondo fijo activo del Centro de Costos elegido.');
+            }
+        }
 
         // Permissions and Limits Check
         if (!$this->canCreateReimbursement($user, $request->type, $effectiveCostCenterId, $request->travel_event_id)) {
@@ -1219,12 +1290,6 @@ class ReimbursementController extends Controller
         $autoNote = "";
         $approvalData = [];
         $autoApprovedSteps = collect();
-
-        if ($costCenter) {
-            [$currentStepId, $initialStatus, $autoNote, $approvalData, $autoApprovedSteps] = $this->buildInitialApprovalState($costCenter, $user);
-        }
-
-        $finalObs = ($request->observaciones ?? "") . $autoNote;
 
         // Re-run validation if missing (important for drafts)
         $validationData = $request->validation_data ? json_decode($request->validation_data, true) : null;
@@ -1245,9 +1310,18 @@ class ReimbursementController extends Controller
             }
         }
 
+        if ($costCenter) {
+            $workflowOwner = $targetUserId === $user->id
+                ? $user
+                : User::with('profile')->findOrFail($targetUserId);
+            [$currentStepId, $initialStatus, $autoNote, $approvalData, $autoApprovedSteps] = $this->buildInitialApprovalState($costCenter, $workflowOwner);
+        }
+
+        $finalObs = ($request->observaciones ?? "") . $autoNote;
+
         $payeeId = $targetUserId;
         if ($request->type === 'fondo_fijo') {
-            $payeeId = $costCenter ? ($costCenter->beneficiary_id ?? $targetUserId) : $targetUserId;
+            $payeeId = $fixedFund?->user_id ?? $targetUserId;
         } else {
             $requestedPayeeId = $request->input('payee_id', $targetUserId);
             // If requesting a different payee, verify create_on_behalf permission
@@ -1268,6 +1342,7 @@ class ReimbursementController extends Controller
         $reimbursementData = array_merge([
             'type' => $request->type,
             'cost_center_id' => $effectiveCostCenterId,
+            'fixed_fund_id' => $fixedFund?->id,
             'travel_event_id' => $request->travel_event_id,
             'week' => $request->week ?: now()->addDays(2)->format('W-Y'),
             'category' => !empty($request->category) ? $request->category : ($existingDraft ? $existingDraft->category : 'viaticos'),
@@ -1386,13 +1461,20 @@ class ReimbursementController extends Controller
             return redirect()->route('reimbursements.show', $reimbursement);
         }
 
-        $reimbursement->load(['children', 'payee', 'costCenter.beneficiary', 'user']);
+        $reimbursement->load(['children', 'payee', 'costCenter.beneficiary', 'fixedFund.user', 'user']);
 
         $type = $reimbursement->type;
         $hasInvoice = !empty($reimbursement->uuid);
         
         // Standard list of cost centers (reuse logic from create if possible)
-        $costCenters = CostCenter::with('beneficiary')->orderBy('name')->get();
+        $costCenters = CostCenter::with(['beneficiary', 'fixedFunds' => fn ($query) => $query->where('is_active', true)->with('user')])->orderBy('name')->get();
+        $fixedFundMapping = $costCenters->mapWithKeys(fn ($cc) => [
+            $cc->id => $cc->fixedFunds->map(fn ($fund) => [
+                'id' => $fund->id, 'name' => $fund->name, 'budget' => (float) $fund->budget,
+                'user_id' => $fund->user_id, 'user_name' => $fund->user?->name,
+                'clabe' => $fund->user?->clabe ? '**** ' . substr($fund->user->clabe, -4) : null,
+            ])->values(),
+        ]);
         
         // Display CURRENT processing week, not the draft's original week
         $today = now();
@@ -1405,7 +1487,7 @@ class ReimbursementController extends Controller
         $currentWeek = $currentProcessWeek;
 
         $categories = $this->getCategoriesForType($type);
-        $travelEvents = \App\Models\TravelEvent::where('status', 'active')->get();
+        $travelEvents = \App\Models\TravelEvent::with('costCenter')->where('status', 'active')->get();
 
         $ccUserMapping = [];
         if ($user->canPerform('reimbursements.create_on_behalf')) {
@@ -1425,7 +1507,7 @@ class ReimbursementController extends Controller
             }
         }
 
-        return view('reimbursements.create', compact('reimbursement', 'type', 'hasInvoice', 'costCenters', 'currentWeek', 'availableWeeks', 'categories', 'travelEvents', 'ccUserMapping'));
+        return view('reimbursements.create', compact('reimbursement', 'type', 'hasInvoice', 'costCenters', 'currentWeek', 'availableWeeks', 'categories', 'travelEvents', 'ccUserMapping', 'fixedFundMapping'));
     }
 
     /**
@@ -1533,6 +1615,7 @@ class ReimbursementController extends Controller
             'costCenter.direccion',
             'costCenter.tesoreria',
             'costCenter.beneficiary',
+            'fixedFund.user',
             'costCenter.approvalSteps.user',
             'directorApprover',
             'controlApprover',
@@ -2028,14 +2111,23 @@ class ReimbursementController extends Controller
         /** @var \App\Models\User|null $user */
         $user = Auth::user();
 
-        if (!$user || !$user->isAdmin()) {
-            abort(403, 'Solo un administrador puede eliminar reembolsos.');
+        if (!$user) {
+            abort(403);
+        }
+
+        $canDeleteOwnDraft = $reimbursement->status === 'borrador'
+            && $this->canRequesterManageReimbursement($reimbursement, $user);
+
+        if (!$user->isAdmin() && !$canDeleteOwnDraft) {
+            abort(403, 'Solo puedes eliminar tus propios borradores.');
         }
 
         $this->deleteReimbursementWithFiles($reimbursement);
 
         return redirect()->back()
-                         ->with('success', 'Reembolso eliminado correctamente.');
+                         ->with('success', $reimbursement->status === 'borrador'
+                             ? 'Borrador eliminado correctamente.'
+                             : 'Reembolso eliminado correctamente.');
     }
 
     /**
@@ -2113,12 +2205,36 @@ class ReimbursementController extends Controller
         
         // Synchronize with dashboard visibility logic
         $this->applyTabScope($query, $tab, $user);
-        $allowedWeeks = $this->availableWeeksForQuery($query);
+        $allowedWeeks = $this->usesOperationalWeek($tab)
+            ? collect([$this->currentProcessingWeek()])
+            : $this->availableWeeksForQuery($query);
 
         // Filter by specific IDs if provided
         if ($request->filled('ids')) {
             $ids = explode(',', $request->ids);
             $query->whereIn('id', $ids);
+        }
+
+        if ($request->filled('week')) {
+            abort_unless($allowedWeeks->contains($request->week), 403, 'No puedes exportar una semana que no está disponible para este módulo.');
+
+            if (!$this->usesOperationalWeek($tab)) {
+                $query->where('week', $request->week);
+            }
+        }
+
+        if ($request->filled('cc')) {
+            $query->whereHas('costCenter', fn($ccQuery) => $ccQuery->where('name', $request->cc));
+        }
+
+        if ($request->filled('payee')) {
+            $query->where(function ($payeeQuery) use ($request) {
+                $payeeQuery->where('payee_id', $request->payee)
+                    ->orWhere(function ($fallbackQuery) use ($request) {
+                        $fallbackQuery->whereNull('payee_id')
+                            ->where('user_id', $request->payee);
+                    });
+            });
         }
 
         // Mandatory filtering for export
@@ -2139,6 +2255,39 @@ class ReimbursementController extends Controller
         }
         if ($request->filled('type')) {
             $query->where('type', $request->type);
+        }
+        if ($request->filled('type_audit')) {
+            $query->where('type', $request->type_audit);
+        }
+        if ($request->filled('category_audit')) {
+            $query->where('category', $request->category_audit);
+        }
+        if ($request->filled('search_audit')) {
+            $search = $request->search_audit;
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery->where('folio', 'like', "%{$search}%")
+                    ->orWhere('uuid', 'like', "%{$search}%")
+                    ->orWhere('nombre_emisor', 'like', "%{$search}%")
+                    ->orWhere('rfc_emisor', 'like', "%{$search}%")
+                    ->orWhere('title', 'like', "%{$search}%")
+                    ->orWhere('category', 'like', "%{$search}%")
+                    ->orWhere('observaciones', 'like', "%{$search}%");
+            });
+        }
+        if ($request->filled('xml_audit')) {
+            if ($request->xml_audit === 'with_xml') {
+                $query->whereNotNull('uuid')->where('uuid', '!=', '');
+            } elseif ($request->xml_audit === 'no_xml') {
+                $query->where(function ($xmlQuery) {
+                    $xmlQuery->whereNull('uuid')->orWhere('uuid', '');
+                });
+            }
+        }
+        if ($request->filled('method_audit')) {
+            $query->where('metodo_pago', $request->method_audit);
+        }
+        if ($request->filled('usage_audit')) {
+            $query->where('uso_cfdi', $request->usage_audit);
         }
 
         // Standard filters from the view have already been applied via common filters section below
@@ -2310,11 +2459,12 @@ class ReimbursementController extends Controller
         } else {
             $paymentScope = Reimbursement::query()->where('status', '!=', 'borrador');
             $this->applyTabScope($paymentScope, 'payment', $user);
-            $allowedWeeks = $this->availableWeeksForQuery($paymentScope);
+            $allowedWeeks = collect([$this->currentProcessingWeek()]);
 
             if ($request->filled('week')) {
                 abort_unless($allowedWeeks->contains($request->week), 403, 'No puedes exportar una semana que no está disponible para pagos.');
-                $query->where('week', $request->week);
+                // En Pagos la semana solicitada es operativa; no se debe filtrar
+                // por la semana fiscal original de cada comprobante.
             }
 
             if ($request->filled('cc')) {
@@ -2390,13 +2540,15 @@ class ReimbursementController extends Controller
             ->map(function ($reimbursement) {
                 $payee = $reimbursement->payee ?: $reimbursement->user;
                 $company = $reimbursement->costCenter?->company;
-                $amount = (float) $reimbursement->total + (float) ($reimbursement->propina ?? 0);
+                $tip = (float) ($reimbursement->propina ?? 0);
+                $amount = (float) $reimbursement->total + $tip;
 
                 return [
                     'deposit_account' => $company?->account ?? '',
                     'charge_account' => $payee?->clabe ?? '',
                     'currency' => 'MXP',
                     'amount' => $amount,
+                    'tips' => $tip,
                     'payment_reason' => $this->paymentFileReason($reimbursement->type),
                     'payee_name' => $payee?->name ?? 'Sin receptor',
                     'account_type' => $this->paymentFileAccountType($payee?->bank_name),
@@ -2426,6 +2578,7 @@ class ReimbursementController extends Controller
                     'charge_account' => $first['charge_account'],
                     'currency' => $first['currency'],
                     'amount' => $group->sum('amount'),
+                    'tips' => $group->sum('tips'),
                     'payment_reason' => $first['payment_reason'],
                     'payee_name' => $first['payee_name'],
                     'account_type' => $first['account_type'],
@@ -2458,6 +2611,7 @@ class ReimbursementController extends Controller
                 'Cuenta de cargo',
                 'Moneda',
                 'Importe de la operacion',
+                'Propinas',
                 'Motivo de pago',
                 'Nombre de la persona que recibe el pago',
                 'Tipo de cuenta',
@@ -2475,6 +2629,7 @@ class ReimbursementController extends Controller
                     $this->excelText($row['charge_account']),
                     $row['currency'],
                     number_format($row['amount'], 2, '.', ''),
+                    number_format($row['tips'], 2, '.', ''),
                     $row['payment_reason'],
                     $row['payee_name'],
                     $row['account_type'],
@@ -3020,18 +3175,28 @@ class ReimbursementController extends Controller
         ini_set('pcre.backtrack_limit', '10000000');
 
         $ids = $request->input('ids');
+        $tab = $request->input('tab', 'management');
         if ($ids) {
             $idsArr = is_array($ids) ? $ids : explode(',', $ids);
             $query = Reimbursement::whereIn('id', $idsArr);
         } else {
             // Fallback to filters
             $user = Auth::user();
-            $tab = $request->input('tab', 'management');
             $query = Reimbursement::with(['user', 'costCenter'])
                 ->where('status', '!=', 'borrador');
             $this->applyTabScope($query, $tab, $user);
 
-            if ($request->filled('week')) $query->where('week', $request->week);
+            if ($request->filled('week')) {
+                if ($this->usesOperationalWeek($tab)) {
+                    abort_unless(
+                        $request->week === $this->currentProcessingWeek(),
+                        403,
+                        'La semana operativa solicitada ya no es la semana actual.'
+                    );
+                } else {
+                    $query->where('week', $request->week);
+                }
+            }
 
             if ($request->filled('cc')) {
                 $query->whereHas('costCenter', fn($q) => $q->where('name', $request->cc));
@@ -3097,7 +3262,9 @@ class ReimbursementController extends Controller
             $first = $groupItems->first();
             $payee = $first->payee ?: $first->user;
             $costCenter = $first->costCenter;
-            $week = $first->week;
+            $week = $this->usesOperationalWeek($tab)
+                ? $this->currentProcessingWeek()
+                : $first->week;
 
             // Prepare summary data for the cover page
             $groupedByTypeAndCat = $groupItems->groupBy(function($item) {
@@ -3499,17 +3666,27 @@ class ReimbursementController extends Controller
     /**
      * Build the initial custom approval step for a reimbursement.
      *
-     * If the requester is already an approver in the cost center, lower/equal
-     * levels are considered covered and the workflow starts at the next level.
+     * If the reimbursement owner is already an approver in the cost center,
+     * lower/equal levels are considered covered and the workflow starts at the
+     * next level. Executive Director N3 and Subdirección N5 are the exception:
+     * their reimbursements restart at Control de Obra when that role exists.
      */
     private function buildInitialApprovalState(CostCenter $costCenter, User $requester): array
     {
         $approvalData = [];
         $autoNote = '';
-        $steps = $costCenter->approvalSteps()->orderBy('order', 'asc')->get();
+        $steps = $costCenter->approvalSteps()
+            ->with('user.profile')
+            ->orderBy('order', 'asc')
+            ->get();
 
         if ($steps->isEmpty()) {
             return [null, 'aprobado', $autoNote, $approvalData, collect()];
+        }
+
+        $initialStep = $this->hierarchyOverrideInitialStep($steps, $costCenter, $requester);
+        if ($initialStep) {
+            return [$initialStep->id, 'pendiente', $autoNote, $approvalData, collect()];
         }
 
         $requesterOrder = $steps
@@ -3535,6 +3712,18 @@ class ReimbursementController extends Controller
         }
 
         return [$nextStep->id, 'pendiente', $autoNote, $approvalData, $skippedSteps];
+    }
+
+    private function hierarchyOverrideInitialStep($steps, CostCenter $costCenter, User $requester)
+    {
+        if (!$requester->hasRole('director_ejecutivo', 'direccion')) {
+            return null;
+        }
+
+        return $steps->first(function ($step) use ($costCenter) {
+            return ($costCenter->control_obra_id && $step->user_id === $costCenter->control_obra_id)
+                || $step->user?->hasRole('control_obra');
+        }) ?? $steps->first();
     }
 
     private function recordInitialApprovalHistory(Reimbursement $reimbursement, User $user, string $submitComment, $autoApprovedSteps): void
@@ -3703,6 +3892,13 @@ class ReimbursementController extends Controller
             $travelEvent = $travelEventId ? \App\Models\TravelEvent::find($travelEventId) : null;
             $requestCostCenterId = $travelEvent ? $travelEvent->cost_center_id : $request->input('cost_center_id');
             $type = $request->input('type');
+            $fixedFund = in_array($type, ['fondo_fijo', 'comida', 'viaje'], true)
+                ? \App\Models\FixedFund::whereKey($request->input('fixed_fund_id'))->where('cost_center_id', $requestCostCenterId)->where('is_active', true)->first()
+                : null;
+
+            if (in_array($type, ['fondo_fijo', 'comida', 'viaje'], true) && !$fixedFund) {
+                return response()->json(['success' => false, 'error' => 'Selecciona un fondo fijo activo.'], 422);
+            }
 
             if ($requestCostCenterId) {
                 $cc = \App\Models\CostCenter::find($requestCostCenterId);
@@ -3735,8 +3931,7 @@ class ReimbursementController extends Controller
 
                     $payeeId = $targetUserId;
                     if ($type === 'fondo_fijo') {
-                        $cc = $requestCostCenterId ? \App\Models\CostCenter::find($requestCostCenterId) : null;
-                        $payeeId = $cc ? ($cc->beneficiary_id ?? $targetUserId) : $targetUserId;
+                        $payeeId = $fixedFund?->user_id ?? $targetUserId;
                     } else {
                         $requestedPayeeId = $request->input('payee_id', $targetUserId);
                         if ($requestedPayeeId != $targetUserId && !$user->canPerform('reimbursements.create_on_behalf')) {
@@ -3761,6 +3956,7 @@ class ReimbursementController extends Controller
 
                     $data = [
                         'user_id' => $targetUserId,
+                        'fixed_fund_id' => $fixedFund?->id,
                     ];
                     $this->setCreatedByData($data, $reimbursement, $user);
 
@@ -3927,7 +4123,8 @@ class ReimbursementController extends Controller
             || $cc->accountant_id === $candidate->id
             || $cc->direccion_id === $candidate->id
             || $cc->tesoreria_id === $candidate->id
-            || $cc->beneficiary_id === $candidate->id;
+            || $cc->beneficiary_id === $candidate->id
+            || $cc->fixedFunds()->where('user_id', $candidate->id)->where('is_active', true)->exists();
     }
 
     private function applyRequesterManagedScope($query, User $user): void
@@ -4041,7 +4238,8 @@ class ReimbursementController extends Controller
                   $cc->accountant_id === $user->id ||
                   $cc->direccion_id === $user->id ||
                   $cc->tesoreria_id === $user->id ||
-                  $cc->beneficiary_id === $user->id) {
+                  $cc->beneficiary_id === $user->id ||
+                  $cc->fixedFunds()->where('user_id', $user->id)->where('is_active', true)->exists()) {
             $isAuthorized = true;
             $isMarked = true; // Being an approver/director/role implies high trust, allow special types
         }
@@ -4134,6 +4332,33 @@ class ReimbursementController extends Controller
     }
 
     /**
+     * Gestión y Pagos se agrupan por la semana en la que están siendo atendidos,
+     * sin sobrescribir la semana fiscal que forma parte del folio y del historial.
+     */
+    private function usesOperationalWeek(string $tab): bool
+    {
+        return in_array($tab, ['management', 'payment'], true);
+    }
+
+    private function currentProcessingWeek(): string
+    {
+        // La semana fiscal de la aplicación corre de sábado a viernes.
+        return now()->addDays(2)->format('W-Y');
+    }
+
+    private function attachOperationalWeek($reimbursements, string $tab): void
+    {
+        if (!$this->usesOperationalWeek($tab)) {
+            return;
+        }
+
+        $currentWeek = $this->currentProcessingWeek();
+        $reimbursements->each(fn (Reimbursement $reimbursement) =>
+            $reimbursement->setAttribute('operational_week', $currentWeek)
+        );
+    }
+
+    /**
      * Helper to apply tab-specific scoping to a query.
      */
     private function applyTabScope($query, $tab, $user)
@@ -4156,7 +4381,7 @@ class ReimbursementController extends Controller
             });
 
         } elseif ($tab === 'payment') {
-            $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());
+            $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury() || $identity->isCxp());
 
             if (!$canUsePaymentModule) {
                 $query->whereRaw('1 = 0');

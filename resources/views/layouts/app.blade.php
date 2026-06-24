@@ -14,6 +14,7 @@
 
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
+        <style>[x-cloak] { display: none !important; }</style>
         
         <!-- Tom Select -->
         <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.min.css" rel="stylesheet">
@@ -36,6 +37,8 @@
             <main>
                 {{ $slot }}
             </main>
+
+            <x-personal-info-required-modal />
 
             <footer class="py-8 mt-auto border-t border-gray-200 dark:border-gray-700/50">
                 <a href="https://indi-lab.com/" target="_blank" rel="noopener noreferrer"

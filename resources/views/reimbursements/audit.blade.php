@@ -10,6 +10,7 @@
                 $tab = request('tab', 'management');
                 $tabName = match($tab) {
                     'management' => 'Módulo de Gestión',
+                    'payment' => 'Módulo de Pago',
                     'active' => 'Mis Reembolsos',
                     'history' => 'Mis Pagados/Rechazados',
                     'global_history' => 'Todos los Reembolsos (Global)',
@@ -29,6 +30,11 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
+    @php
+        $user = Auth::user();
+        $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
+        $canDownloadPaymentFile = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());
+    @endphp
 
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
@@ -73,6 +79,11 @@
                                 @endif
                             </div>
                             <div class="flex flex-wrap items-center gap-3">
+                                @if(request('tab') === 'payment')
+                                    <a href="{{ route('reimbursements.export', request()->query()) }}" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-xl font-black text-[10px] text-white uppercase tracking-widest hover:bg-blue-500 transition-colors shadow-lg shadow-blue-200">
+                                        Descargar CSV
+                                    </a>
+                                @endif
                                 <a href="{{ route('reimbursements.audit', ['week' => $selectedWeek, 'tab' => request('tab')]) }}" class="text-[10px] font-black text-indigo-600 hover:underline uppercase tracking-widest">Ver toda la semana</a>
                             </div>
                         </div>
@@ -276,11 +287,20 @@
 
                                 @if(request('tab') === 'payment')
                                     <button type="button"
-                                        @click="downloadPaymentFileSelected()"
+                                        @click="downloadCSVSelected()"
                                         class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
-                                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
-                                        <span>Archivo de Pago</span>
+                                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                        <span>Descargar CSV</span>
                                     </button>
+
+                                    @if($canDownloadPaymentFile)
+                                        <button type="button"
+                                            @click="downloadPaymentFileSelected()"
+                                            class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                                            <span>Archivo de Pago</span>
+                                        </button>
+                                    @endif
                                 @else
                                     <button type="button"
                                         @click="downloadCSVSelected()"
@@ -444,6 +464,9 @@
                                     </div>
                                 </div>
                                 <div class="flex items-center space-x-2">
+                                    @if(request('tab') === 'payment')
+                                        <a href="{{ route('reimbursements.export', request()->query()) }}" class="bg-blue-600 px-4 py-2 border border-transparent rounded-xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-blue-500 transition-colors shadow-lg shadow-blue-200">Descargar CSV</a>
+                                    @endif
                                     <a href="{{ route('reimbursements.index', ['tab' => request('tab', 'management')]) }}" class="bg-white dark:bg-gray-800 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-indigo-600 transition-colors">Volver a listado</a>
                                 </div>
                              </div>
@@ -543,6 +566,11 @@
                                             @if($selectedCcName)
                                                 <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-2">{{ $ccName }}</span>
                                             @endif
+                                            @if(request('tab') === 'payment')
+                                                <a href="{{ route('reimbursements.export', request()->query()) }}" class="inline-flex items-center mt-4 px-4 py-2 bg-blue-600 border border-transparent rounded-xl font-black text-[10px] text-white uppercase tracking-widest hover:bg-blue-500 transition-colors shadow-lg shadow-blue-200">
+                                                    Descargar CSV
+                                                </a>
+                                            @endif
                                         </div>
                                     </div>
                                     <div class="mt-4 md:mt-0 text-right">
@@ -572,10 +600,17 @@
                                         </button>
 
                                         @if(request('tab') === 'payment')
-                                            <button type="button" @click="downloadPaymentFile()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
-                                                <span>Archivo de Pago</span>
+                                            <button type="button" @click="downloadCSV()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                                <span>Descargar CSV</span>
                                             </button>
+
+                                            @if($canDownloadPaymentFile)
+                                                <button type="button" @click="downloadPaymentFile()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                                                    <span>Archivo de Pago</span>
+                                                </button>
+                                            @endif
                                         @else
                                             <button type="button" @click="downloadCSV()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>

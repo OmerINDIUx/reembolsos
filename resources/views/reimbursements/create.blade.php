@@ -101,11 +101,19 @@
                             <!-- Travel/Event Select -->
                             <div x-show="type === 'viaje' && chargeType === 'travel_event'" class="animate-slideDown">
                                 <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Viaje o Evento *</label>
-                                <select name="travel_event_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" :required="type === 'viaje' && chargeType === 'travel_event'">
+                                <select name="travel_event_id" @change="updateTravelEvent" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all py-4 px-5" :required="type === 'viaje' && chargeType === 'travel_event'">
                                     <option value="">Selecciona el Viaje o Evento...</option>
                                     @foreach($travelEvents as $event)
-                                        <option value="{{ $event->id }}" @selected(isset($reimbursement) && $reimbursement->travel_event_id == $event->id)>{{ $event->name }} ({{ $event->code }})</option>
+                                        <option value="{{ $event->id }}" data-cost-center-id="{{ $event->cost_center_id }}" @selected(isset($reimbursement) && $reimbursement->travel_event_id == $event->id)>{{ $event->name }} ({{ $event->code }})</option>
                                     @endforeach
+                                </select>
+                            </div>
+
+                            <div x-show="['fondo_fijo','comida','viaje'].includes(type) && selectedCostCenterId" class="animate-slideDown">
+                                <label class="block text-xs font-black text-emerald-600 uppercase tracking-[0.2em] mb-3">Fondo fijo al que se cargará *</label>
+                                <select name="fixed_fund_id" x-model="selectedFixedFundId" @change="updateFixedFund" class="w-full border-emerald-200 dark:border-emerald-800 dark:bg-gray-900 rounded-2xl py-4 px-5 font-bold" :required="['fondo_fijo','comida','viaje'].includes(type)">
+                                    <option value="">Selecciona el fondo fijo...</option>
+                                    <template x-for="fund in availableFixedFunds" :key="fund.id"><option :value="fund.id" x-text="`${fund.name} — ${fund.user_name} ($${Number(fund.budget).toLocaleString('es-MX')})`"></option></template>
                                 </select>
                             </div>
 
@@ -811,6 +819,9 @@
                 selectedOwnerClabe: '{{ Auth::user()->clabe ? "**** " . substr(Auth::user()->clabe, -4) : "" }}',
                 selectedOwnerId: '{{ Auth::id() }}',
                 ccUserMapping: @json($ccUserMapping ?? []),
+                fixedFundMapping: @json($fixedFundMapping ?? []),
+                selectedFixedFundId: @json(isset($reimbursement) ? $reimbursement->fixed_fund_id : null),
+                availableFixedFunds: [],
                 selectedCostCenterId: null,
                 filteredColleagues: [],
                 payeeOption: 'creator',
@@ -1001,6 +1012,7 @@
                         const teSelect = document.querySelector('select[name="travel_event_id"]');
                         if (teSelect) {
                             teSelect.value = String(travelEventId);
+                            teSelect.dispatchEvent(new Event('change', { bubbles: true }));
                         }
                     }
 
@@ -1017,9 +1029,12 @@
                     const selectedOption = e.target.options[e.target.selectedIndex];
                     if (selectedOption && selectedOption.dataset) {
                         this.selectedCostCenterId = e.target.value || null;
+                        this.availableFixedFunds = this.fixedFundMapping[this.selectedCostCenterId] || [];
+                        if (!this.availableFixedFunds.some(f => String(f.id) === String(this.selectedFixedFundId))) this.selectedFixedFundId = '';
                         this.selectedCcBeneficiary = selectedOption.dataset.beneficiary || '';
                         this.selectedCcBeneficiaryId = selectedOption.dataset.beneficiaryId || null;
                         this.selectedCcBeneficiaryClabe = selectedOption.dataset.beneficiaryClabe || '';
+                        this.updateFixedFund();
                         
                         // Update filtered colleagues for this CC
                         if (this.selectedCostCenterId && this.ccUserMapping[this.selectedCostCenterId]) {
@@ -1046,6 +1061,23 @@
                         this.selectedCcBeneficiaryId = null;
                         this.selectedCcBeneficiaryClabe = '';
                         this.filteredColleagues = [];
+                        this.availableFixedFunds = [];
+                        this.selectedFixedFundId = '';
+                    }
+                },
+                updateTravelEvent(e) {
+                    const option = e.target.options[e.target.selectedIndex];
+                    this.selectedCostCenterId = option?.dataset?.costCenterId || null;
+                    this.availableFixedFunds = this.fixedFundMapping[this.selectedCostCenterId] || [];
+                    if (!this.availableFixedFunds.some(f => String(f.id) === String(this.selectedFixedFundId))) this.selectedFixedFundId = '';
+                },
+                updateFixedFund() {
+                    if (this.type !== 'fondo_fijo') return;
+                    const fund = this.availableFixedFunds.find(f => String(f.id) === String(this.selectedFixedFundId));
+                    if (fund) {
+                        this.selectedCcBeneficiary = fund.user_name;
+                        this.selectedCcBeneficiaryId = fund.user_id;
+                        this.selectedCcBeneficiaryClabe = fund.clabe || '';
                     }
                 },
                 updateOwner(e) {
@@ -1130,7 +1162,7 @@
                 buildSlotFormData(index) {
                     const item = this.items[index];
                     const formData = new FormData();
-                    const globalFields = ['type', 'has_invoice', 'cost_center_id', 'travel_event_id', 'week', 'user_id', 'payee_id', 'title'];
+                    const globalFields = ['type', 'has_invoice', 'cost_center_id', 'travel_event_id', 'fixed_fund_id', 'week', 'user_id', 'payee_id', 'title'];
 
                     formData.append('_token', '{{ csrf_token() }}');
                     globalFields.forEach(name => formData.append(name, this.getFieldValue(name)));

@@ -5,7 +5,7 @@
         </h2>
 
         <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            {{ __("Actualiza la información de tu cuenta, banco y CLABE interbancaria.") }}
+            {{ __("Actualiza tu nombre completo, RFC, banco y CLABE interbancaria.") }}
         </p>
     </header>
 
@@ -19,21 +19,33 @@
 
         <div>
             <x-input-label for="name" :value="__('Nombre Completo')" />
-            <x-text-input id="name" name="name" type="text" class="mt-1 block w-full" :value="old('name', $user->name)" required autofocus autocomplete="name" />
+            <x-text-input id="name" name="name" type="text" class="mt-1 block w-full uppercase" :value="old('name', $user->name)" required autofocus autocomplete="name" placeholder="Nombre Apellido Paterno Apellido Materno" />
             <x-input-error class="mt-2" :messages="$errors->get('name')" />
         </div>
 
         <div>
+            <x-input-label for="rfc" :value="__('RFC')" />
+            <x-text-input id="rfc" name="rfc" type="text" class="mt-1 block w-full uppercase" :value="old('rfc', $user->rfc)" required maxlength="13" minlength="12" autocomplete="off" oninput="this.value = this.value.toUpperCase().replace(/[^A-ZÑ&0-9]/g, '')" placeholder="ABCD000000XXX" />
+            <x-input-error class="mt-2" :messages="$errors->get('rfc')" />
+        </div>
+
+        <div>
             <x-input-label for="bank_name" :value="__('Institución Bancaria')" />
-            <x-text-input id="bank_name" name="bank_name" type="text" class="mt-1 block w-full" :value="old('bank_name', $user->bank_name)" placeholder="Ej. BBVA, Santander, etc." autocomplete="off" />
+            <x-text-input id="bank_name" name="bank_name" type="text" class="mt-1 block w-full uppercase" :value="old('bank_name', $user->bank_name)" placeholder="Ej. BBVA, Santander, etc." autocomplete="off" required />
             <x-input-error class="mt-2" :messages="$errors->get('bank_name')" />
         </div>
 
         <div>
             <x-input-label for="clabe" :value="__('Cuenta CLABE (18 dígitos)')" />
-            <x-text-input id="clabe" name="clabe" type="text" class="mt-1 block w-full" :value="old('clabe', $user->clabe)" placeholder="000000000000000000" maxlength="18" autocomplete="off" />
+            <x-text-input id="clabe" name="clabe" type="text" class="mt-1 block w-full" :value="old('clabe', $user->clabe)" placeholder="000000000000000000" maxlength="18" autocomplete="off" oninput="this.value = this.value.replace(/[^0-9]/g, '')" required />
             <x-input-error class="mt-2" :messages="$errors->get('clabe')" />
         </div>
+
+        <label class="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            <input type="checkbox" name="personal_info_confirmed" value="1" class="mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" required>
+            <span>Confirmo que mi nombre completo, RFC y datos bancarios son correctos. Entiendo que esta información personal es requerida para recibir mis reembolsos.</span>
+        </label>
+        <x-input-error class="mt-2" :messages="$errors->get('personal_info_confirmed')" />
 
         <div>
             <x-input-label for="email" :value="__('Correo Electrónico')" />

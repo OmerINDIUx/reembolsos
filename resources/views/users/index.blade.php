@@ -152,14 +152,11 @@
                                         <a href="{{ route('users.edit', $user->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Editar</a>
                                         
                                         @if($user->id !== auth()->id())
-                                        <form action="{{ route('users.destroy', $user->id) }}" method="POST" class="inline"
-                                              data-confirm="Se eliminará el usuario del sistema. Esta acción no se puede deshacer."
-                                              data-confirm-title="¿Eliminar usuario?"
-                                              data-confirm-type="danger"
-                                              data-confirm-btn="SÍ, ELIMINAR">
+                                        <form id="delete-user-{{ $user->id }}" action="{{ route('users.destroy', $user->id) }}" method="POST" class="inline">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Eliminar</button>
+                                            <input type="hidden" name="transfer_to_user_id" value="">
+                                            <button type="button" onclick="confirmUserDeletion({{ $user->id }}, @js($user->name), {{ $user->active_fixed_funds_count }})" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Eliminar</button>
                                         </form>
                                         @endif
                                         @else
@@ -278,6 +275,65 @@
             }).catch(err => {
                 console.error('Error al copiar: ', err);
             });
+        }
+
+        @php
+            $fixedFundTransferCandidateOptions = $fixedFundTransferCandidates->map(function ($candidate) {
+                return [
+                    'id' => $candidate->id,
+                    'name' => $candidate->name,
+                    'profile' => $candidate->profile?->display_name ?: $candidate->role_name,
+                ];
+            })->values();
+        @endphp
+        const fixedFundTransferCandidates = @js($fixedFundTransferCandidateOptions);
+
+        async function confirmUserDeletion(userId, userName, activeFundCount) {
+            const form = document.getElementById(`delete-user-${userId}`);
+            if (!form) return;
+
+            if (activeFundCount > 0) {
+                const candidates = fixedFundTransferCandidates.filter(candidate => Number(candidate.id) !== Number(userId));
+                const options = candidates.map(candidate =>
+                    `<option value="${candidate.id}">${candidate.name} — ${candidate.profile}</option>`
+                ).join('');
+
+                const result = await Swal.fire({
+                    icon: 'warning',
+                    title: 'Transferir fondos antes de eliminar',
+                    html: `<p class="mb-4 text-sm">${userName} tiene ${activeFundCount} fondo(s) fijo(s). Selecciona quién los recibirá.</p>
+                           <select id="fixed-fund-replacement" class="swal2-select" style="display:block;width:85%;margin:1rem auto">
+                               <option value="">Selecciona nuevo responsable...</option>${options}
+                           </select>
+                           <p class="text-xs text-gray-500">Cuentas por Pagar Pagadores no está disponible como destinatario.</p>`,
+                    showCancelButton: true,
+                    confirmButtonText: 'TRANSFERIR Y ELIMINAR',
+                    cancelButtonText: 'CANCELAR',
+                    confirmButtonColor: '#dc2626',
+                    preConfirm: () => {
+                        const replacementId = document.getElementById('fixed-fund-replacement')?.value;
+                        if (!replacementId) {
+                            Swal.showValidationMessage('Selecciona el nuevo responsable del fondo fijo.');
+                            return false;
+                        }
+                        return replacementId;
+                    }
+                });
+
+                if (result.isConfirmed) {
+                    form.querySelector('[name="transfer_to_user_id"]').value = result.value;
+                    form.submit();
+                }
+                return;
+            }
+
+            const result = await AppConfirm({
+                type: 'danger',
+                title: '¿Eliminar usuario?',
+                message: 'Se eliminará el usuario del sistema. Esta acción no se puede deshacer.',
+                confirmText: 'SÍ, ELIMINAR'
+            });
+            if (result.isConfirmed) form.submit();
         }
     </script>
 </x-app-layout>

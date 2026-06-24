@@ -52,7 +52,12 @@
                             @error('profile_id') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div>
+                                <label for="rfc" class="block text-sm font-medium text-gray-700 dark:text-gray-300">RFC</label>
+                                <input type="text" name="rfc" id="rfc" value="{{ old('rfc', $user->rfc) }}" maxlength="13" minlength="12" oninput="this.value = this.value.toUpperCase().replace(/[^A-ZÑ&0-9]/g, '')" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm uppercase">
+                                @error('rfc') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                            </div>
                             <div>
                                 <label for="bank_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Nombre del Banco</label>
                                 <input type="text" name="bank_name" id="bank_name" value="{{ old('bank_name', $user->bank_name) }}" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm uppercase">

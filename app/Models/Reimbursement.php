@@ -27,6 +27,7 @@ class Reimbursement extends Model
     protected $fillable = [
         'type',
         'cost_center_id',
+        'fixed_fund_id',
         'travel_event_id',
         'week',
         'category',
@@ -131,22 +132,27 @@ class Reimbursement extends Model
 
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     public function createdBy()
     {
-        return $this->belongsTo(User::class, 'created_by_id');
+        return $this->belongsTo(User::class, 'created_by_id')->withTrashed();
     }
 
     public function payee()
     {
-        return $this->belongsTo(User::class, 'payee_id');
+        return $this->belongsTo(User::class, 'payee_id')->withTrashed();
     }
 
     public function costCenter()
     {
         return $this->belongsTo(CostCenter::class);
+    }
+
+    public function fixedFund()
+    {
+        return $this->belongsTo(FixedFund::class);
     }
 
     public function travelEvent()

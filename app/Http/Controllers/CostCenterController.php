@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CostCenter;
 use App\Models\Company;
+use App\Models\FixedFund;
 use App\Models\User;
 use App\Models\BudgetRenewal;
 use Illuminate\Http\Request;
@@ -13,6 +14,123 @@ use Illuminate\Support\Facades\DB;
 
 class CostCenterController extends Controller
 {
+    private const FIXED_FUND_TRANSFER_BLOCKED_STATUSES = [
+        'borrador',
+        'rechazado',
+        'pendiente_pago',
+        'aprobado',
+        'pagado',
+    ];
+
+    private function syncFixedFunds(CostCenter $costCenter, array $funds, array $transfers = []): void
+    {
+        $keptIds = collect($funds)->pluck('id')->filter()->map(fn ($id) => (int) $id)->values();
+        $existingFunds = $costCenter->fixedFunds()->lockForUpdate()->get()->keyBy('id');
+        $transfersByFund = collect($transfers)
+            ->filter(fn ($transfer) => !empty($transfer['fund_id']) && !empty($transfer['transfer_to_user_id']))
+            ->keyBy(fn ($transfer) => (int) $transfer['fund_id']);
+        $savedFunds = collect();
+
+        $submittedUserIds = collect($funds)->pluck('user_id')->map(fn ($id) => (int) $id)->filter()->values();
+
+        foreach ($funds as $fund) {
+            $values = [
+                'user_id' => $fund['user_id'],
+                'name' => $fund['name'],
+                'budget' => $fund['budget'],
+                'is_active' => true,
+            ];
+
+            if (!empty($fund['id'])) {
+                $fixedFund = $costCenter->fixedFunds()->whereKey($fund['id'])->firstOrFail();
+                $oldUserId = (int) $fixedFund->user_id;
+                $newUserId = (int) $fund['user_id'];
+
+                $fixedFund->update($values);
+
+                if ($oldUserId !== $newUserId) {
+                    $this->transferActiveFixedFundReimbursements($fixedFund, $fixedFund, $newUserId);
+                }
+            } else {
+                $fixedFund = $costCenter->fixedFunds()->updateOrCreate(['user_id' => $fund['user_id']], $values);
+            }
+
+            $savedFunds->push($fixedFund->fresh());
+        }
+
+        $removedFunds = $existingFunds
+            ->filter(fn ($fund) => $fund->is_active && !$keptIds->contains((int) $fund->id));
+
+        foreach ($removedFunds as $removedFund) {
+            $activeReimbursements = $this->activeFixedFundReimbursements($removedFund);
+            $transfer = $transfersByFund->get((int) $removedFund->id);
+
+            if ($activeReimbursements->exists()) {
+                if (!$transfer) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'fund_transfers' => "Selecciona quién recibirá los reembolsos activos de {$removedFund->name}.",
+                    ]);
+                }
+
+                $targetUserId = (int) $transfer['transfer_to_user_id'];
+
+                if ((int) $removedFund->user_id === $targetUserId || !$submittedUserIds->contains($targetUserId)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'fund_transfers' => 'El receptor debe ser otro responsable que permanezca activo en este centro de costos.',
+                    ]);
+                }
+
+                $targetFund = $savedFunds->first(fn ($fund) => (int) $fund->user_id === $targetUserId && $fund->is_active)
+                    ?: $costCenter->fixedFunds()->where('user_id', $targetUserId)->where('is_active', true)->first();
+
+                if (!$targetFund) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'fund_transfers' => 'No se encontró un fondo activo para recibir los reembolsos.',
+                    ]);
+                }
+
+                $this->transferActiveFixedFundReimbursements($removedFund, $targetFund, $targetUserId);
+            }
+        }
+
+        $costCenter->fixedFunds()->whereNotIn('id', $savedFunds->pluck('id'))->update(['is_active' => false]);
+    }
+
+    private function activeFixedFundReimbursements(FixedFund $fixedFund)
+    {
+        return $fixedFund->reimbursements()
+            ->where('type', 'fondo_fijo')
+            ->whereNotIn('status', self::FIXED_FUND_TRANSFER_BLOCKED_STATUSES);
+    }
+
+    private function transferActiveFixedFundReimbursements(FixedFund $sourceFund, FixedFund $targetFund, int $targetUserId): void
+    {
+        $this->activeFixedFundReimbursements($sourceFund)->update([
+            'fixed_fund_id' => $targetFund->id,
+            'user_id' => $targetUserId,
+            'payee_id' => $targetUserId,
+        ]);
+    }
+
+    private function ensureFixedFundUsersCanReceive(array $funds): void
+    {
+        $userIds = collect($funds)->pluck('user_id')->filter()->unique()->values();
+
+        if ($userIds->isEmpty()) {
+            return;
+        }
+
+        $blockedUser = User::whereIn('id', $userIds)
+            ->get()
+            ->first(fn ($user) => $user->hasRole('tesoreria'));
+
+        if ($blockedUser) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'fixed_funds' => 'Cuentas por Pagar Pagadores no puede recibir la asignación de un fondo fijo.',
+            ]);
+        }
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -105,7 +223,7 @@ class CostCenterController extends Controller
         }
 
         $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
-        $costCenter->load(['beneficiary', 'approvalSteps.user']);
+        $costCenter->load(['beneficiary', 'fixedFunds.user', 'approvalSteps.user']);
 
         // 1. Basic Stats
         // ONLY marked users affect the budget
@@ -186,8 +304,12 @@ class CostCenterController extends Controller
 
         // 8. Budget Renewals
         $budgetRenewals = $costCenter->budgetRenewals()->with('user')->get();
+        $fundSummaries = $costCenter->fixedFunds()->where('is_active', true)->with('user')
+            ->withSum(['reimbursements as spent_total' => fn ($query) => $query->whereNotIn('status', ['borrador', 'rechazado'])], 'total')
+            ->withSum(['reimbursements as spent_tips' => fn ($query) => $query->whereNotIn('status', ['borrador', 'rechazado'])], 'propina')
+            ->get();
 
-        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements', 'budgetRenewals', 'periods'));
+        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements', 'budgetRenewals', 'fundSummaries', 'periods'));
     }
 
     /**
@@ -219,8 +341,10 @@ class CostCenterController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:cost_centers,name'],
             'company_id' => ['required', 'exists:companies,id'],
-            'beneficiary_id' => ['nullable', 'exists:users,id'],
-            'budget' => ['required', 'numeric', 'min:0'],
+            'fixed_funds' => ['required', 'array', 'min:1'],
+            'fixed_funds.*.user_id' => ['required', 'exists:users,id'],
+            'fixed_funds.*.name' => ['required', 'string', 'max:255'],
+            'fixed_funds.*.budget' => ['required', 'numeric', 'min:0'],
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.user_id' => ['required', 'exists:users,id'],
             'steps.*.name' => ['required', 'string', 'max:255'],
@@ -231,19 +355,23 @@ class CostCenterController extends Controller
             'allowed_users.*.can_do_special' => ['nullable'],
         ]);
 
+        $this->ensureFixedFundUsersCanReceive($request->fixed_funds);
+
         $cc = CostCenter::create([
             'name' => $request->name,
             'company_id' => $request->company_id,
             'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
             'description' => $request->description,
             'menfis_email' => $request->menfis_email,
-            'budget' => $request->budget,
-            'beneficiary_id' => $request->beneficiary_id,
+            'budget' => collect($request->fixed_funds)->sum('budget'),
+            'beneficiary_id' => $request->fixed_funds[0]['user_id'],
         ]);
+
+        $this->syncFixedFunds($cc, $request->fixed_funds);
 
         // Create initial renewal record
         $cc->budgetRenewals()->create([
-            'amount' => $request->budget,
+            'amount' => collect($request->fixed_funds)->sum('budget'),
             'description' => 'Presupuesto inicial',
             'renewal_date' => now(),
             'user_id' => Auth::id(),
@@ -281,8 +409,13 @@ class CostCenterController extends Controller
 
         $users = User::orderBy('name')->get();
         $companies = Company::orderBy('name')->get();
-        $costCenter->load('approvalSteps.user');
-        return view('cost_centers.edit', compact('costCenter', 'users', 'companies'));
+        $costCenter->load(['approvalSteps.user', 'fixedFunds.user']);
+        $activeFixedFundReimbursementCounts = $costCenter->fixedFunds
+            ->mapWithKeys(fn ($fund) => [
+                $fund->id => $this->activeFixedFundReimbursements($fund)->count(),
+            ]);
+
+        return view('cost_centers.edit', compact('costCenter', 'users', 'companies', 'activeFixedFundReimbursementCounts'));
     }
 
     /**
@@ -301,8 +434,21 @@ class CostCenterController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('cost_centers')->ignore($costCenter->id)],
             'company_id' => ['required', 'exists:companies,id'],
-            'beneficiary_id' => ['nullable', 'exists:users,id'],
-            'budget' => ['required', 'numeric', 'min:0'],
+            'fixed_funds' => ['nullable', 'array'],
+            'fixed_funds.*.id' => [
+                'nullable', 'integer',
+                Rule::exists('fixed_funds', 'id')->where(fn ($query) => $query->where('cost_center_id', $costCenter->id)),
+            ],
+            'fixed_funds.*.user_id' => ['required', 'exists:users,id'],
+            'fixed_funds.*.name' => ['required', 'string', 'max:255'],
+            'fixed_funds.*.budget' => ['required', 'numeric', 'min:0'],
+            'fund_transfers' => ['nullable', 'array'],
+            'fund_transfers.*.fund_id' => [
+                'required',
+                'integer',
+                Rule::exists('fixed_funds', 'id')->where(fn ($query) => $query->where('cost_center_id', $costCenter->id)),
+            ],
+            'fund_transfers.*.transfer_to_user_id' => ['required', 'integer', 'exists:users,id'],
             'steps' => ['required', 'array', 'min:1'],
             'steps.*.id' => [
                 'nullable',
@@ -317,6 +463,8 @@ class CostCenterController extends Controller
             'allowed_users.*.user_id' => ['required', 'exists:users,id'],
             'allowed_users.*.can_do_special' => ['nullable'],
         ]);
+
+        $this->ensureFixedFundUsersCanReceive($request->input('fixed_funds', []));
 
         DB::transaction(function() use ($request, $costCenter) {
             // 1. Capture the current approval chain before any deletion can null current_step_id.
@@ -339,6 +487,8 @@ class CostCenterController extends Controller
                 ->with('currentStep')
                 ->get();
 
+            $fixedFunds = $request->input('fixed_funds', []);
+
             // 2. Update CC Basic Info
             $costCenter->update([
                 'name' => $request->name,
@@ -346,9 +496,11 @@ class CostCenterController extends Controller
                 'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
                 'description' => $request->description,
                 'menfis_email' => $request->menfis_email,
-                'budget' => $request->budget,
-                'beneficiary_id' => $request->beneficiary_id,
+                'budget' => collect($fixedFunds)->sum('budget'),
+                'beneficiary_id' => $fixedFunds[0]['user_id'] ?? null,
             ]);
+
+            $this->syncFixedFunds($costCenter, $fixedFunds, $request->input('fund_transfers', []));
 
             // 3. Update existing steps, create new ones, and only delete removed levels.
             $submittedStepIds = collect($request->steps)
@@ -499,22 +651,28 @@ class CostCenterController extends Controller
         }
 
         $request->validate([
+            'fixed_fund_id' => [
+                'required',
+                Rule::exists('fixed_funds', 'id')->where(fn ($query) => $query->where('cost_center_id', $costCenter->id)->where('is_active', true)),
+            ],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'description' => ['nullable', 'string', 'max:255'],
             'renewal_date' => ['required', 'date'],
         ]);
 
         DB::transaction(function() use ($request, $costCenter) {
+            $fixedFund = $costCenter->fixedFunds()->whereKey($request->fixed_fund_id)->lockForUpdate()->firstOrFail();
             // Create renewal record
             $costCenter->budgetRenewals()->create([
                 'amount' => $request->amount,
-                'description' => $request->description,
+                'description' => '[' . $fixedFund->name . '] ' . ($request->description ?: 'Renovación de fondo fijo'),
                 'renewal_date' => $request->renewal_date,
                 'user_id' => Auth::id(),
             ]);
 
             // Update total budget
-            $costCenter->increment('budget', $request->amount);
+            $fixedFund->increment('budget', $request->amount);
+            $costCenter->update(['budget' => $costCenter->fixedFunds()->where('is_active', true)->sum('budget')]);
         });
 
         return redirect()->back()->with('success', 'Presupuesto renovado correctamente.');

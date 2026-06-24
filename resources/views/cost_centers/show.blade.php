@@ -20,13 +20,13 @@
                 </h2>
                 <p class="text-sm text-gray-500 dark:text-gray-400 font-medium italic">
                     Código: <span class="font-bold text-indigo-600 dark:text-indigo-400 mr-4">{{ $costCenter->code }}</span>
-                    Beneficiario: <span class="font-bold text-gray-900 dark:text-white uppercase not-italic mr-4">{{ $costCenter->beneficiary->name ?? 'No asignado' }}</span>
+                    Fondos activos: <span class="font-bold text-gray-900 dark:text-white uppercase not-italic mr-4">{{ $fundSummaries->count() }}</span>
                     @if($costCenter->menfis_email)
                         Menfis: <span class="font-bold text-emerald-600 dark:text-emerald-400 not-italic lowercase">{{ $costCenter->menfis_email }}</span>
                     @endif
                 </p>
             </div>
-            
+
             <div class="flex items-center gap-3">
                 @if(Auth::user()->isAdmin())
                 <a href="{{ route('cost_centers.edit', $costCenter) }}" class="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-black uppercase tracking-widest text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm">
@@ -47,6 +47,20 @@
             
             <!-- Time Filter Bar -->
             <x-time-filter-bar :action="route('cost_centers.show', $costCenter)" :periods="$periods" />
+
+            <div class="bg-white dark:bg-gray-800 rounded-[2rem] border border-gray-100 dark:border-gray-700 p-6">
+                <h3 class="text-sm font-black uppercase tracking-widest text-emerald-600 mb-5">Presupuesto por fondo fijo</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    @foreach($fundSummaries as $fund)
+                        @php $fundSpent = (float)($fund->spent_total ?? 0) + (float)($fund->spent_tips ?? 0); @endphp
+                        <div class="p-5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800">
+                            <p class="font-black text-gray-900 dark:text-white">{{ $fund->name }}</p>
+                            <p class="text-xs text-gray-500 mb-3">{{ $fund->user->name ?? 'Sin responsable' }}</p>
+                            <p class="text-lg font-black text-emerald-700 dark:text-emerald-400">${{ number_format($fundSpent, 2) }} / ${{ number_format($fund->budget, 2) }}</p>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
             
             <!-- Budget & Performance Statistics -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -339,6 +353,13 @@
                     
                     <form action="{{ route('cost_centers.renew_budget', $costCenter) }}" method="POST" class="p-8 space-y-6">
                         @csrf
+                        <div>
+                            <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Fondo fijo *</label>
+                            <select name="fixed_fund_id" class="w-full border-gray-200 dark:border-gray-700 dark:bg-gray-900 rounded-2xl py-4" required>
+                                <option value="">Selecciona el fondo...</option>
+                                @foreach($fundSummaries as $fund)<option value="{{ $fund->id }}">{{ $fund->name }} — {{ $fund->user->name ?? 'Sin responsable' }}</option>@endforeach
+                            </select>
+                        </div>
                         <div>
                             <label for="amount" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Importe a Añadir *</label>
                             <div class="relative">

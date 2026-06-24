@@ -14,6 +14,23 @@
             <x-text-input id="email" class="block mt-1 w-full bg-gray-100 dark:bg-gray-700 cursor-not-allowed" type="email" name="email" :value="$user->email" disabled />
         </div>
 
+        <div class="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            <p class="font-black uppercase tracking-widest">Información personal requerida</p>
+            <p class="mt-1 leading-5">Tu nombre completo, RFC y cuenta bancaria son datos personales requeridos para poder procesar tus reembolsos y pagos correctamente.</p>
+        </div>
+
+        <div class="mt-4">
+            <x-input-label for="name" :value="__('Nombre completo con dos apellidos')" />
+            <x-text-input id="name" class="block mt-1 w-full uppercase placeholder:normal-case shadow-sm" type="text" name="name" :value="old('name', $user->name)" required autocomplete="name" placeholder="Nombre Apellido Paterno Apellido Materno" />
+            <x-input-error :messages="$errors->get('name')" class="mt-2" />
+        </div>
+
+        <div class="mt-4">
+            <x-input-label for="rfc" :value="__('RFC')" />
+            <x-text-input id="rfc" class="block mt-1 w-full uppercase shadow-sm" type="text" name="rfc" :value="old('rfc', $user->rfc)" required maxlength="13" minlength="12" oninput="this.value = this.value.toUpperCase().replace(/[^A-ZÑ&0-9]/g, '')" placeholder="ABCD000000XXX" />
+            <x-input-error :messages="$errors->get('rfc')" class="mt-2" />
+        </div>
+
         <!-- Password -->
         <div class="mt-4">
             <x-input-label for="password" :value="__('Nueva Contraseña')" />
@@ -52,6 +69,12 @@
             <x-text-input id="clabe" class="block mt-1 w-full shadow-sm" type="text" name="clabe" :value="old('clabe')" required maxlength="18" minlength="18" oninput="this.value = this.value.replace(/[^0-9]/g, '')" placeholder="000 000 0000000000 0" />
             <x-input-error :messages="$errors->get('clabe')" class="mt-2" />
         </div>
+
+        <label class="mt-5 flex items-start gap-3 rounded-2xl border border-gray-200 p-4 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">
+            <input type="checkbox" name="personal_info_confirmed" value="1" class="mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" required>
+            <span>Confirmo que mi nombre completo, RFC y datos bancarios son correctos. Entiendo que esta información personal es requerida para recibir mis reembolsos.</span>
+        </label>
+        <x-input-error :messages="$errors->get('personal_info_confirmed')" class="mt-2" />
 
         <div class="flex items-center justify-end mt-4">
             <x-primary-button>

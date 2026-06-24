@@ -37,6 +37,7 @@ Route::middleware(['auth'])->group(function () {
         ->name('admin.device-audit.unblock');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('/profile/personal-info/remind-later', [ProfileController::class, 'remindPersonalInfoLater'])->name('profile.personal_info.remind_later');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::post('reimbursements/bulk/store', [ReimbursementController::class, 'bulkStore'])->name('reimbursements.bulk_store');
