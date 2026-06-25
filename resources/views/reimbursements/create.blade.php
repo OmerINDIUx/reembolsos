@@ -820,6 +820,7 @@
                 selectedOwnerId: '{{ Auth::id() }}',
                 ccUserMapping: @json($ccUserMapping ?? []),
                 fixedFundMapping: @json($fixedFundMapping ?? []),
+                isExistingReimbursement: @json(isset($reimbursement)),
                 selectedFixedFundId: @json(isset($reimbursement) ? $reimbursement->fixed_fund_id : null),
                 availableFixedFunds: [],
                 selectedCostCenterId: null,
@@ -1025,12 +1026,31 @@
                     }
                     @endif
                 },
+                requiresFixedFund() {
+                    return ['fondo_fijo', 'comida', 'viaje'].includes(this.type);
+                },
+                syncDefaultFixedFund() {
+                    if (!this.requiresFixedFund()) {
+                        this.selectedFixedFundId = '';
+                        return;
+                    }
+
+                    const selectedFundStillAvailable = this.availableFixedFunds.some(f => String(f.id) === String(this.selectedFixedFundId));
+                    if (this.isExistingReimbursement) {
+                        if (!selectedFundStillAvailable) this.selectedFixedFundId = '';
+                        return;
+                    }
+
+                    this.selectedFixedFundId = this.availableFixedFunds.length === 1
+                        ? String(this.availableFixedFunds[0].id)
+                        : '';
+                },
                 updateBeneficiary(e) {
                     const selectedOption = e.target.options[e.target.selectedIndex];
                     if (selectedOption && selectedOption.dataset) {
                         this.selectedCostCenterId = e.target.value || null;
                         this.availableFixedFunds = this.fixedFundMapping[this.selectedCostCenterId] || [];
-                        if (!this.availableFixedFunds.some(f => String(f.id) === String(this.selectedFixedFundId))) this.selectedFixedFundId = '';
+                        this.syncDefaultFixedFund();
                         this.selectedCcBeneficiary = selectedOption.dataset.beneficiary || '';
                         this.selectedCcBeneficiaryId = selectedOption.dataset.beneficiaryId || null;
                         this.selectedCcBeneficiaryClabe = selectedOption.dataset.beneficiaryClabe || '';
@@ -1069,7 +1089,7 @@
                     const option = e.target.options[e.target.selectedIndex];
                     this.selectedCostCenterId = option?.dataset?.costCenterId || null;
                     this.availableFixedFunds = this.fixedFundMapping[this.selectedCostCenterId] || [];
-                    if (!this.availableFixedFunds.some(f => String(f.id) === String(this.selectedFixedFundId))) this.selectedFixedFundId = '';
+                    this.syncDefaultFixedFund();
                 },
                 updateFixedFund() {
                     if (this.type !== 'fondo_fijo') return;

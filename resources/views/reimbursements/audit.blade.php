@@ -59,6 +59,9 @@
                                 </h3>
                                 <div class="flex items-center space-x-3 pt-1">
                                     <span class="px-2 py-0.5 bg-indigo-600 text-white rounded text-[8px] font-black uppercase tracking-widest">Semana {{ $auditMeta['week'] }}</span>
+                                    @if($selectedUploadWeek)
+                                        <span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[8px] font-black uppercase tracking-widest border border-amber-200">Subida: Semana {{ $selectedUploadWeek }}</span>
+                                    @endif
                                     <span class="px-2 py-0.5 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded text-[8px] font-black uppercase tracking-widest border border-gray-200 dark:border-gray-600">{{ ucfirst(str_replace('_', ' ', $auditMeta['type'])) }}</span>
                                     @if(!empty($auditMeta['payee']))
                                         <span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[8px] font-black uppercase tracking-widest border border-emerald-200">Recibe: {{ $auditMeta['payee']->name }}</span>
@@ -191,7 +194,7 @@
                         <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                             <form action="{{ route('reimbursements.audit') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4" novalidate>
                                 {{-- Preserve existing params --}}
-                                @foreach(request()->except(['search_audit', 'validation_audit', 'xml_audit', 'method_audit', 'usage_audit']) as $name => $value)
+                                @foreach(request()->except(['search_audit', 'upload_week', 'validation_audit', 'xml_audit', 'method_audit', 'usage_audit']) as $name => $value)
                                     <input type="hidden" name="{{ $name }}" value="{{ $value }}">
                                 @endforeach
 
@@ -202,6 +205,15 @@
                                 </div>
 
                                 {{-- Section: Detail Filters --}}
+                                <div class="col-span-1 md:col-span-2">
+                                    <label for="upload_week_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana de subida</label>
+                                    <select name="upload_week" id="upload_week_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <option value="">Todas</option>
+                                        @foreach($availableUploadWeeks as $uploadWeek)
+                                            <option value="{{ $uploadWeek }}" {{ request('upload_week') == $uploadWeek ? 'selected' : '' }}>Semana {{ $uploadWeek }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
                                 <div class="col-span-1 md:col-span-2">
                                     <label for="validation_audit_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Validación</label>
                                     <select name="validation_audit" id="validation_audit_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
@@ -238,7 +250,7 @@
                                     </select>
                                 </div>
 
-                                <div class="col-span-1 md:col-span-4 flex justify-end items-end space-x-2">
+                                <div class="col-span-1 md:col-span-2 flex justify-end items-end space-x-2">
                                     <a href="{{ route('reimbursements.audit', request()->only(['tab', 'week', 'cc', 'type', 'payee'])) }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
                                         Limpiar
                                     </a>
@@ -368,6 +380,7 @@
                                         <div class="flex items-center space-x-1 mt-0.5">
                                             <span class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-800">De: {{ $r->user->name ?? 'N/A' }}</span>
                                             <span class="text-[9px] font-black text-emerald-600 uppercase tracking-tighter bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded border border-emerald-100 dark:border-emerald-800">Recibe: {{ $r->payee->name ?? ($r->user->name ?? 'N/A') }}</span>
+                                            <span class="text-[9px] font-black text-amber-700 uppercase tracking-tighter bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800">Subida: Sem. {{ $r->week ?? 'N/A' }}</span>
                                         </div>
                                         <div class="flex items-center space-x-1 mt-0.5">
                                             <span class="text-[8px] font-black text-gray-400 uppercase tracking-tighter">{{ $r->fecha ? $r->fecha->format('d/m/Y') : 'S/F' }}</span>
@@ -500,7 +513,7 @@
                             <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                                 <form action="{{ route('reimbursements.audit') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4" novalidate>
                                     {{-- Preserve existing params --}}
-                                    @foreach(request()->except(['search_audit', 'type_audit', 'category_audit', 'xml_audit']) as $name => $value)
+                                    @foreach(request()->except(['search_audit', 'upload_week', 'type_audit', 'category_audit', 'xml_audit']) as $name => $value)
                                         <input type="hidden" name="{{ $name }}" value="{{ $value }}">
                                     @endforeach
 
@@ -511,6 +524,15 @@
                                     </div>
 
                                     {{-- Row 2 --}}
+                                    <div class="col-span-1 md:col-span-3">
+                                        <label for="upload_week_sum" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana de subida</label>
+                                        <select name="upload_week" id="upload_week_sum" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                            <option value="">Todas</option>
+                                            @foreach($availableUploadWeeks as $uploadWeek)
+                                                <option value="{{ $uploadWeek }}" {{ request('upload_week') == $uploadWeek ? 'selected' : '' }}>Semana {{ $uploadWeek }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
                                     <div class="col-span-1 md:col-span-3">
                                         <label for="type_audit_sum" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Reembolso</label>
                                         <select name="type_audit" id="type_audit_sum" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
@@ -651,7 +673,7 @@
                                                 ->sortByDesc('total')
                                                 ->first();
                                         @endphp
-                                        <a href="{{ route('reimbursements.audit', array_filter(['week' => $selectedWeek, 'cc' => $ccName, 'type' => $type, 'payee' => $selectedCcName ? $payeeId : null, 'tab' => request('tab')], fn($value) => $value !== null && $value !== '')) }}"
+                                        <a href="{{ route('reimbursements.audit', array_filter(['week' => $selectedWeek, 'cc' => $ccName, 'type' => $type, 'payee' => $selectedCcName ? $payeeId : null, 'tab' => request('tab'), 'upload_week' => request('upload_week')], fn($value) => $value !== null && $value !== '')) }}"
                                            class="flex flex-col md:flex-row items-center justify-between p-5 bg-gray-50 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-lg transition-all group/type no-underline space-y-4 md:space-y-0">
                                             <div class="flex items-center space-x-5">
                                                 <div class="flex items-center justify-center border-r border-gray-200 dark:border-gray-700 pr-4" @click.stop>
@@ -668,6 +690,7 @@
                                                     <span class="text-sm font-black text-gray-700 dark:text-gray-300">{{ ucfirst(str_replace('_', ' ', $type)) }}</span>
                                                     <div class="flex items-center space-x-1 mt-0.5">
                                                         <span class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-800">Resp: {{ $mainSolicitor['name'] ?? 'Varios' }}</span>
+                                                        <span class="text-[9px] font-black text-amber-700 uppercase tracking-tighter bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">Subida: {{ $typeItems->pluck('week')->unique()->count() === 1 ? 'Sem. ' . $typeItems->first()->week : $typeItems->pluck('week')->unique()->count() . ' semanas' }}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -732,11 +755,20 @@
 
                                     {{-- Row 2 --}}
                                     <div class="col-span-1 md:col-span-3">
-                                        <label for="week_land" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana Fiscal</label>
+                                        <label for="week_land" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ request('tab', 'management') === 'management' ? 'Semana de gestión' : 'Semana fiscal' }}</label>
                                         <select name="week" id="week_land" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                             <option value="">Selecciona Semana...</option>
                                             @foreach($availableWeeks as $w)
                                                 <option value="{{ $w }}" {{ request('week') == $w ? 'selected' : '' }}>Semana {{ $w }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-span-1 md:col-span-3">
+                                        <label for="upload_week_land" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana de subida</label>
+                                        <select name="upload_week" id="upload_week_land" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                            <option value="">Todas</option>
+                                            @foreach($availableUploadWeeks as $uploadWeek)
+                                                <option value="{{ $uploadWeek }}" {{ request('upload_week') == $uploadWeek ? 'selected' : '' }}>Semana {{ $uploadWeek }}</option>
                                             @endforeach
                                         </select>
                                     </div>

@@ -30,6 +30,7 @@ class Reimbursement extends Model
         'fixed_fund_id',
         'travel_event_id',
         'week',
+        'payment_week',
         'category',
         'uuid',
         'rfc_emisor',

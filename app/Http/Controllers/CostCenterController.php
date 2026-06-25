@@ -17,7 +17,6 @@ class CostCenterController extends Controller
     private const FIXED_FUND_TRANSFER_BLOCKED_STATUSES = [
         'borrador',
         'rechazado',
-        'pendiente_pago',
         'aprobado',
         'pagado',
     ];
@@ -57,6 +56,8 @@ class CostCenterController extends Controller
 
             $savedFunds->push($fixedFund->fresh());
         }
+
+        $savedFunds->each(fn ($fund) => $this->syncFixedFundPaymentRecipient($fund));
 
         $removedFunds = $existingFunds
             ->filter(fn ($fund) => $fund->is_active && !$keptIds->contains((int) $fund->id));
@@ -107,9 +108,18 @@ class CostCenterController extends Controller
     {
         $this->activeFixedFundReimbursements($sourceFund)->update([
             'fixed_fund_id' => $targetFund->id,
-            'user_id' => $targetUserId,
             'payee_id' => $targetUserId,
         ]);
+    }
+
+    private function syncFixedFundPaymentRecipient(FixedFund $fixedFund): void
+    {
+        $this->activeFixedFundReimbursements($fixedFund)
+            ->where(function ($query) use ($fixedFund) {
+                $query->whereNull('payee_id')
+                    ->orWhere('payee_id', '<>', $fixedFund->user_id);
+            })
+            ->update(['payee_id' => $fixedFund->user_id]);
     }
 
     private function ensureFixedFundUsersCanReceive(array $funds): void

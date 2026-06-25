@@ -77,9 +77,7 @@ class ReimbursementController extends Controller
                 $q->where('folio', 'like', "%{$globalSearch}%")
                   ->orWhere('uuid', 'like', "%{$globalSearch}%");
             });
-            $availableWeeks = $this->usesOperationalWeek($tab)
-                ? collect([$this->currentProcessingWeek()])
-                : $this->availableWeeksForQuery($query);
+            $availableWeeks = $this->availableWeeksForTab($query, $tab);
             $reimbursements = $query->paginate(10)->appends($request->all());
             $this->attachOperationalWeek($reimbursements->getCollection(), $tab);
             return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'authorizedCCs', 'availableWeeks'));
@@ -87,9 +85,7 @@ class ReimbursementController extends Controller
 
         // Apply Tab Scoping
         $this->applyTabScope($query, $tab, $user);
-        $availableWeeks = $this->usesOperationalWeek($tab)
-            ? collect([$this->currentProcessingWeek()])
-            : $this->availableWeeksForQuery($query);
+        $availableWeeks = $this->availableWeeksForTab($query, $tab);
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -112,17 +108,18 @@ class ReimbursementController extends Controller
             $query->where('type', $request->type);
         }
 
-        if (!$this->usesOperationalWeek($tab) && ($request->filled('from_week') || $request->filled('to_week'))) {
+        $weekColumn = $this->filterableWeekColumn($tab);
+        if ($weekColumn && ($request->filled('from_week') || $request->filled('to_week'))) {
             $fromWeek = $request->from_week;
             $toWeek = $request->to_week;
 
             if ($fromWeek) {
-                $query->whereRaw("CONCAT(SUBSTRING_INDEX(week, '-', -1), LPAD(SUBSTRING_INDEX(week, '-', 1), 2, '0')) >= ?", [
+                $query->whereRaw("CONCAT(SUBSTRING_INDEX({$weekColumn}, '-', -1), LPAD(SUBSTRING_INDEX({$weekColumn}, '-', 1), 2, '0')) >= ?", [
                     explode('-', $fromWeek)[1] . str_pad(explode('-', $fromWeek)[0], 2, '0', STR_PAD_LEFT)
                 ]);
             }
             if ($toWeek) {
-                $query->whereRaw("CONCAT(SUBSTRING_INDEX(week, '-', -1), LPAD(SUBSTRING_INDEX(week, '-', 1), 2, '0')) <= ?", [
+                $query->whereRaw("CONCAT(SUBSTRING_INDEX({$weekColumn}, '-', -1), LPAD(SUBSTRING_INDEX({$weekColumn}, '-', 1), 2, '0')) <= ?", [
                     explode('-', $toWeek)[1] . str_pad(explode('-', $toWeek)[0], 2, '0', STR_PAD_LEFT)
                 ]);
             }
@@ -206,6 +203,7 @@ class ReimbursementController extends Controller
         $selectedCcName  = $request->input('cc');
         $selectedType    = $request->input('type');
         $selectedPayeeId = $request->input('payee');
+        $selectedUploadWeek = $request->input('upload_week');
 
         // Global Audit Filters
         if ($request->filled('search_audit') || $request->filled('type_audit') || $request->filled('category_audit') || $request->filled('xml_audit') || $request->filled('validation_audit') || $request->filled('method_audit') || $request->filled('usage_audit')) {
@@ -257,6 +255,36 @@ class ReimbursementController extends Controller
                 }
                 return $pass;
             });
+        }
+
+        $itemsForUploadWeekOptions = $allReimbursements;
+        if ($selectedWeek) {
+            $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->where(
+                $this->usesOperationalWeek($tab) ? 'operational_week' : 'week',
+                $selectedWeek
+            );
+        }
+        if ($selectedCcName) {
+            $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->filter(fn($r) => ($r->costCenter->name ?? 'Sin Centro de Costos') === $selectedCcName);
+        }
+        if ($selectedType) {
+            $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->where('type', $selectedType);
+        }
+        if ($selectedPayeeId) {
+            $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->filter(function ($r) use ($selectedPayeeId) {
+                return (string) ($r->payee_id ?: $r->user_id) === (string) $selectedPayeeId;
+            });
+        }
+
+        $availableUploadWeeks = $itemsForUploadWeekOptions
+            ->pluck('week')
+            ->filter()
+            ->unique()
+            ->sortByDesc(fn ($week) => $this->normalizeWeekForComparison((string) $week))
+            ->values();
+
+        if ($selectedUploadWeek) {
+            $allReimbursements = $allReimbursements->where('week', $selectedUploadWeek);
         }
 
         // Build stats for dashboard panels
@@ -331,14 +359,7 @@ class ReimbursementController extends Controller
         $categories = $this->getCategories();
 
         // Data for Global Filters (matching index)
-        $availableWeeks = $this->usesOperationalWeek($tab)
-            ? collect([$this->currentProcessingWeek()])
-            : Reimbursement::select('week')
-                ->whereNotNull('week')
-                ->distinct()
-                ->orderByRaw("SUBSTRING_INDEX(week, '-', -1) DESC")
-                ->orderByRaw("SUBSTRING_INDEX(week, '-', 1) DESC")
-                ->pluck('week');
+        $availableWeeks = $this->availableWeeksForTab($query, $tab);
 
         if ($user->isAdmin() || $user->isTreasury() || $user->isCxp() || $user->isDireccion()) {
             $authorizedCCs = \App\Models\CostCenter::orderBy('name')->get();
@@ -354,7 +375,7 @@ class ReimbursementController extends Controller
             'groupedByWeek', 'auditItems', 'auditMeta', 'selectedWeek', 
             'selectedCcName', 'selectedType', 'auditStats', 'categories',
             'availableWeeks', 'authorizedCCs', 'availableMethods', 'availableUsages',
-            'selectedPayeeId'
+            'selectedPayeeId', 'availableUploadWeeks', 'selectedUploadWeek'
         ));
     }
 
@@ -1819,6 +1840,7 @@ class ReimbursementController extends Controller
                 $data['status'] = 'pendiente_revision_cxp';
             } elseif (str_contains($lastCorrectionStep, 'Cuentas por Pagar Pagadores')) {
                 $data['status'] = 'pendiente_pago';
+                $data['payment_week'] = $reimbursement->payment_week ?: $this->currentProcessingWeek();
             } elseif ($reimbursement->approved_by_direccion_id !== null) {
                 $data['status'] = 'aprobado_direccion'; // Back to Treasury
             } elseif ($reimbursement->approved_by_cxp_id !== null) {
@@ -2205,9 +2227,8 @@ class ReimbursementController extends Controller
         
         // Synchronize with dashboard visibility logic
         $this->applyTabScope($query, $tab, $user);
-        $allowedWeeks = $this->usesOperationalWeek($tab)
-            ? collect([$this->currentProcessingWeek()])
-            : $this->availableWeeksForQuery($query);
+        $allowedWeeks = $this->availableWeeksForTab($query, $tab);
+        $exportWeekColumn = $this->filterableWeekColumn($tab);
 
         // Filter by specific IDs if provided
         if ($request->filled('ids')) {
@@ -2218,8 +2239,8 @@ class ReimbursementController extends Controller
         if ($request->filled('week')) {
             abort_unless($allowedWeeks->contains($request->week), 403, 'No puedes exportar una semana que no está disponible para este módulo.');
 
-            if (!$this->usesOperationalWeek($tab)) {
-                $query->where('week', $request->week);
+            if ($exportWeekColumn) {
+                $query->where($exportWeekColumn, $request->week);
             }
         }
 
@@ -2238,7 +2259,7 @@ class ReimbursementController extends Controller
         }
 
         // Mandatory filtering for export
-        $this->applyExportFilters($query, $request, $allowedWeeks);
+        $this->applyExportFilters($query, $request, $allowedWeeks, $exportWeekColumn);
 
         // Apply common filters
         if ($request->filled('search')) {
@@ -2459,12 +2480,11 @@ class ReimbursementController extends Controller
         } else {
             $paymentScope = Reimbursement::query()->where('status', '!=', 'borrador');
             $this->applyTabScope($paymentScope, 'payment', $user);
-            $allowedWeeks = collect([$this->currentProcessingWeek()]);
+            $allowedWeeks = $this->availableWeeksForTab($paymentScope, 'payment');
 
             if ($request->filled('week')) {
                 abort_unless($allowedWeeks->contains($request->week), 403, 'No puedes exportar una semana que no está disponible para pagos.');
-                // En Pagos la semana solicitada es operativa; no se debe filtrar
-                // por la semana fiscal original de cada comprobante.
+                $query->where('payment_week', $request->week);
             }
 
             if ($request->filled('cc')) {
@@ -2511,7 +2531,7 @@ class ReimbursementController extends Controller
                 $query->where('uso_cfdi', $request->usage_audit);
             }
 
-            $this->applyExportFilters($query, $request, $allowedWeeks);
+            $this->applyExportFilters($query, $request, $allowedWeeks, 'payment_week');
 
             if ($request->filled('search')) {
                 $search = $request->search;
@@ -2693,7 +2713,7 @@ class ReimbursementController extends Controller
         // Use the same scoping as the dashboard
         $this->applyTabScope($accessQuery, $tab, $user);
         $this->applyTabScope($query, $tab, $user);
-        $allowedWeeks = $this->availableWeeksForQuery($accessQuery);
+        $allowedWeeks = $this->availableWeeksForTab($accessQuery, $tab);
 
         // Filter by specific IDs if provided
         if ($request->filled('ids')) {
@@ -2701,8 +2721,18 @@ class ReimbursementController extends Controller
             $query->whereIn('id', $ids);
         }
 
+        if ($request->filled('week')) {
+            $weekColumn = $this->filterableWeekColumn($tab);
+
+            abort_unless($allowedWeeks->contains($request->week), 403, 'No puedes exportar una semana que no está disponible para este módulo.');
+
+            if ($weekColumn) {
+                $query->where($weekColumn, $request->week);
+            }
+        }
+
         // Mandatory filtering for export (consistent with export method)
-        $this->applyExportFilters($query, $request, $allowedWeeks);
+        $this->applyExportFilters($query, $request, $allowedWeeks, $this->filterableWeekColumn($tab));
 
         // Apply common filters
         if ($request->filled('search')) {
@@ -2990,6 +3020,7 @@ class ReimbursementController extends Controller
 
                 $updateData = [
                     'status' => 'pendiente_pago',
+                    'payment_week' => $reimbursement->payment_week ?: $this->currentProcessingWeek(),
                     'approved_by_cxp_id' => $isCxpReviewAction
                         ? $user->id
                         : $reimbursement->approved_by_cxp_id,
@@ -3187,12 +3218,14 @@ class ReimbursementController extends Controller
             $this->applyTabScope($query, $tab, $user);
 
             if ($request->filled('week')) {
-                if ($this->usesOperationalWeek($tab)) {
+                if ($tab === 'management') {
                     abort_unless(
                         $request->week === $this->currentProcessingWeek(),
                         403,
                         'La semana operativa solicitada ya no es la semana actual.'
                     );
+                } elseif ($tab === 'payment') {
+                    $query->where('payment_week', $request->week);
                 } else {
                     $query->where('week', $request->week);
                 }
@@ -3262,9 +3295,9 @@ class ReimbursementController extends Controller
             $first = $groupItems->first();
             $payee = $first->payee ?: $first->user;
             $costCenter = $first->costCenter;
-            $week = $this->usesOperationalWeek($tab)
-                ? $this->currentProcessingWeek()
-                : $first->week;
+            $week = $first->operational_week
+                ?? ($tab === 'payment' ? $first->payment_week : null)
+                ?? ($tab === 'management' ? $this->currentProcessingWeek() : $first->week);
 
             // Prepare summary data for the cover page
             $groupedByTypeAndCat = $groupItems->groupBy(function($item) {
@@ -3787,6 +3820,7 @@ class ReimbursementController extends Controller
                 $reimbursement->update([
                     'status' => 'pendiente_pago',
                     'current_step_id' => null,
+                    'payment_week' => $reimbursement->payment_week ?: $this->currentProcessingWeek(),
                     'approved_by_cxp_id' => $user->id,
                     'approved_by_cxp_at' => now(),
                 ]);
@@ -3794,6 +3828,7 @@ class ReimbursementController extends Controller
                 $reimbursement->update([
                     'status' => 'pendiente_pago',
                     'current_step_id' => null,
+                    'payment_week' => $reimbursement->payment_week ?: $this->currentProcessingWeek(),
                 ]);
             }
             
@@ -4279,27 +4314,62 @@ class ReimbursementController extends Controller
             ->values();
     }
 
-    private function applyExportFilters($query, Request $request, $allowedWeeks): void
+    private function availableWeeksForTab($query, string $tab)
+    {
+        if ($tab === 'management') {
+            return collect([$this->currentProcessingWeek()]);
+        }
+
+        $weekColumn = $this->filterableWeekColumn($tab);
+        if (!$weekColumn) {
+            return $this->availableWeeksForQuery($query);
+        }
+
+        return (clone $query)->reorder()
+            ->select($weekColumn)
+            ->whereNotNull($weekColumn)
+            ->distinct()
+            ->orderByRaw("CAST(SUBSTRING_INDEX({$weekColumn}, '-', -1) AS UNSIGNED) DESC")
+            ->orderByRaw("CAST(SUBSTRING_INDEX({$weekColumn}, '-', 1) AS UNSIGNED) DESC")
+            ->pluck($weekColumn)
+            ->filter()
+            ->values();
+    }
+
+    private function filterableWeekColumn(string $tab): ?string
+    {
+        return $tab === 'management'
+            ? null
+            : ($tab === 'payment' ? 'payment_week' : 'week');
+    }
+
+    private function applyExportFilters($query, Request $request, $allowedWeeks, ?string $weekColumn = 'week'): void
     {
         if ($request->filled('export_week')) {
             abort_unless($allowedWeeks->contains($request->export_week), 403, 'No puedes exportar una semana que no está en tu línea de aprobación.');
-            $query->where('week', $request->export_week);
+            if ($weekColumn) {
+                $query->where($weekColumn, $request->export_week);
+            }
             return;
         }
 
         if ($request->filled('from_week') || $request->filled('to_week')) {
             if ($request->filled('from_week')) {
                 abort_unless($allowedWeeks->contains($request->from_week), 403, 'La semana inicial no está disponible para tu línea de aprobación.');
-                $query->whereRaw("CONCAT(SUBSTRING_INDEX(week, '-', -1), LPAD(SUBSTRING_INDEX(week, '-', 1), 2, '0')) >= ?", [
-                    $this->normalizeWeekForComparison($request->from_week),
-                ]);
+                if ($weekColumn) {
+                    $query->whereRaw("CONCAT(SUBSTRING_INDEX({$weekColumn}, '-', -1), LPAD(SUBSTRING_INDEX({$weekColumn}, '-', 1), 2, '0')) >= ?", [
+                        $this->normalizeWeekForComparison($request->from_week),
+                    ]);
+                }
             }
 
             if ($request->filled('to_week')) {
                 abort_unless($allowedWeeks->contains($request->to_week), 403, 'La semana final no está disponible para tu línea de aprobación.');
-                $query->whereRaw("CONCAT(SUBSTRING_INDEX(week, '-', -1), LPAD(SUBSTRING_INDEX(week, '-', 1), 2, '0')) <= ?", [
-                    $this->normalizeWeekForComparison($request->to_week),
-                ]);
+                if ($weekColumn) {
+                    $query->whereRaw("CONCAT(SUBSTRING_INDEX({$weekColumn}, '-', -1), LPAD(SUBSTRING_INDEX({$weekColumn}, '-', 1), 2, '0')) <= ?", [
+                        $this->normalizeWeekForComparison($request->to_week),
+                    ]);
+                }
             }
 
             return;
@@ -4332,8 +4402,7 @@ class ReimbursementController extends Controller
     }
 
     /**
-     * Gestión y Pagos se agrupan por la semana en la que están siendo atendidos,
-     * sin sobrescribir la semana fiscal que forma parte del folio y del historial.
+     * Gestión usa la semana operativa viva; Pagos conserva la semana en que llegó.
      */
     private function usesOperationalWeek(string $tab): bool
     {
@@ -4353,9 +4422,13 @@ class ReimbursementController extends Controller
         }
 
         $currentWeek = $this->currentProcessingWeek();
-        $reimbursements->each(fn (Reimbursement $reimbursement) =>
-            $reimbursement->setAttribute('operational_week', $currentWeek)
-        );
+        $reimbursements->each(function (Reimbursement $reimbursement) use ($tab, $currentWeek) {
+            $operationalWeek = $tab === 'payment'
+                ? ($reimbursement->payment_week ?: $currentWeek)
+                : $currentWeek;
+
+            $reimbursement->setAttribute('operational_week', $operationalWeek);
+        });
     }
 
     /**
