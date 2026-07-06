@@ -224,7 +224,7 @@ class Reimbursement extends Model
             return $allIdentities->contains(fn($identity) => $identity->isCxp());
         }
 
-        if ($this->status === 'pendiente_pago') {
+        if ($this->status === 'pendiente_pago' && $this->approved_by_treasury_at === null) {
             return $allIdentities->contains(fn($identity) => $identity->isTreasury());
         }
         

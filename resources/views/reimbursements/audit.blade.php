@@ -87,7 +87,7 @@
                                         Descargar CSV
                                     </a>
                                 @endif
-                                <a href="{{ route('reimbursements.audit', ['week' => $selectedWeek, 'tab' => request('tab')]) }}" class="text-[10px] font-black text-indigo-600 hover:underline uppercase tracking-widest">Ver toda la semana</a>
+                                <a href="{{ route('reimbursements.audit', array_filter(['week' => $selectedWeek, 'tab' => request('tab'), 'ids' => isset($selectedIds) && $selectedIds->isNotEmpty() ? $selectedIds->implode(',') : null], fn($value) => $value !== null && $value !== '')) }}" class="text-[10px] font-black text-indigo-600 hover:underline uppercase tracking-widest">Ver toda la semana</a>
                             </div>
                         </div>
                     </div>
@@ -194,9 +194,9 @@
                         <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                             <form action="{{ route('reimbursements.audit') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4" novalidate>
                                 {{-- Preserve existing params --}}
-                                @foreach(request()->except(['search_audit', 'upload_week', 'validation_audit', 'xml_audit', 'method_audit', 'usage_audit']) as $name => $value)
-                                    <input type="hidden" name="{{ $name }}" value="{{ $value }}">
-                                @endforeach
+                                    @foreach(request()->except(['search_audit', 'upload_week', 'validation_audit', 'xml_audit', 'method_audit', 'usage_audit']) as $name => $value)
+                                        <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                                    @endforeach
 
                                 {{-- Row 1 --}}
                                 <div class="col-span-1 md:col-span-6">
@@ -205,6 +205,7 @@
                                 </div>
 
                                 {{-- Section: Detail Filters --}}
+                                @if(request('tab') !== 'payment')
                                 <div class="col-span-1 md:col-span-2">
                                     <label for="upload_week_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana de subida</label>
                                     <select name="upload_week" id="upload_week_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
@@ -214,6 +215,7 @@
                                         @endforeach
                                     </select>
                                 </div>
+                                @endif
                                 <div class="col-span-1 md:col-span-2">
                                     <label for="validation_audit_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Validación</label>
                                     <select name="validation_audit" id="validation_audit_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
@@ -251,7 +253,7 @@
                                 </div>
 
                                 <div class="col-span-1 md:col-span-2 flex justify-end items-end space-x-2">
-                                    <a href="{{ route('reimbursements.audit', request()->only(['tab', 'week', 'cc', 'type', 'payee'])) }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
+                                    <a href="{{ route('reimbursements.audit', request()->only(['tab', 'week', 'cc', 'type', 'payee', 'ids'])) }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
                                         Limpiar
                                     </a>
                                     <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
@@ -524,6 +526,7 @@
                                     </div>
 
                                     {{-- Row 2 --}}
+                                    @if(request('tab') !== 'payment')
                                     <div class="col-span-1 md:col-span-3">
                                         <label for="upload_week_sum" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana de subida</label>
                                         <select name="upload_week" id="upload_week_sum" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
@@ -533,6 +536,7 @@
                                             @endforeach
                                         </select>
                                     </div>
+                                    @endif
                                     <div class="col-span-1 md:col-span-3">
                                         <label for="type_audit_sum" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Reembolso</label>
                                         <select name="type_audit" id="type_audit_sum" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
@@ -673,7 +677,7 @@
                                                 ->sortByDesc('total')
                                                 ->first();
                                         @endphp
-                                        <a href="{{ route('reimbursements.audit', array_filter(['week' => $selectedWeek, 'cc' => $ccName, 'type' => $type, 'payee' => $selectedCcName ? $payeeId : null, 'tab' => request('tab'), 'upload_week' => request('upload_week')], fn($value) => $value !== null && $value !== '')) }}"
+                                        <a href="{{ route('reimbursements.audit', array_filter(['week' => $selectedWeek, 'cc' => $ccName, 'type' => $type, 'payee' => $selectedCcName ? $payeeId : null, 'tab' => request('tab'), 'upload_week' => request('tab') === 'payment' ? null : request('upload_week'), 'ids' => isset($selectedIds) && $selectedIds->isNotEmpty() ? $selectedIds->implode(',') : null], fn($value) => $value !== null && $value !== '')) }}"
                                            class="flex flex-col md:flex-row items-center justify-between p-5 bg-gray-50 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-lg transition-all group/type no-underline space-y-4 md:space-y-0">
                                             <div class="flex items-center space-x-5">
                                                 <div class="flex items-center justify-center border-r border-gray-200 dark:border-gray-700 pr-4" @click.stop>
@@ -763,6 +767,7 @@
                                             @endforeach
                                         </select>
                                     </div>
+                                    @if(request('tab') !== 'payment')
                                     <div class="col-span-1 md:col-span-3">
                                         <label for="upload_week_land" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana de subida</label>
                                         <select name="upload_week" id="upload_week_land" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
@@ -772,6 +777,7 @@
                                             @endforeach
                                         </select>
                                     </div>
+                                    @endif
                                     <div class="col-span-1 md:col-span-3 flex justify-end items-end space-x-2">
                                         <a href="{{ route('reimbursements.audit', ['tab' => request('tab', 'management')]) }}" class="inline-flex items-center px-6 py-3 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[44px]">
                                             Limpiar

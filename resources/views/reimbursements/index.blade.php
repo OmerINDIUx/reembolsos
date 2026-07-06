@@ -21,8 +21,8 @@
                                         @php
                         $user = Auth::user();
                         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-                        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
-                        $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury() || $identity->isCxp());
+                        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->isAdminView() || $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
+                        $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isAdminView() || $identity->isTreasury() || $identity->isCxp());
                         $canDownloadPaymentFile = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());
                         $defaultTab = $canManage ? 'management' : 'active';
                     @endphp
@@ -84,7 +84,7 @@
                             </li>
                             @endif
 
-                            @if($user->canPerform('reimbursements.global_history'))
+                            @if($user->isAdminView() || $user->canPerform('reimbursements.global_history'))
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'global_history'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'global_history' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="global-history-tab" type="button" role="tab" aria-controls="global_history" aria-selected="false">
                                     Historial Global
@@ -393,9 +393,10 @@
                                                         }
                                                     }
                                                     $idsJson = json_encode($batchItems->pluck('id'));
+                                                    $auditIds = $batchItems->pluck('id')->implode(',');
                                                     $totalAmount = $batchItems->sum('total') + $batchItems->sum('propina');
                                                 @endphp
-                                                <a href="{{ route('reimbursements.audit', ['week' => $week, 'cc' => $ccName, 'tab' => $tab]) }}" 
+                                                <a href="{{ route('reimbursements.audit', ['week' => $week, 'cc' => $ccName, 'tab' => $tab, 'ids' => $auditIds]) }}" 
                                                    class="flex flex-col md:flex-row items-start md:items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/30 hover:bg-white dark:hover:bg-gray-800 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-md transition-all group no-underline space-y-3 md:space-y-0">
                                                     <div class="flex items-center space-x-4">
                                                         @if($tab !== 'management' || $user->isAdmin())
@@ -581,7 +582,7 @@
                                                     @if($r->status === 'aprobado') Pago aprobado
                                                     @elseif($r->status === 'pendiente') {{ $r->currentStep->name ?? 'En Proceso' }}
                                                     @elseif($r->status === 'pendiente_revision_cxp') CXP Revisadores
-                                                    @elseif($r->status === 'pendiente_pago') CXP Pagadores
+                                                    @elseif($r->status === 'pendiente_pago') {{ $r->approved_by_treasury_at ? 'Listo para pago' : 'CXP Pagadores' }}
                                                     @elseif($r->status === 'requiere_correccion') Corregir
                                                     @else {{ ucfirst(str_replace('_', ' ', $r->status)) }} @endif
                                                 </span>
@@ -600,7 +601,7 @@
                                                     @elseif($r->status === 'pendiente_revision_cxp')
                                                         En revisión de Cuentas por Pagar
                                                     @elseif($r->status === 'pendiente_pago')
-                                                        Listo para pago final
+                                                        {{ $r->approved_by_treasury_at ? 'Disponible en módulo de pago' : 'Esperando aprobación final de pagadores' }}
                                                     @elseif($r->status === 'aprobado') 
                                                         Pago aprobado
                                                     @elseif($r->status === 'requiere_correccion')
@@ -616,7 +617,7 @@
                                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                             @php
                                                 $user = Auth::user();
-                                                $canApproveCurr = $r->canBeApprovedBy($user) && !in_array($r->status, ['aprobado', 'rechazado', 'borrador', 'pendiente_pago']);
+                                                $canApproveCurr = $r->canBeApprovedBy($user) && !in_array($r->status, ['aprobado', 'rechazado', 'borrador']);
                                                 $canEditFlow = !$user->isAdminView() && $user->canPerform('reimbursements.edit');
                                             @endphp
 

@@ -32,7 +32,7 @@ class ReimbursementController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
+        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->isAdminView() || $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
         $globalSearch = $request->input('global_search');
         
@@ -203,7 +203,17 @@ class ReimbursementController extends Controller
         $selectedCcName  = $request->input('cc');
         $selectedType    = $request->input('type');
         $selectedPayeeId = $request->input('payee');
-        $selectedUploadWeek = $request->input('upload_week');
+        $selectedUploadWeek = $tab === 'payment' ? null : $request->input('upload_week');
+        $selectedIds = collect(explode(',', (string) $request->input('ids')))
+            ->map(fn ($id) => trim($id))
+            ->filter(fn ($id) => ctype_digit($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($selectedIds->isNotEmpty()) {
+            $allReimbursements = $allReimbursements->whereIn('id', $selectedIds);
+        }
 
         // Global Audit Filters
         if ($request->filled('search_audit') || $request->filled('type_audit') || $request->filled('category_audit') || $request->filled('xml_audit') || $request->filled('validation_audit') || $request->filled('method_audit') || $request->filled('usage_audit')) {
@@ -257,34 +267,37 @@ class ReimbursementController extends Controller
             });
         }
 
-        $itemsForUploadWeekOptions = $allReimbursements;
-        if ($selectedWeek) {
-            $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->where(
-                $this->usesOperationalWeek($tab) ? 'operational_week' : 'week',
-                $selectedWeek
-            );
-        }
-        if ($selectedCcName) {
-            $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->filter(fn($r) => ($r->costCenter->name ?? 'Sin Centro de Costos') === $selectedCcName);
-        }
-        if ($selectedType) {
-            $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->where('type', $selectedType);
-        }
-        if ($selectedPayeeId) {
-            $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->filter(function ($r) use ($selectedPayeeId) {
-                return (string) ($r->payee_id ?: $r->user_id) === (string) $selectedPayeeId;
-            });
-        }
+        $availableUploadWeeks = collect();
+        if ($tab !== 'payment') {
+            $itemsForUploadWeekOptions = $allReimbursements;
+            if ($selectedWeek) {
+                $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->where(
+                    $this->usesOperationalWeek($tab) ? 'operational_week' : 'week',
+                    $selectedWeek
+                );
+            }
+            if ($selectedCcName) {
+                $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->filter(fn($r) => ($r->costCenter->name ?? 'Sin Centro de Costos') === $selectedCcName);
+            }
+            if ($selectedType) {
+                $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->where('type', $selectedType);
+            }
+            if ($selectedPayeeId) {
+                $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->filter(function ($r) use ($selectedPayeeId) {
+                    return (string) ($r->payee_id ?: $r->user_id) === (string) $selectedPayeeId;
+                });
+            }
 
-        $availableUploadWeeks = $itemsForUploadWeekOptions
-            ->pluck('week')
-            ->filter()
-            ->unique()
-            ->sortByDesc(fn ($week) => $this->normalizeWeekForComparison((string) $week))
-            ->values();
+            $availableUploadWeeks = $itemsForUploadWeekOptions
+                ->pluck('week')
+                ->filter()
+                ->unique()
+                ->sortByDesc(fn ($week) => $this->normalizeWeekForComparison((string) $week))
+                ->values();
 
-        if ($selectedUploadWeek) {
-            $allReimbursements = $allReimbursements->where('week', $selectedUploadWeek);
+            if ($selectedUploadWeek) {
+                $allReimbursements = $allReimbursements->where('week', $selectedUploadWeek);
+            }
         }
 
         // Build stats for dashboard panels
@@ -375,7 +388,7 @@ class ReimbursementController extends Controller
             'groupedByWeek', 'auditItems', 'auditMeta', 'selectedWeek', 
             'selectedCcName', 'selectedType', 'auditStats', 'categories',
             'availableWeeks', 'authorizedCCs', 'availableMethods', 'availableUsages',
-            'selectedPayeeId', 'availableUploadWeeks', 'selectedUploadWeek'
+            'selectedPayeeId', 'availableUploadWeeks', 'selectedUploadWeek', 'selectedIds'
         ));
     }
 
@@ -1964,12 +1977,14 @@ class ReimbursementController extends Controller
                 NotificationBatchService::add($owner, $reimbursement);
             }
         } elseif ($currentStatus === 'pendiente_pago') {
-            // Notificar a CXP Pagadores
-            $payers = \App\Models\User::where('role', 'tesoreria')
-                ->orWhereHas('profile', fn($q) => $q->where('name', 'tesoreria'))
-                ->get();
-            foreach ($payers as $payer) {
-                NotificationBatchService::add($payer, $reimbursement);
+            if ($reimbursement->approved_by_treasury_at === null) {
+                // Notificar a CXP Pagadores
+                $payers = \App\Models\User::where('role', 'tesoreria')
+                    ->orWhereHas('profile', fn($q) => $q->where('name', 'tesoreria'))
+                    ->get();
+                foreach ($payers as $payer) {
+                    NotificationBatchService::add($payer, $reimbursement);
+                }
             }
             if ($owner) {
                 NotificationBatchService::add($owner, $reimbursement);
@@ -2222,7 +2237,7 @@ class ReimbursementController extends Controller
             ->where('status', '!=', 'borrador');
             
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
+        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->isAdminView() || $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
         
         // Synchronize with dashboard visibility logic
@@ -2473,7 +2488,8 @@ class ReimbursementController extends Controller
             ->values();
 
         $query = Reimbursement::with(['user', 'payee', 'costCenter.company'])
-            ->where('status', 'pendiente_pago');
+            ->where('status', 'pendiente_pago')
+            ->whereNotNull('approved_by_treasury_at');
 
         if ($ids->isNotEmpty()) {
             $query->whereIn('id', $ids);
@@ -2707,7 +2723,7 @@ class ReimbursementController extends Controller
             ->whereNotNull('xml_path');
              
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
+        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->isAdminView() || $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
         $tab = $request->input('tab', $canManage ? 'management' : 'active');
         
         // Use the same scoping as the dashboard
@@ -3006,9 +3022,15 @@ class ReimbursementController extends Controller
                     continue;
                 }
 
+                if ($reimbursement->status === 'pendiente_pago' && $reimbursement->approved_by_treasury_at !== null) {
+                    $failed++;
+                    $errors['already_approved'][] = "Folio $folio: Ya fue aprobado por pagadores y ya está disponible en pago.";
+                    continue;
+                }
+
                 // 3. Check workflow profile
                 $canReviewCxp = $user->isAdmin() || ($user->isCxp() && $reimbursement->status === 'pendiente_revision_cxp');
-                $canPayCxp = $user->isAdmin() || ($user->isTreasury() && $reimbursement->status === 'pendiente_pago');
+                $canPayCxp = $user->isAdmin() || ($user->isTreasury() && $reimbursement->status === 'pendiente_pago' && $reimbursement->approved_by_treasury_at === null);
                 if (!$canReviewCxp && !$canPayCxp) {
                     $failed++;
                     $statusLabel = ucwords(str_replace('_', ' ', $reimbursement->status));
@@ -3020,7 +3042,6 @@ class ReimbursementController extends Controller
 
                 $updateData = [
                     'status' => 'pendiente_pago',
-                    'payment_week' => $reimbursement->payment_week ?: $this->currentProcessingWeek(),
                     'approved_by_cxp_id' => $isCxpReviewAction
                         ? $user->id
                         : $reimbursement->approved_by_cxp_id,
@@ -3028,6 +3049,12 @@ class ReimbursementController extends Controller
                         ? now()
                         : $reimbursement->approved_by_cxp_at,
                 ];
+
+                if (!$isCxpReviewAction) {
+                    $updateData['approved_by_treasury_id'] = $user->id;
+                    $updateData['approved_by_treasury_at'] = now();
+                    $updateData['payment_week'] = $this->currentProcessingWeek();
+                }
 
                 $reimbursement->update($updateData);
                 $processed++;
@@ -3812,15 +3839,13 @@ class ReimbursementController extends Controller
         }
 
 
-        // 2. Accounts Payable review sends the item to the payment module.
-        // Payment-module items stay in pendiente_pago so they remain available for payment files.
+        // 2. Accounts Payable review sends the item to treasury for the final approval.
         $statusToCheck = $originalStatus ?? $reimbursement->status;
         if (in_array($statusToCheck, ['pendiente_revision_cxp', 'pendiente_pago', 'aprobado'])) {
             if ($statusToCheck === 'pendiente_revision_cxp') {
                 $reimbursement->update([
                     'status' => 'pendiente_pago',
                     'current_step_id' => null,
-                    'payment_week' => $reimbursement->payment_week ?: $this->currentProcessingWeek(),
                     'approved_by_cxp_id' => $user->id,
                     'approved_by_cxp_at' => now(),
                 ]);
@@ -3828,7 +3853,9 @@ class ReimbursementController extends Controller
                 $reimbursement->update([
                     'status' => 'pendiente_pago',
                     'current_step_id' => null,
-                    'payment_week' => $reimbursement->payment_week ?: $this->currentProcessingWeek(),
+                    'approved_by_treasury_id' => $user->id,
+                    'approved_by_treasury_at' => now(),
+                    'payment_week' => $this->currentProcessingWeek(),
                 ]);
             }
             
@@ -4440,6 +4467,22 @@ class ReimbursementController extends Controller
         $identityIds = $allIdentities->pluck('id')->unique();
 
         if ($tab === 'management') {
+            if ($allIdentities->contains(fn($identity) => $identity->isAdminView())) {
+                $query->where(function ($q) {
+                    $q->whereNotIn('status', ['aprobado', 'rechazado', 'borrador'])
+                        ->where(function ($workflowQueue) {
+                            $workflowQueue->whereNotIn('status', ['pendiente_revision_cxp', 'pendiente_pago'])
+                                ->orWhere('status', 'pendiente_revision_cxp')
+                                ->orWhere(function ($paymentApprovalQueue) {
+                                    $paymentApprovalQueue->where('status', 'pendiente_pago')
+                                        ->whereNull('approved_by_treasury_at');
+                                });
+                        });
+                });
+
+                return;
+            }
+
             $query->where(function($q) use ($allIdentities, $identityIds) {
                 // Management is an action queue: only items waiting on the current user
                 // or an identity they are actively substituting.
@@ -4451,17 +4494,26 @@ class ReimbursementController extends Controller
                 if ($isCxpReviewer) {
                     $q->orWhere('status', 'pendiente_revision_cxp');
                 }
+
+                $isTreasuryApprover = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());
+                if ($isTreasuryApprover) {
+                    $q->orWhere(function ($paymentQueue) {
+                        $paymentQueue->where('status', 'pendiente_pago')
+                            ->whereNull('approved_by_treasury_at');
+                    });
+                }
             });
 
         } elseif ($tab === 'payment') {
-            $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury() || $identity->isCxp());
+            $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isAdminView() || $identity->isTreasury() || $identity->isCxp());
 
             if (!$canUsePaymentModule) {
                 $query->whereRaw('1 = 0');
                 return;
             }
 
-            $query->where('status', 'pendiente_pago');
+            $query->where('status', 'pendiente_pago')
+                ->whereNotNull('approved_by_treasury_at');
 
         } elseif ($tab === 'active') {
             // Personal & Substituted: Pending (My items that are still in process)
@@ -4477,7 +4529,7 @@ class ReimbursementController extends Controller
 
         } elseif ($tab === 'global_history') {
             // Check permission dynamically
-            if (!$user->canPerform('reimbursements.global_history')) {
+            if (!$user->isAdminView() && !$user->canPerform('reimbursements.global_history')) {
                 // If they don't have permission, restrict to their own items
                 $query->where(function ($q) use ($identityIds, $user) {
                     $this->applyRequesterManagedScopeForIdentities($q, $identityIds, $user);

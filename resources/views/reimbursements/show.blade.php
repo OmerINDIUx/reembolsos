@@ -653,7 +653,7 @@
                     <!-- Acción de Aprobación -->
                     @php
                         $user = auth()->user();
-                        $canApproveAny = $reimbursement->canBeApprovedBy($user) && !in_array($reimbursement->status, ['aprobado', 'rechazado', 'borrador', 'pendiente_pago']);
+                        $canApproveAny = $reimbursement->canBeApprovedBy($user) && !in_array($reimbursement->status, ['aprobado', 'rechazado', 'borrador']);
                         $canEditFlow = !$user->isAdminView() && $user->canPerform('reimbursements.edit');
                     @endphp
 
@@ -739,8 +739,8 @@
                             @php
                                 $cxpReviewCompleted = in_array($reimbursement->status, ['pendiente_pago', 'aprobado']);
                                 $cxpReviewCurrent = ($reimbursement->status === 'pendiente_revision_cxp');
-                                $cxpPayCompleted = ($reimbursement->status === 'aprobado');
-                                $cxpPayCurrent = ($reimbursement->status === 'pendiente_pago');
+                                $cxpPayCompleted = ($reimbursement->approved_by_treasury_at !== null || $reimbursement->status === 'aprobado');
+                                $cxpPayCurrent = ($reimbursement->status === 'pendiente_pago' && $reimbursement->approved_by_treasury_at === null);
                             @endphp
                             <div class="relative pb-6">
                                 <div class="relative flex items-center group">

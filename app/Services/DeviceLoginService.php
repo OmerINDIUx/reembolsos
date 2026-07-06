@@ -38,48 +38,62 @@ class DeviceLoginService
         }
 
         $userAgent = Str::limit((string) $request->userAgent(), 1000, '');
+        $hasSecuritySignals = Schema::hasColumn('device_logins', 'risk_score');
         $previousDeviceLogins = DeviceLogin::where('user_id', $user->id)->exists();
-        $isNewDevice = ! DeviceLogin::where('user_id', $user->id)
-            ->where('device_hash', $deviceHash)
-            ->exists();
-        $simultaneousDevicesCount = DeviceLogin::where('user_id', $user->id)
-            ->where('device_hash', '!=', $deviceHash)
-            ->whereNull('logged_out_at')
-            ->where('last_seen_at', '>=', now()->subMinutes(15))
-            ->distinct()
-            ->count('device_hash');
-        $sharedAccountsCount = DeviceLogin::where('device_hash', $deviceHash)
-            ->where('user_id', '!=', $user->id)
-            ->where('last_seen_at', '>=', now()->subDays(90))
-            ->distinct()
-            ->count('user_id');
-        $recentDeviceChanges = DeviceLogin::where('user_id', $user->id)
-            ->where('last_seen_at', '>=', now()->subDays(7))
-            ->distinct()
-            ->count('device_hash');
-        [$riskScore, $riskReasons] = $this->riskSignal(
-            $isNewDevice,
-            $simultaneousDevicesCount,
-            $sharedAccountsCount,
-            $recentDeviceChanges
-        );
+        $isNewDevice = false;
+        $simultaneousDevicesCount = 0;
+        $sharedAccountsCount = 0;
+        $riskScore = 0;
+        $riskReasons = [];
 
-        $login = DeviceLogin::create([
+        $data = [
             'user_id' => $user->id,
             'device_hash' => $deviceHash,
             'session_id' => $request->session()->getId(),
             'ip_address' => $request->ip(),
-            'approx_location' => $this->approximateLocation($request),
             'user_agent' => $userAgent ?: null,
             'device_label' => $this->deviceLabel($userAgent),
-            'is_new_device' => $isNewDevice,
-            'risk_score' => $riskScore,
-            'risk_reasons' => $riskReasons,
-            'simultaneous_devices_count' => $simultaneousDevicesCount,
-            'shared_accounts_count' => $sharedAccountsCount,
             'logged_in_at' => now(),
             'last_seen_at' => now(),
-        ]);
+        ];
+
+        if ($hasSecuritySignals) {
+            $isNewDevice = ! DeviceLogin::where('user_id', $user->id)
+                ->where('device_hash', $deviceHash)
+                ->exists();
+            $simultaneousDevicesCount = DeviceLogin::where('user_id', $user->id)
+                ->where('device_hash', '!=', $deviceHash)
+                ->whereNull('logged_out_at')
+                ->where('last_seen_at', '>=', now()->subMinutes(15))
+                ->distinct()
+                ->count('device_hash');
+            $sharedAccountsCount = DeviceLogin::where('device_hash', $deviceHash)
+                ->where('user_id', '!=', $user->id)
+                ->where('last_seen_at', '>=', now()->subDays(90))
+                ->distinct()
+                ->count('user_id');
+            $recentDeviceChanges = DeviceLogin::where('user_id', $user->id)
+                ->where('last_seen_at', '>=', now()->subDays(7))
+                ->distinct()
+                ->count('device_hash');
+            [$riskScore, $riskReasons] = $this->riskSignal(
+                $isNewDevice,
+                $simultaneousDevicesCount,
+                $sharedAccountsCount,
+                $recentDeviceChanges
+            );
+
+            $data += [
+                'approx_location' => $this->approximateLocation($request),
+                'is_new_device' => $isNewDevice,
+                'risk_score' => $riskScore,
+                'risk_reasons' => $riskReasons,
+                'simultaneous_devices_count' => $simultaneousDevicesCount,
+                'shared_accounts_count' => $sharedAccountsCount,
+            ];
+        }
+
+        $login = DeviceLogin::create($data);
 
         if ($isNewDevice && $previousDeviceLogins) {
             $user->notify(new NewDeviceLoginNotification($login));
