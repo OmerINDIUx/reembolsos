@@ -67,7 +67,7 @@ class ReimbursementController extends Controller
 
         // TRACKER LOGIC: Global search bypasses tab scoping for management roles but respects general visibility
         if ($globalSearch && $canManage) {
-            if ($tab === 'payment') {
+            if (in_array($tab, ['payment', 'rejections'], true)) {
                 $this->applyTabScope($query, $tab, $user);
             } elseif (!$user->isAdmin() && !$user->isAdminView()) {
                 $this->applyGeneralVisibilityScope($query, $user);
@@ -220,7 +220,7 @@ class ReimbursementController extends Controller
         }
 
         // Global Audit Filters
-        if ($request->filled('search_audit') || $request->filled('type_audit') || $request->filled('category_audit') || $request->filled('xml_audit') || $request->filled('validation_audit') || $request->filled('method_audit') || $request->filled('usage_audit')) {
+        if ($request->filled('search_audit') || $request->filled('type_audit') || $request->filled('category_audit') || $request->filled('status_audit') || $request->filled('xml_audit') || $request->filled('validation_audit') || $request->filled('method_audit') || $request->filled('usage_audit')) {
             $allReimbursements = $allReimbursements->filter(function($r) use ($request) {
                 $pass = true;
                 if ($request->filled('search_audit')) {
@@ -240,6 +240,18 @@ class ReimbursementController extends Controller
                 }
                 if ($request->filled('category_audit')) {
                     $pass = $pass && ($r->category === $request->category_audit);
+                }
+                if ($request->filled('status_audit')) {
+                    if ($request->status_audit === 'rechazado') {
+                        $pass = $pass && in_array($r->status, ['rechazado', 'requiere_correccion'], true);
+                    } elseif ($request->status_audit === 'exclude_rechazado') {
+                        $pass = $pass && !in_array($r->status, ['rechazado', 'requiere_correccion'], true);
+                    } elseif (str_starts_with($request->status_audit, 'exclude_')) {
+                        $excludedStatus = str_replace('exclude_', '', $request->status_audit);
+                        $pass = $pass && ($r->status !== $excludedStatus);
+                    } else {
+                        $pass = $pass && ($r->status === $request->status_audit);
+                    }
                 }
                 if ($request->filled('xml_audit')) {
                     if ($request->xml_audit === 'with_xml') {
@@ -4741,6 +4753,51 @@ class ReimbursementController extends Controller
 
             $query->where('status', 'pendiente_pago')
                 ->whereNotNull('approved_by_treasury_at');
+
+        } elseif ($tab === 'rejections') {
+            $authorizedCCsIds = [];
+            foreach ($allIdentities as $identity) {
+                $authorizedCCsIds = array_merge($authorizedCCsIds, $identity->authorizedCostCenters()->pluck('cost_centers.id')->toArray());
+
+                $extraIds = \App\Models\ApprovalStep::where('user_id', $identity->id)->pluck('cost_center_id')
+                    ->concat(\App\Models\CostCenter::where('director_id', $identity->id)
+                        ->orWhere('control_obra_id', $identity->id)
+                        ->orWhere('director_ejecutivo_id', $identity->id)
+                        ->orWhere('accountant_id', $identity->id)
+                        ->orWhere('direccion_id', $identity->id)
+                        ->orWhere('tesoreria_id', $identity->id)
+                        ->orWhere('beneficiary_id', $identity->id)
+                        ->pluck('id'))
+                    ->unique();
+
+                $authorizedCCsIds = array_merge($authorizedCCsIds, $extraIds->toArray());
+            }
+
+            $authorizedCCsIds = array_values(array_unique($authorizedCCsIds));
+            $canSeeAllRejections = $allIdentities->contains(fn($identity) =>
+                $identity->isAdmin()
+                || $identity->isAdminView()
+                || $identity->hasRole('accountant', 'direccion')
+                || $identity->canPerform('reimbursements.global_history')
+            );
+
+            $query->whereIn('status', ['rechazado', 'requiere_correccion']);
+
+            if (!$canSeeAllRejections) {
+                if (empty($authorizedCCsIds)) {
+                    $query->where(function ($q) use ($identityIds, $user) {
+                        $this->applyRequesterManagedScopeForIdentities($q, $identityIds, $user);
+                    });
+                    return;
+                }
+
+                $query->where(function ($q) use ($authorizedCCsIds, $identityIds, $user) {
+                    $q->whereIn('cost_center_id', $authorizedCCsIds)
+                        ->orWhere(function ($requesterScope) use ($identityIds, $user) {
+                            $this->applyRequesterManagedScopeForIdentities($requesterScope, $identityIds, $user);
+                        });
+                });
+            }
 
         } elseif ($tab === 'active') {
             // Personal & Substituted: Pending (My items that are still in process)

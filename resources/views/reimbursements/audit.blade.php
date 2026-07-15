@@ -194,7 +194,7 @@
                         <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                             <form action="{{ route('reimbursements.audit') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4" novalidate>
                                 {{-- Preserve existing params --}}
-                                    @foreach(request()->except(['search_audit', 'upload_week', 'validation_audit', 'xml_audit', 'method_audit', 'usage_audit']) as $name => $value)
+                                    @foreach(request()->except(['search_audit', 'upload_week', 'status_audit', 'validation_audit', 'xml_audit', 'method_audit', 'usage_audit']) as $name => $value)
                                         <input type="hidden" name="{{ $name }}" value="{{ $value }}">
                                     @endforeach
 
@@ -216,6 +216,21 @@
                                     </select>
                                 </div>
                                 @endif
+                                <div class="col-span-1 md:col-span-2">
+                                    <label for="status_audit_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label>
+                                    <select name="status_audit" id="status_audit_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <option value="">Todos</option>
+                                        <option value="exclude_rechazado" {{ request('status_audit') == 'exclude_rechazado' ? 'selected' : '' }}>Quitar rechazados/corrección</option>
+                                        <option value="exclude_aprobado" {{ request('status_audit') == 'exclude_aprobado' ? 'selected' : '' }}>Quitar aprobados</option>
+                                        <option value="exclude_requiere_correccion" {{ request('status_audit') == 'exclude_requiere_correccion' ? 'selected' : '' }}>Quitar corrección</option>
+                                        <option value="aprobado" {{ request('status_audit') == 'aprobado' ? 'selected' : '' }}>Aprobados</option>
+                                        <option value="rechazado" {{ request('status_audit') == 'rechazado' ? 'selected' : '' }}>Rechazados/corrección</option>
+                                        <option value="requiere_correccion" {{ request('status_audit') == 'requiere_correccion' ? 'selected' : '' }}>En corrección</option>
+                                        <option value="pendiente" {{ request('status_audit') == 'pendiente' ? 'selected' : '' }}>Pendientes</option>
+                                        <option value="pendiente_revision_cxp" {{ request('status_audit') == 'pendiente_revision_cxp' ? 'selected' : '' }}>Revisión CXP</option>
+                                        <option value="pendiente_pago" {{ request('status_audit') == 'pendiente_pago' ? 'selected' : '' }}>Pendiente de pago</option>
+                                    </select>
+                                </div>
                                 <div class="col-span-1 md:col-span-2">
                                     <label for="validation_audit_det" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Validación</label>
                                     <select name="validation_audit" id="validation_audit_det" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
@@ -515,7 +530,7 @@
                             <div class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                                 <form action="{{ route('reimbursements.audit') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4" novalidate>
                                     {{-- Preserve existing params --}}
-                                    @foreach(request()->except(['search_audit', 'upload_week', 'type_audit', 'category_audit', 'xml_audit']) as $name => $value)
+                                    @foreach(request()->except(['search_audit', 'upload_week', 'type_audit', 'category_audit', 'status_audit', 'xml_audit']) as $name => $value)
                                         <input type="hidden" name="{{ $name }}" value="{{ $value }}">
                                     @endforeach
 
@@ -545,6 +560,21 @@
                                             <option value="comida" {{ request('type_audit') == 'comida' ? 'selected' : '' }}>Comida</option>
                                             <option value="fondo_fijo" {{ request('type_audit') == 'fondo_fijo' ? 'selected' : '' }}>Fondo Fijo</option>
                                             <option value="viaje" {{ request('type_audit') == 'viaje' ? 'selected' : '' }}>Viaje</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-span-1 md:col-span-3">
+                                        <label for="status_audit_sum" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label>
+                                        <select name="status_audit" id="status_audit_sum" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                            <option value="">Todos</option>
+                                            <option value="exclude_rechazado" {{ request('status_audit') == 'exclude_rechazado' ? 'selected' : '' }}>Quitar rechazados/corrección</option>
+                                            <option value="exclude_aprobado" {{ request('status_audit') == 'exclude_aprobado' ? 'selected' : '' }}>Quitar aprobados</option>
+                                            <option value="exclude_requiere_correccion" {{ request('status_audit') == 'exclude_requiere_correccion' ? 'selected' : '' }}>Quitar corrección</option>
+                                            <option value="aprobado" {{ request('status_audit') == 'aprobado' ? 'selected' : '' }}>Aprobados</option>
+                                            <option value="rechazado" {{ request('status_audit') == 'rechazado' ? 'selected' : '' }}>Rechazados/corrección</option>
+                                            <option value="requiere_correccion" {{ request('status_audit') == 'requiere_correccion' ? 'selected' : '' }}>En corrección</option>
+                                            <option value="pendiente" {{ request('status_audit') == 'pendiente' ? 'selected' : '' }}>Pendientes</option>
+                                            <option value="pendiente_revision_cxp" {{ request('status_audit') == 'pendiente_revision_cxp' ? 'selected' : '' }}>Revisión CXP</option>
+                                            <option value="pendiente_pago" {{ request('status_audit') == 'pendiente_pago' ? 'selected' : '' }}>Pendiente de pago</option>
                                         </select>
                                     </div>
                                     <div class="col-span-1 md:col-span-3 flex justify-end items-end space-x-2">
@@ -768,6 +798,21 @@
                                             @foreach($availableWeeks as $w)
                                                 <option value="{{ $w }}" {{ request('week') == $w ? 'selected' : '' }}>Semana {{ $w }}</option>
                                             @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-span-1 md:col-span-3">
+                                        <label for="status_audit_land" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label>
+                                        <select name="status_audit" id="status_audit_land" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                            <option value="">Todos</option>
+                                            <option value="exclude_rechazado" {{ request('status_audit') == 'exclude_rechazado' ? 'selected' : '' }}>Quitar rechazados/corrección</option>
+                                            <option value="exclude_aprobado" {{ request('status_audit') == 'exclude_aprobado' ? 'selected' : '' }}>Quitar aprobados</option>
+                                            <option value="exclude_requiere_correccion" {{ request('status_audit') == 'exclude_requiere_correccion' ? 'selected' : '' }}>Quitar corrección</option>
+                                            <option value="aprobado" {{ request('status_audit') == 'aprobado' ? 'selected' : '' }}>Aprobados</option>
+                                            <option value="rechazado" {{ request('status_audit') == 'rechazado' ? 'selected' : '' }}>Rechazados/corrección</option>
+                                            <option value="requiere_correccion" {{ request('status_audit') == 'requiere_correccion' ? 'selected' : '' }}>En corrección</option>
+                                            <option value="pendiente" {{ request('status_audit') == 'pendiente' ? 'selected' : '' }}>Pendientes</option>
+                                            <option value="pendiente_revision_cxp" {{ request('status_audit') == 'pendiente_revision_cxp' ? 'selected' : '' }}>Revisión CXP</option>
+                                            <option value="pendiente_pago" {{ request('status_audit') == 'pendiente_pago' ? 'selected' : '' }}>Pendiente de pago</option>
                                         </select>
                                     </div>
                                     @if(request('tab') !== 'payment')

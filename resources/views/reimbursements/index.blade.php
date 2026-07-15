@@ -80,6 +80,9 @@
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'management'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab', $defaultTab) == 'management' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="management-tab" type="button" role="tab" aria-controls="management" aria-selected="false">Módulo de Gestión</a>
                             </li>
+                            <li class="mr-2" role="presentation">
+                                <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'rejections'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'rejections' ? 'border-red-600 text-red-600 dark:text-red-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="rejections-tab" type="button" role="tab" aria-controls="rejections" aria-selected="false">Módulo de Rechazos</a>
+                            </li>
                             @endif
 
                             @if($canUsePaymentModule)
@@ -106,7 +109,7 @@
                     </div>
 
                     <!-- Global Folio Search (Rastreador) -->
-                    @if($canManage && (request('tab', $defaultTab) === 'management' || request('tab') === 'payment' || request('tab') === 'global_history'))
+                    @if($canManage && (request('tab', $defaultTab) === 'management' || request('tab') === 'rejections' || request('tab') === 'payment' || request('tab') === 'global_history'))
                         <div class="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl flex flex-col md:flex-row items-center gap-4">
                             <div class="flex-shrink-0">
                                 <span class="text-indigo-600 dark:text-indigo-400 font-bold text-sm uppercase tracking-wider">Rastreador de Folio (Global):</span>
@@ -255,7 +258,7 @@
 
                     @php
                         $tab = request('tab', $defaultTab);
-                        $isGroupedView = ($tab === 'management' || $tab === 'payment' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history' || $tab === 'audit');
+                        $isGroupedView = ($tab === 'management' || $tab === 'rejections' || $tab === 'payment' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history' || $tab === 'audit');
                     @endphp
 
                     <div x-data="bulkAuditIndex()" class="relative border-transparent">
@@ -279,6 +282,8 @@
 
                                         if ($tab === 'payment') {
                                             $ctx = 'Listos para pago';
+                                        } elseif ($tab === 'rejections') {
+                                            $ctx = $item->user->name ?? 'Solicitante sin nombre';
                                         } elseif ($targetUserId === $user->id) {
                                             $ctx = ($tab === 'management' || $tab === 'weekly_summary') ? 'Mis Pendientes' : 'Mis Reembolsos';
                                         } elseif ($substitutes->has($targetUserId)) {
