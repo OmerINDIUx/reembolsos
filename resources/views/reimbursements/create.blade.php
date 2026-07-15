@@ -473,7 +473,11 @@
                                             </div>
                                             <div x-show="hasInvoice">
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Folio Interno (XML)</label>
-                                                <input type="text" :name="'items['+index+'][folio]'" :value="item.data.folio" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                                <input type="text" :name="'items['+index+'][folio_interno_proveedor]'" :value="item.data.folio_interno_proveedor" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
+                                            </div>
+                                            <div x-show="hasInvoice">
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Tipo de CFDI</label>
+                                                <input type="text" :name="'items['+index+'][tipo_comprobante]'" :value="item.data.tipo_comprobante" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
                                             </div>
                                             
                                             <div x-show="hasInvoice">
@@ -535,7 +539,7 @@
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">$</span>
                                                     <input type="number" step="0.01" :name="'items['+index+'][subtotal]'" x-model="item.data.subtotal" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-indigo-600 pl-8" :readonly="hasInvoice" :required="!hasInvoice"
-                                                        @input="if(!hasInvoice) item.data.impuestos = Math.max(0, (parseFloat(item.data.total || 0) - parseFloat(item.data.subtotal || 0))).toFixed(2)">
+                                                        @input="if(!hasInvoice) { const iva = Math.max(0, (parseFloat(item.data.total || 0) - parseFloat(item.data.subtotal || 0))).toFixed(2); item.data.impuestos = iva; item.data.monto_iva = iva; }">
                                                 </div>
                                             </div>
 
@@ -543,7 +547,22 @@
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2 text-amber-600">Impuestos (IVA)</label>
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">$</span>
-                                                    <input type="number" step="0.01" :name="'items['+index+'][impuestos]'" x-model="item.data.impuestos" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-amber-600 pl-8" readonly>
+                                                    <input type="number" step="0.01" :name="'items['+index+'][monto_iva]'" x-model="item.data.monto_iva" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-amber-600 pl-8" readonly>
+                                                </div>
+                                            </div>
+                                            <input type="hidden" :name="'items['+index+'][impuestos]'" :value="item.data.monto_iva">
+                                            <div x-show="hasInvoice">
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2 text-rose-600">Retención IVA</label>
+                                                <div class="relative">
+                                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">$</span>
+                                                    <input type="number" step="0.01" :name="'items['+index+'][retencion_iva]'" x-model="item.data.retencion_iva" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-rose-600 pl-8" readonly>
+                                                </div>
+                                            </div>
+                                            <div x-show="hasInvoice">
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2 text-sky-600">Monto ISR</label>
+                                                <div class="relative">
+                                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">$</span>
+                                                    <input type="number" step="0.01" :name="'items['+index+'][monto_isr]'" x-model="item.data.monto_isr" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-sky-600 pl-8" readonly>
                                                 </div>
                                             </div>
                                             <div>
@@ -551,7 +570,7 @@
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-indigo-300">$</span>
                                                     <input type="number" step="0.01" :name="'items['+index+'][total]'" x-model="item.data.total" class="w-full bg-indigo-50 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-800 rounded-xl rounded-tl-none text-xl font-black text-indigo-700 dark:text-indigo-300 py-3 pl-10" :readonly="hasInvoice" :required="!hasInvoice" 
-                                                        @input="if(!hasInvoice) item.data.impuestos = Math.max(0, (parseFloat(item.data.total || 0) - parseFloat(item.data.subtotal || 0))).toFixed(2)">
+                                                        @input="if(!hasInvoice) { const iva = Math.max(0, (parseFloat(item.data.total || 0) - parseFloat(item.data.subtotal || 0))).toFixed(2); item.data.impuestos = iva; item.data.monto_iva = iva; }">
                                                 </div>
                                                 
                                                 <template x-if="!hasInvoice && parseFloat(item.data.subtotal) > parseFloat(item.data.total)">
@@ -892,7 +911,7 @@
                         @php
                             $draftXmlLabel = $reimbursement->original_xml_name
                                 ?: ($reimbursement->xml_path
-                                    ? ('Factura: ' . ($reimbursement->folio ?: (substr($reimbursement->uuid ?? '', 0, 8) ?: basename($reimbursement->xml_path))))
+                                    ? ('Factura: ' . ($reimbursement->folio_interno_proveedor ?: (substr($reimbursement->uuid ?? '', 0, 8) ?: basename($reimbursement->xml_path))))
                                     : '');
                             $draftPdfLabel = $reimbursement->original_pdf_name
                                 ?: ($reimbursement->pdf_path ? basename($reimbursement->pdf_path) : '');
@@ -907,7 +926,7 @@
                             xmlParsed: {{ $reimbursement->xml_path ? 'true' : 'false' }},
                             data: {
                                 uuid: @json($reimbursement->uuid),
-                                folio: @json($reimbursement->folio),
+                                folio_interno_proveedor: @json($reimbursement->folio_interno_proveedor),
                                 rfc_emisor: @json($reimbursement->rfc_emisor),
                                 nombre_emisor: @json($reimbursement->nombre_emisor),
                                 rfc_receptor: @json($reimbursement->rfc_receptor),
@@ -916,7 +935,11 @@
                                 total: {{ $reimbursement->total ?: 0 }},
                                 subtotal: {{ $reimbursement->subtotal ?: 0 }},
                                 impuestos: {{ $reimbursement->impuestos ?: 0 }},
+                                monto_iva: {{ $reimbursement->monto_iva ?? ($reimbursement->impuestos ?: 0) }},
+                                retencion_iva: {{ $reimbursement->retencion_iva ?: 0 }},
+                                monto_isr: {{ $reimbursement->monto_isr ?: 0 }},
                                 moneda: @json($reimbursement->moneda ?: "MXN"),
+                                tipo_comprobante: @json($reimbursement->tipo_comprobante),
                                 metodo_pago: @json($reimbursement->metodo_pago),
                                 forma_pago: @json($reimbursement->forma_pago),
                                 uso_cfdi: @json($reimbursement->uso_cfdi),
@@ -937,7 +960,7 @@
                             @php
                                 $childXmlLabel = $child->original_xml_name
                                     ?: ($child->xml_path
-                                        ? ('Factura: ' . ($child->folio ?: (substr($child->uuid ?? '', 0, 8) ?: basename($child->xml_path))))
+                                        ? ('Factura: ' . ($child->folio_interno_proveedor ?: (substr($child->uuid ?? '', 0, 8) ?: basename($child->xml_path))))
                                         : '');
                                 $childPdfLabel = $child->original_pdf_name
                                     ?: ($child->pdf_path ? basename($child->pdf_path) : '');
@@ -952,7 +975,7 @@
                                 xmlParsed: {{ $child->xml_path ? 'true' : 'false' }},
                                 data: {
                                     uuid: @json($child->uuid),
-                                    folio: @json($child->folio),
+                                    folio_interno_proveedor: @json($child->folio_interno_proveedor),
                                     rfc_emisor: @json($child->rfc_emisor),
                                     nombre_emisor: @json($child->nombre_emisor),
                                     rfc_receptor: @json($child->rfc_receptor),
@@ -961,7 +984,11 @@
                                     total: {{ $child->total ?: 0 }},
                                     subtotal: {{ $child->subtotal ?: 0 }},
                                     impuestos: {{ $child->impuestos ?: 0 }},
+                                    monto_iva: {{ $child->monto_iva ?? ($child->impuestos ?: 0) }},
+                                    retencion_iva: {{ $child->retencion_iva ?: 0 }},
+                                    monto_isr: {{ $child->monto_isr ?: 0 }},
                                     moneda: @json($child->moneda ?: "MXN"),
+                                    tipo_comprobante: @json($child->tipo_comprobante),
                                     metodo_pago: @json($child->metodo_pago),
                                     forma_pago: @json($child->forma_pago),
                                     uso_cfdi: @json($child->uso_cfdi),
@@ -1140,9 +1167,9 @@
                         companyConfirmed: initialData ? !!initialData.companyConfirmed : false,
                         manualData: { nombre_emisor: '', fecha: '', subtotal: 0, total: 0, impuestos: 0 },
                         data: initialData ? initialData.data : { 
-                            uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', 
+                            uuid: '', folio_interno_proveedor: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', 
                             nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, 
-                            impuestos: 0, metodo_pago: '', forma_pago: '', uso_cfdi: '', 
+                            impuestos: 0, monto_iva: 0, retencion_iva: 0, monto_isr: 0, tipo_comprobante: '', metodo_pago: '', forma_pago: '', uso_cfdi: '', 
                             lugar_expedicion: '', regimen_fiscal_emisor: '', category: this.lockedCategory || '', observaciones: '',
                             attendees_count: '', location: '', attendees_names: '', propina: 0
                         }
@@ -1216,7 +1243,7 @@
                             this.items[index].draftId = r.id;
                             if (r.has_xml) {
                                 this.items[index].xmlParsed = true;
-                                this.items[index].fileName = r.xml_name || this.items[index].fileName || 'Factura: ' + (r.folio || 'Guardada');
+                                this.items[index].fileName = r.xml_name || this.items[index].fileName || 'Factura: ' + (r.folio_interno_proveedor || 'Guardada');
                                 const xmlInput = this.getItemFileInput(index, 'xml_file');
                                 if (xmlInput) xmlInput.value = '';
                             }
@@ -1238,7 +1265,7 @@
                                 const ticketInput = this.getItemFileInput(index, 'ticket_file');
                                 if (ticketInput) ticketInput.value = '';
                             }
-                            if (r.folio) this.items[index].folio = r.folio;
+                            if (r.folio_interno_proveedor) this.items[index].data.folio_interno_proveedor = r.folio_interno_proveedor;
                         }
                     });
                     this.$nextTick(() => this.calculateTotalFileSize());
@@ -1581,7 +1608,7 @@
                             item.xmlParsed = false; 
                             xmlInput.value = ''; 
                             item.fileName = ''; 
-                            item.data = { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '', category: this.lockedCategory || '' };
+                            item.data = { uuid: '', folio_interno_proveedor: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, impuestos: 0, monto_iva: 0, retencion_iva: 0, monto_isr: 0, tipo_comprobante: '', metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '', category: this.lockedCategory || '' };
                         }
                         else { 
                             // Check for duplicates in current session list
@@ -1601,7 +1628,7 @@
                                 xmlInput.value = '';
                                 item.xmlParsed = false;
                                 item.fileName = '';
-                                item.data = { uuid: '', folio: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '', category: this.lockedCategory || '' };
+                                item.data = { uuid: '', folio_interno_proveedor: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, impuestos: 0, monto_iva: 0, retencion_iva: 0, monto_isr: 0, tipo_comprobante: '', metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '', category: this.lockedCategory || '' };
                                 return;
                             }
 
@@ -1620,7 +1647,7 @@
                              item.data.attendees_names = oldAttendeesNames;
                              item.data.category = this.lockedCategory || oldCategory || '';
                              if (oldObservaciones) item.data.observaciones = oldObservaciones;
-                             item.fileName = 'Factura: ' + (d.folio || (d.uuid ? d.uuid.substring(0, 8) : '???'));
+                             item.fileName = 'Factura: ' + (d.folio_interno_proveedor || (d.uuid ? d.uuid.substring(0, 8) : '???'));
                              this.saveSlot(index, true).catch(e => console.error('Slot Save Error:', e));
                             
                             if (d.pdf_validation && !d.pdf_validation.uuid_match && !item.noPdf && !d.pdf_validation.is_missing) {

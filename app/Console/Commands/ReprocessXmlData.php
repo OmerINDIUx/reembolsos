@@ -82,7 +82,7 @@ class ReprocessXmlData extends Command
                     'nombre_emisor' => $data['nombre_emisor'],
                     'rfc_receptor' => $data['rfc_receptor'],
                     'nombre_receptor' => $data['nombre_receptor'],
-                    'folio' => $r->folio ?: $data['folio'], // No sobreescribir si ya tiene un folio asignado por el sistema
+                    'folio_interno_proveedor' => $data['folio_interno_proveedor'] ?? null,
                     'fecha' => $data['fecha'],
                     'total' => $data['total'],
                     'subtotal' => $data['subtotal'],
@@ -94,6 +94,9 @@ class ReprocessXmlData extends Command
                     'uso_cfdi' => $data['uso_cfdi'],
                     'lugar_expedicion' => $data['lugar_expedicion'],
                     'regimen_fiscal_emisor' => $data['regimen_fiscal_emisor'],
+                    'retencion_iva' => $data['retencion_iva'] ?? 0,
+                    'monto_iva' => $data['monto_iva'] ?? $data['impuestos'],
+                    'monto_isr' => $data['monto_isr'] ?? 0,
                 ]);
 
                 // NUEVO: Validar contra el PDF si existe para marcar si UUID y Monto están "OK"
@@ -167,7 +170,7 @@ class ReprocessXmlData extends Command
             $total = (string)$xml['Total'];
             $subtotal = (string)$xml['SubTotal'];
             $moneda = (string)$xml['Moneda'];
-            $folio = (string)$xml['Folio'] ?? 'N/A';
+            $folioInternoProveedor = (string)$xml['Folio'] ?? null;
             $fechaAttr = (string)$xml['Fecha'];
             $fecha = $fechaAttr ? date('Y-m-d', strtotime($fechaAttr)) : null;
             $tipo = (string)$xml['TipoDeComprobante'];
@@ -186,6 +189,31 @@ class ReprocessXmlData extends Command
                     }
                 }
             }
+
+            $montoIva = $this->sumTaxAmounts(
+                $xml,
+                [
+                    '//cfdi:Comprobante/cfdi:Impuestos/cfdi:Traslados/cfdi:Traslado',
+                    '//cfdi:Concepto/cfdi:Impuestos/cfdi:Traslados/cfdi:Traslado',
+                ],
+                '002'
+            );
+            $retencionIva = $this->sumTaxAmounts(
+                $xml,
+                [
+                    '//cfdi:Comprobante/cfdi:Impuestos/cfdi:Retenciones/cfdi:Retencion',
+                    '//cfdi:Concepto/cfdi:Impuestos/cfdi:Retenciones/cfdi:Retencion',
+                ],
+                '002'
+            );
+            $montoIsr = $this->sumTaxAmounts(
+                $xml,
+                [
+                    '//cfdi:Comprobante/cfdi:Impuestos/cfdi:Retenciones/cfdi:Retencion',
+                    '//cfdi:Concepto/cfdi:Impuestos/cfdi:Retenciones/cfdi:Retencion',
+                ],
+                '001'
+            );
 
             // Emisor / Receptor
             $emisorArr = $xml->xpath('//cfdi:Emisor');
@@ -208,7 +236,7 @@ class ReprocessXmlData extends Command
                 'nombre_emisor' => $emisor ? (string)$emisor['Nombre'] : 'N/A',
                 'rfc_receptor' => $receptor ? (string)$receptor['Rfc'] : 'N/A',
                 'nombre_receptor' => $receptor ? (string)$receptor['Nombre'] : 'N/A',
-                'folio' => $folio,
+                'folio_interno_proveedor' => $folioInternoProveedor,
                 'fecha' => $fecha,
                 'total' => (float)$total,
                 'subtotal' => (float)$subtotal,
@@ -220,9 +248,37 @@ class ReprocessXmlData extends Command
                 'uso_cfdi' => $usoCfdi,
                 'lugar_expedicion' => $lugarExpedicion,
                 'regimen_fiscal_emisor' => $regimenFiscalEmisor,
+                'retencion_iva' => $retencionIva,
+                'monto_iva' => $montoIva,
+                'monto_isr' => $montoIsr,
             ];
         } catch (\Exception $e) {
             return null;
         }
+    }
+
+    private function sumTaxAmounts(\SimpleXMLElement $xml, array $paths, string $taxCode): float
+    {
+        foreach ($paths as $path) {
+            $nodes = $xml->xpath($path);
+            if (!$nodes) {
+                continue;
+            }
+
+            $amount = 0.0;
+            foreach ($nodes as $node) {
+                if ((string) ($node['Impuesto'] ?? '') !== $taxCode) {
+                    continue;
+                }
+
+                $amount += (float) ($node['Importe'] ?? 0);
+            }
+
+            if ($amount > 0) {
+                return round($amount, 2);
+            }
+        }
+
+        return 0.0;
     }
 }

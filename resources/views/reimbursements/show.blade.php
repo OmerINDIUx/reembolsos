@@ -410,6 +410,13 @@
                             'PUE' => 'Pago en una sola exhibición',
                             'PPD' => 'Pago en parcialidades o diferido'
                         ];
+                        $satTipoComprobante = [
+                            'I' => 'Ingreso',
+                            'E' => 'Egreso',
+                            'T' => 'Traslado',
+                            'N' => 'Nómina',
+                            'P' => 'Pago',
+                        ];
                         
                         $satFormaPago = [
                             '01' => 'Efectivo', '02' => 'Cheque nominativo', '03' => 'Transferencia electrónica', 
@@ -457,6 +464,11 @@
 
                         $reg = $reimbursement->regimen_fiscal_emisor;
                         $regDesc = $satRegimenFiscal[$reg] ?? '';
+                        $tipoCfdi = $reimbursement->tipo_comprobante;
+                        $tipoCfdiDesc = $satTipoComprobante[$tipoCfdi] ?? '';
+                        $montoIva = $reimbursement->monto_iva ?? $reimbursement->impuestos ?? 0;
+                        $retencionIva = $reimbursement->retencion_iva ?? 0;
+                        $montoIsr = $reimbursement->monto_isr ?? 0;
                     @endphp
                     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                         <!-- Prominent Validation Header (Semaphore) -->
@@ -526,10 +538,32 @@
                                 @endif
                             </div>
                             <div>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Tipo de CFDI</p>
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $tipoCfdi ?? 'N/A' }}</p>
+                                @if($tipoCfdiDesc)
+                                    <p class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 leading-tight">{{ $tipoCfdiDesc }}</p>
+                                @endif
+                            </div>
+                            <div>
                                 <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">CP Expedición</p>
                                 <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $reimbursement->lugar_expedicion ?? 'S/N' }}</p>
                             </div>
-                            
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Folio Interno Proveedor</p>
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $reimbursement->folio_interno_proveedor ?? 'S/N' }}</p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Monto IVA</p>
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">$ {{ number_format((float) $montoIva, 2) }}</p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Retención IVA</p>
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">$ {{ number_format((float) $retencionIva, 2) }}</p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Monto ISR</p>
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">$ {{ number_format((float) $montoIsr, 2) }}</p>
+                            </div>
                             <div class="col-span-2 md:col-span-4 border-t border-gray-100 pt-4 dark:border-gray-700">
                                 <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Régimen Fiscal Emisor</p>
                                 <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $reg ?? 'S/N' }}</p>
@@ -979,8 +1013,20 @@
                                 </div>
 
                                 <div>
+                                    <label class="block mb-1 font-medium text-gray-700 dark:text-gray-300">Centro de costos</label>
+                                    <select name="cost_center_id" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>
+                                        @foreach($adminFlowCostCenters as $costCenterOption)
+                                            <option value="{{ $costCenterOption->id }}" @selected((int) old('cost_center_id', $reimbursement->cost_center_id) === (int) $costCenterOption->id)>
+                                                {{ $costCenterOption->name }}{{ $costCenterOption->code ? ' (' . $costCenterOption->code . ')' : '' }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Si eliges tipo fondo fijo, se tomará automáticamente un fondo fijo activo del centro seleccionado.</p>
+                                </div>
+
+                                <div>
                                     <label class="block mb-1 font-medium text-gray-700 dark:text-gray-300">Motivo del ajuste</label>
-                                    <textarea name="admin_comment" rows="3" required class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Explica por qué se cambia el estado o tipo.">{{ old('admin_comment') }}</textarea>
+                                    <textarea name="admin_comment" rows="3" required class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Explica por qué se cambia el estado, tipo o centro de costos.">{{ old('admin_comment') }}</textarea>
                                 </div>
                             </div>
                         </div>

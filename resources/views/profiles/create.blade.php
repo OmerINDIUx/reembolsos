@@ -79,7 +79,14 @@
                                 'travel_events' => 'Viajes y Eventos',
                                 'profiles' => 'Perfiles',
                             ][$module] ?? str_replace('_', ' ', $module);
+                            $permissionDescriptionOverrides = [
+                                'reimbursements.edit' => 'Permite modificar reembolsos existentes, incluyendo la edición individual y masiva de estatus operativo, tipo de solicitud y centro de costos.',
+                            ];
+                            $visibleModulePermissions = collect($modulePermissions)
+                                ->reject(fn ($permission) => $permission->name === 'reimbursements.create_special')
+                                ->values();
                         @endphp
+                        @continue($visibleModulePermissions->isEmpty())
                         <div class="p-8">
                             <div class="flex items-center justify-between mb-4">
                                 <h4 class="text-sm font-black text-gray-900 dark:text-white uppercase tracking-[0.1em] flex items-center">
@@ -102,13 +109,13 @@
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-50 dark:divide-gray-700">
-                                        @foreach($modulePermissions as $permission)
+                                        @foreach($visibleModulePermissions as $permission)
                                         <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-900/20 transition-colors">
                                             <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">
                                                 {{ $permission->display_name }}
                                             </td>
                                             <td class="px-6 py-4 text-xs text-gray-500 dark:text-gray-400">
-                                                {{ $permission->description ?? 'Permite realizar acciones en el módulo.' }}
+                                                {{ $permissionDescriptionOverrides[$permission->name] ?? ($permission->description ?? 'Permite realizar acciones en el módulo.') }}
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap text-center">
                                                 <input type="checkbox" name="permissions[]" value="{{ $permission->id }}" 
@@ -152,4 +159,3 @@
     </script>
     @endpush
 </x-app-layout>
-

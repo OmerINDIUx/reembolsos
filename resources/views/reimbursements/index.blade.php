@@ -32,7 +32,11 @@
                             @if($canUsePaymentModule && request('tab') === 'payment')
                             <button type="button" onclick="downloadCsvFromFilters()" class="inline-flex items-center px-4 py-2 bg-sky-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-sky-500 focus:bg-sky-700 active:bg-sky-900 transition ease-in-out duration-150">
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                Descargar CSV
+                                Descargar acumulado
+                            </button>
+                            <button type="button" onclick="downloadPolicyFromFilters()" class="inline-flex items-center px-4 py-2 bg-sky-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-sky-500 focus:bg-sky-700 active:bg-sky-900 transition ease-in-out duration-150">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M9 8h6m-9 12h12a2 2 0 002-2V6a2 2 0 00-2-2H8l-4 4v10a2 2 0 002 2z"/></svg>
+                                Descargar póliza
                             </button>
                             <button type="button" onclick="downloadXmlFromFilters()" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 transition ease-in-out duration-150">
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -318,10 +322,14 @@
 
                                         <button type="button" @click="downloadCSV()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                            <span>Descargar CSV</span>
+                                            <span>Descargar acumulado</span>
                                         </button>
 
                                         @if($tab === 'payment')
+                                        <button type="button" @click="downloadPolicy()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M9 8h6m-9 12h12a2 2 0 002-2V6a2 2 0 00-2-2H8l-4 4v10a2 2 0 002 2z"/></svg>
+                                            <span>Descargar Póliza</span>
+                                        </button>
                                         <button type="button" @click="downloadXML()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                             <span>Descargar XML</span>
@@ -406,6 +414,9 @@
                                                                    data-amount="{{ $totalAmount }}"
                                                                    data-has-uuid="{{ $ticketCount }}"
                                                                    data-mismatch="{{ $mismatchCount }}"
+                                                                   data-statuses='@json($batchItems->pluck("status")->filter()->unique()->values())'
+                                                                   data-types='@json($batchItems->pluck("type")->filter()->unique()->values())'
+                                                                   data-cost-center-ids='@json($batchItems->pluck("cost_center_id")->filter()->unique()->values())'
                                                                    class="cc-group-checkbox w-6 h-6 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200 cursor-pointer" 
                                                                    @change="toggleGroupData($event.target)" />
                                                         </div>
@@ -852,6 +863,12 @@
                 params.set('tab', 'payment');
                 window.location.href = "{{ route('reimbursements.export_xml') }}?" + params.toString();
             }
+
+            window.downloadPolicyFromFilters = function() {
+                const params = new URLSearchParams(new FormData(form));
+                params.set('tab', 'payment');
+                window.location.href = "{{ route('reimbursements.payment_policy') }}?" + params.toString();
+            }
             
             // Function to handle fetching and updating
             function fetchResults(url) {
@@ -1036,6 +1053,9 @@
                 confirmed: false,
                 selectedAction: '',
                 selectAll: false,
+                bulkEditStatus: '',
+                bulkEditType: '',
+                bulkEditCostCenterId: '',
                 
                 // Track metadata manually because DOM inputs can be detached during re-render
                 metadata: [],
@@ -1053,6 +1073,7 @@
                         this.selectedIds = [];
                         this.metadata = [];
                     }
+                    this.syncBulkEditDefaults();
                 },
                 
                 get selectedGroupCount() {
@@ -1074,22 +1095,49 @@
                 get totalAlerts() {
                     return this.missingUuidCount + this.mismatchCount;
                 },
+
+                get uniformStatus() {
+                    const values = [...new Set(this.metadata.flatMap(item => item.statuses || []).filter(Boolean))];
+                    return values.length === 1 ? values[0] : '';
+                },
+
+                get uniformType() {
+                    const values = [...new Set(this.metadata.flatMap(item => item.types || []).filter(Boolean))];
+                    return values.length === 1 ? values[0] : '';
+                },
+
+                get uniformCostCenterId() {
+                    const values = [...new Set(this.metadata.flatMap(item => item.costCenterIds || []).filter(Boolean).map(String))];
+                    return values.length === 1 ? values[0] : '';
+                },
+
+                syncBulkEditDefaults() {
+                    if (this.selectedAction !== 'editar') return;
+                    this.bulkEditStatus = this.uniformStatus;
+                    this.bulkEditType = this.uniformType;
+                    this.bulkEditCostCenterId = this.uniformCostCenterId;
+                },
                 
                 toggleGroupData(target) {
                     const idsArr = JSON.parse(target.dataset.ids || "[]");
                     const amount = parseFloat(target.dataset.amount || 0);
                     const hasUuid = parseInt(target.dataset.hasUuid || 0);
                     const mismatch = parseInt(target.dataset.mismatch || 0);
+                    const statuses = JSON.parse(target.dataset.statuses || "[]");
+                    const types = JSON.parse(target.dataset.types || "[]");
+                    const costCenterIds = JSON.parse(target.dataset.costCenterIds || "[]");
                     
                     if (target.checked) {
                         idsArr.forEach(id => {
                             if (!this.selectedIds.includes(String(id))) this.selectedIds.push(String(id));
                         });
-                        this.metadata.push({ idsArr, amount, hasUuid, mismatch });
+                        this.metadata.push({ idsArr, amount, hasUuid, mismatch, statuses, types, costCenterIds });
                     } else {
                         this.selectedIds = this.selectedIds.filter(id => !idsArr.map(String).includes(String(id)));
                         this.metadata = this.metadata.filter(m => JSON.stringify(m.idsArr) !== JSON.stringify(idsArr));
                     }
+
+                    this.syncBulkEditDefaults();
                 },
                 
                 formatMoney(amount) {
@@ -1120,6 +1168,14 @@
                     window.location.href = `{{ route('reimbursements.export_xml') }}?${params.toString()}`;
                 },
 
+                downloadPolicy() {
+                    const ids = this.selectedIds.join(',');
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('ids', ids);
+                    params.set('tab', 'payment');
+                    window.location.href = `{{ route('reimbursements.payment_policy') }}?${params.toString()}`;
+                },
+
                 downloadPaymentFile() {
                     const ids = this.selectedIds.join(',');
                     const params = new URLSearchParams(window.location.search);
@@ -1130,6 +1186,11 @@
 
                 init() {
                     // Modal now handled inline with the partial.
+                    this.$watch('selectedAction', (value) => {
+                        if (value === 'editar') {
+                            this.syncBulkEditDefaults();
+                        }
+                    });
                 }
             }));
         });

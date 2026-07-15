@@ -1,3 +1,15 @@
+@php
+    $bulkAdminFlowStatusOptions = [
+        'pendiente' => 'Activo en flujo de operación',
+        'requiere_correccion' => 'Devuelto para cambio',
+        'rechazado' => 'Rechazo definitivo',
+    ];
+    $bulkAdminFlowTypeOptions = [
+        'reembolso' => 'Reembolso',
+        'fondo_fijo' => 'Fondo fijo',
+    ];
+    $bulkEditableCostCenters = collect($editableCostCenters ?? $authorizedCCs ?? [])->where('is_active', true);
+@endphp
 <div x-show="openModal" class="fixed z-50 inset-0 overflow-y-auto" style="display: none;" id="bulk-modal-target">
     <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
         <div class="fixed inset-0 transition-opacity" aria-hidden="true" @click="openModal = false">
@@ -49,11 +61,17 @@
                                 <!-- Action Selection -->
                                 <div class="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
                                     <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Qué acción deseas realizar?</label>
-                                    <div class="grid grid-cols-2 gap-3">
+                                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                                         <label class="cursor-pointer">
                                             <input type="radio" name="action" value="aprobado" x-model="selectedAction" class="sr-only" required>
                                             <div :class="selectedAction === 'aprobado' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/40 ring-1 ring-emerald-500' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-transparent'" class="rounded-xl p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all text-center border">
                                                 <span class="block text-sm font-black" :class="selectedAction === 'aprobado' ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300'">Aprobar Masivamente</span>
+                                            </div>
+                                        </label>
+                                        <label class="cursor-pointer">
+                                            <input type="radio" name="action" value="requiere_correccion" x-model="selectedAction" class="sr-only" required>
+                                            <div :class="selectedAction === 'requiere_correccion' ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/40 ring-1 ring-amber-500' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-transparent'" class="rounded-xl p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all text-center border">
+                                                <span class="block text-sm font-black" :class="selectedAction === 'requiere_correccion' ? 'text-amber-700 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300'">Devolver para Corrección</span>
                                             </div>
                                         </label>
                                         <label class="cursor-pointer">
@@ -62,13 +80,67 @@
                                                 <span class="block text-sm font-black" :class="selectedAction === 'rechazado' ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'">Rechazar Masivamente</span>
                                             </div>
                                         </label>
+                                        @if(auth()->user()->canPerform('reimbursements.edit') && !auth()->user()->isAdminView())
+                                        <label class="cursor-pointer">
+                                            <input type="radio" name="action" value="editar" x-model="selectedAction" class="sr-only" required>
+                                            <div :class="selectedAction === 'editar' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/40 ring-1 ring-indigo-500' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-transparent'" class="rounded-xl p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all text-center border">
+                                                <span class="block text-sm font-black" :class="selectedAction === 'editar' ? 'text-indigo-700 dark:text-indigo-400' : 'text-gray-700 dark:text-gray-300'">Editar Masivamente</span>
+                                            </div>
+                                        </label>
+                                        @endif
                                     </div>
                                 </div>
 
                                 <!-- Rejection Reason (Conditional) -->
-                                <div x-show="selectedAction === 'rechazado'" x-transition class="mt-4">
-                                    <label class="block text-[10px] font-black text-red-500 uppercase tracking-widest mb-2">Motivo de Rechazo (Obligatorio)</label>
-                                    <textarea name="rejection_reason" x-bind:required="selectedAction === 'rechazado'" rows="2" class="shadow-sm focus:ring-red-500 focus:border-red-500 block w-full sm:text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-xl" placeholder="Describe brevemente el motivo para los seleccionados..."></textarea>
+                                <div x-show="selectedAction === 'rechazado' || selectedAction === 'requiere_correccion'" x-transition class="mt-4">
+                                    <label class="block text-[10px] font-black uppercase tracking-widest mb-2"
+                                           :class="selectedAction === 'rechazado' ? 'text-red-500' : 'text-amber-500'"
+                                           x-text="selectedAction === 'rechazado' ? 'Motivo de Rechazo (Obligatorio)' : 'Motivo de Devolución (Obligatorio)'"></label>
+                                    <textarea name="rejection_reason" x-bind:required="selectedAction === 'rechazado' || selectedAction === 'requiere_correccion'" rows="2" class="shadow-sm block w-full sm:text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-xl" :class="selectedAction === 'rechazado' ? 'focus:ring-red-500 focus:border-red-500' : 'focus:ring-amber-500 focus:border-amber-500'" placeholder="Describe brevemente el motivo para los seleccionados..."></textarea>
+                                </div>
+
+                                <div x-show="selectedAction === 'editar'" x-transition class="mt-4 space-y-4">
+                                    <div class="rounded-2xl border border-indigo-200 bg-indigo-50/80 p-4 dark:border-indigo-800 dark:bg-indigo-900/20">
+                                        <p class="text-xs font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300">Edición masiva</p>
+                                        <p class="mt-1 text-xs text-indigo-700/80 dark:text-indigo-300/80">Aplicará el mismo estatus, tipo y centro de costos a todos los seleccionados.</p>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Estatus operativo</label>
+                                        <select name="status" x-model="bulkEditStatus" class="block w-full rounded-xl border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                            <option value="">No cambiar estatus</option>
+                                            @foreach($bulkAdminFlowStatusOptions as $value => $label)
+                                                <option value="{{ $value }}">{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Tipo de solicitud</label>
+                                        <select name="type" x-model="bulkEditType" class="block w-full rounded-xl border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                            <option value="">No cambiar tipo</option>
+                                            @foreach($bulkAdminFlowTypeOptions as $value => $label)
+                                                <option value="{{ $value }}">{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Centro de costos</label>
+                                        <select name="cost_center_id" x-model="bulkEditCostCenterId" class="block w-full rounded-xl border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                            <option value="">No cambiar centro de costos</option>
+                                            @foreach($bulkEditableCostCenters as $costCenterOption)
+                                                <option value="{{ $costCenterOption->id }}">{{ $costCenterOption->name }}{{ $costCenterOption->code ? ' (' . $costCenterOption->code . ')' : '' }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Motivo del ajuste</label>
+                                        <textarea name="admin_comment" x-bind:required="selectedAction === 'editar'" rows="3" class="shadow-sm block w-full sm:text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-xl focus:ring-indigo-500 focus:border-indigo-500" placeholder="Explica por qué se hará este ajuste masivo..."></textarea>
+                                    </div>
+
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Si el lote trae valores distintos, el campo se queda en blanco. Solo se actualizarán los campos que elijas.</p>
                                 </div>
                                 
                                 <!-- Confirmation & Security -->

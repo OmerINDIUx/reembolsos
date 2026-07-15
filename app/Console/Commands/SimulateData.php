@@ -137,17 +137,21 @@ class SimulateData extends Command
                     'nombre_emisor' => $data['nombre_emisor'],
                     'rfc_receptor' => $data['rfc_receptor'],
                     'nombre_receptor' => $data['nombre_receptor'],
-                    'folio' => $data['folio'],
+                    'folio_interno_proveedor' => $data['folio_interno_proveedor'] ?? null,
                     'fecha' => $data['fecha'],
                     'total' => $data['total'],
                     'subtotal' => $data['subtotal'],
                     'impuestos' => $data['impuestos'],
                     'moneda' => $data['moneda'],
+                    'tipo_comprobante' => $data['tipo_comprobante'] ?? 'I',
                     'metodo_pago' => $data['metodo_pago'],
                     'forma_pago' => $data['forma_pago'],
                     'uso_cfdi' => $data['uso_cfdi'],
                     'lugar_expedicion' => $data['lugar_expedicion'],
                     'regimen_fiscal_emisor' => $data['regimen_fiscal_emisor'],
+                    'retencion_iva' => $data['retencion_iva'] ?? 0,
+                    'monto_iva' => $data['monto_iva'] ?? $data['impuestos'],
+                    'monto_isr' => $data['monto_isr'] ?? 0,
                     'xml_path' => $storagePathXml,
                     'pdf_path' => $storagePathPdf,
                     'status' => $status,
@@ -216,7 +220,7 @@ class SimulateData extends Command
             $total = (string)$xml['Total'];
             $subtotal = (string)$xml['SubTotal'];
             $moneda = (string)$xml['Moneda'] ?? 'MXN';
-            $folio = (string)$xml['Folio'] ?? 'N/A';
+            $folioInternoProveedor = (string)$xml['Folio'] ?? null;
             $fecha = (string)$xml['Fecha'];
             
             $emisorArr = $xml->xpath('//cfdi:Emisor');
@@ -234,7 +238,7 @@ class SimulateData extends Command
                 'nombre_emisor' => $emisor ? (string)$emisor['Nombre'] : 'N/A',
                 'rfc_receptor' => $receptor ? (string)$receptor['Rfc'] : 'N/A',
                 'nombre_receptor' => $receptor ? (string)$receptor['Nombre'] : 'N/A',
-                'folio' => $folio,
+                'folio_interno_proveedor' => $folioInternoProveedor,
                 'fecha' => $fecha ? date('Y-m-d', strtotime($fecha)) : null,
                 'total' => $total,
                 'subtotal' => $subtotal,

@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Support\NotificationRouteHelper;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -15,6 +16,7 @@ class BatchedReimbursementsNotification extends Notification
     protected $count;
     protected $totalAmount;
     protected $breakdown;
+    protected $reimbursementIds;
 
     /**
      * Create a new notification instance.
@@ -22,6 +24,7 @@ class BatchedReimbursementsNotification extends Notification
     public function __construct($reimbursements)
     {
         $this->reimbursements = $reimbursements;
+        $this->reimbursementIds = $reimbursements->pluck('id')->filter()->unique()->values()->all();
         $this->count = $reimbursements->count();
         $this->totalAmount = $reimbursements->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0));
         
@@ -51,13 +54,15 @@ class BatchedReimbursementsNotification extends Notification
      */
     public function toMail(object $notifiable): MailMessage
     {
+        $actionUrl = NotificationRouteHelper::reimbursementsByIds($this->reimbursementIds, 'management');
+
         return (new MailMessage)
             ->subject('Nuevas Notificaciones de Reembolso (Resumen)')
             ->view('emails.notification', [
                 'greeting' => 'Hola ' . $notifiable->name . ',',
                 'bodyText' => 'Has recibido <span class="highlight">' . $this->count . '</span> nuevas notificaciones de reembolso. Aquí tienes el resumen de las solicitudes que requieren tu atención.',
-                'actionUrl' => route('reimbursements.index', ['tab' => 'management']),
-                'actionText' => 'Ver Todo en el Sistema',
+                'actionUrl' => $actionUrl,
+                'actionText' => $this->count === 1 ? 'Ver Solicitud' : 'Ver Solicitudes',
                 'details' => [
                     'Cantidad Total' => $this->count . ' reembolsos',
                     'Monto Total' => '$' . number_format($this->totalAmount, 2),
@@ -77,8 +82,10 @@ class BatchedReimbursementsNotification extends Notification
         return [
             'count' => $this->count,
             'total' => $this->totalAmount,
+            'reimbursement_ids' => $this->reimbursementIds,
             'message' => 'Has recibido ' . $this->count . ' nuevas notificaciones de reembolso.',
-            'type' => 'info'
+            'type' => 'info',
+            'url' => NotificationRouteHelper::reimbursementsByIds($this->reimbursementIds, 'management'),
         ];
     }
 }

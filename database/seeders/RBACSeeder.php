@@ -14,7 +14,7 @@ class RBACSeeder extends Seeder
         // Define Modules and Permissions
         $modules = [
             'dashboard' => ['view_own', 'view_global'],
-            'reimbursements' => ['view', 'create', 'create_special', 'create_on_behalf', 'create_all_cost_centers', 'edit', 'delete', 'approve', 'bulk_approve', 'export', 'global_history'],
+            'reimbursements' => ['view', 'create', 'create_on_behalf', 'create_all_cost_centers', 'edit', 'delete', 'approve', 'bulk_approve', 'export', 'global_history'],
             'users' => ['view', 'create', 'edit', 'delete'],
             'cost_centers' => ['view', 'create', 'edit', 'delete'],
             'travel_events' => ['view', 'create', 'edit', 'delete', 'close'],
@@ -25,7 +25,6 @@ class RBACSeeder extends Seeder
         $descriptions = [
             'view' => 'Permite visualizar los registros del módulo.',
             'create' => 'Permite crear nuevos registros básicos.',
-            'create_special' => 'Permite registrar reembolsos de tipo Fondo Fijo y Viajes.',
             'create_on_behalf' => 'Permite crear reembolsos a nombre de otros usuarios del mismo centro de costos.',
             'edit' => 'Permite modificar registros existentes.',
             'delete' => 'Permite eliminar registros del sistema.',
@@ -41,9 +40,6 @@ class RBACSeeder extends Seeder
             foreach ($actions as $action) {
                 $permissionName = "{$module}.{$action}";
                 $displayName = ucfirst($action) . " " . str_replace('_', ' ', $module);
-                if ($action === 'create_special') {
-                    $displayName = 'Create Fondo Fijo/Viajes';
-                }
                 if ($action === 'bulk_approve') {
                     $displayName = 'Aprobación Masiva (CSV)';
                 }

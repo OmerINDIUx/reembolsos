@@ -47,6 +47,7 @@ class SendPendingApprovalsReminders extends Command
                 $usersToNotify[$uid]['user'] = $approver;
                 $usersToNotify[$uid]['count'] = ($usersToNotify[$uid]['count'] ?? 0) + 1;
                 $usersToNotify[$uid]['total'] = ($usersToNotify[$uid]['total'] ?? 0) + (float)$reimbursement->total;
+                $usersToNotify[$uid]['reimbursement_ids'][] = $reimbursement->id;
                 
                 $ccName = $reimbursement->costCenter->name ?? 'Sin Centro de Costos';
                 if (!isset($usersToNotify[$uid]['breakdown'][$ccName])) {
@@ -69,6 +70,7 @@ class SendPendingApprovalsReminders extends Command
                 foreach ($pendingCxpReviewItems as $r) {
                     $usersToNotify[$uid]['count'] = ($usersToNotify[$uid]['count'] ?? 0) + 1;
                     $usersToNotify[$uid]['total'] = ($usersToNotify[$uid]['total'] ?? 0) + (float)$r->total;
+                    $usersToNotify[$uid]['reimbursement_ids'][] = $r->id;
                     
                     $ccName = $r->costCenter->name ?? 'Sin Centro de Costos';
                     if (!isset($usersToNotify[$uid]['breakdown'][$ccName])) {
@@ -92,6 +94,7 @@ class SendPendingApprovalsReminders extends Command
                 foreach ($pendingPaymentItems as $r) {
                     $usersToNotify[$uid]['count'] = ($usersToNotify[$uid]['count'] ?? 0) + 1;
                     $usersToNotify[$uid]['total'] = ($usersToNotify[$uid]['total'] ?? 0) + (float)$r->total;
+                    $usersToNotify[$uid]['reimbursement_ids'][] = $r->id;
                     
                     $ccName = $r->costCenter->name ?? 'Sin Centro de Costos';
                     if (!isset($usersToNotify[$uid]['breakdown'][$ccName])) {
@@ -109,9 +112,10 @@ class SendPendingApprovalsReminders extends Command
             $count = $data['count'];
             $total = $data['total'] ?? 0;
             $breakdown = $data['breakdown'] ?? [];
+            $reimbursementIds = collect($data['reimbursement_ids'] ?? [])->filter()->unique()->values()->all();
 
             try {
-                $user->notify(new PendingApprovalsReminder($count, $total, $breakdown));
+                $user->notify(new PendingApprovalsReminder($count, $total, $breakdown, $reimbursementIds));
                 $this->info("Notified {$user->name} about {$count} pending tasks ($" . number_format($total, 2) . ").");
                 $notificationsCount++;
             } catch (\Exception $e) {

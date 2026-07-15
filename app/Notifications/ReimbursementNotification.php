@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Support\NotificationRouteHelper;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -44,6 +45,7 @@ class ReimbursementNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $folio = $this->reimbursement ? ($this->reimbursement->true_folio ?? 'S/F') : 'VARIOS';
+        $actionUrl = NotificationRouteHelper::reimbursement($this->reimbursement);
         
         $details = [];
         if ($this->reimbursement) {
@@ -61,7 +63,7 @@ class ReimbursementNotification extends Notification
             ->view('emails.notification', [
                 'greeting' => 'Hola ' . $notifiable->name . ',',
                 'bodyText' => $this->message,
-                'actionUrl' => $this->reimbursement ? route('reimbursements.show', $this->reimbursement->id) : route('reimbursements.index'),
+                'actionUrl' => $actionUrl,
                 'actionText' => 'Ver Solicitud',
                 'details' => $details
             ]);
@@ -79,7 +81,7 @@ class ReimbursementNotification extends Notification
             'reimbursement_folio' => $this->reimbursement ? ($this->reimbursement->true_folio ?? 'S/F') : 'VARIOS',
             'message' => $this->message,
             'type' => $this->type, // success, danger, warning, info
-            'url' => $this->reimbursement ? route('reimbursements.show', $this->reimbursement->id) : route('reimbursements.index')
+            'url' => NotificationRouteHelper::reimbursement($this->reimbursement),
         ];
     }
 }

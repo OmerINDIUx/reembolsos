@@ -80,7 +80,8 @@ class ReimbursementController extends Controller
             $availableWeeks = $this->availableWeeksForTab($query, $tab);
             $reimbursements = $query->paginate(10)->appends($request->all());
             $this->attachOperationalWeek($reimbursements->getCollection(), $tab);
-            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'authorizedCCs', 'availableWeeks'));
+            $editableCostCenters = $this->flowAssignableCostCenters($user);
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'authorizedCCs', 'availableWeeks', 'editableCostCenters'));
         }
 
         // Apply Tab Scoping
@@ -144,7 +145,8 @@ class ReimbursementController extends Controller
                 ->get();
             $this->attachOperationalWeek($reimbursements, $tab);
 
-            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'authorizedCCs'));
+            $editableCostCenters = $this->flowAssignableCostCenters($user);
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'authorizedCCs', 'editableCostCenters'));
         }
 
         if ($tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history') {
@@ -167,12 +169,14 @@ class ReimbursementController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->get();
 
-            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'weeksPaginator', 'availableWeeks', 'authorizedCCs'));
+            $editableCostCenters = $this->flowAssignableCostCenters($user);
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'weeksPaginator', 'availableWeeks', 'authorizedCCs', 'editableCostCenters'));
         }
 
         $reimbursements = $query->paginate(10)->appends($request->all());
 
-        return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'authorizedCCs'));
+        $editableCostCenters = $this->flowAssignableCostCenters($user);
+        return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'authorizedCCs', 'editableCostCenters'));
     }
 
     /**
@@ -384,11 +388,14 @@ class ReimbursementController extends Controller
         $availableMethods = $allReimbursements->pluck('metodo_pago')->whereNotNull()->unique()->sort();
         $availableUsages = $allReimbursements->pluck('uso_cfdi')->whereNotNull()->unique()->sort();
 
+        $editableCostCenters = $this->flowAssignableCostCenters($user);
+
         return view('reimbursements.audit', compact(
             'groupedByWeek', 'auditItems', 'auditMeta', 'selectedWeek', 
             'selectedCcName', 'selectedType', 'auditStats', 'categories',
             'availableWeeks', 'authorizedCCs', 'availableMethods', 'availableUsages',
-            'selectedPayeeId', 'availableUploadWeeks', 'selectedUploadWeek', 'selectedIds'
+            'selectedPayeeId', 'availableUploadWeeks', 'selectedUploadWeek', 'selectedIds',
+            'editableCostCenters'
         ));
     }
 
@@ -428,7 +435,7 @@ class ReimbursementController extends Controller
                     })->orWhere('user_id', $user->id);
                 })->exists();
 
-            $isPrivilegedInCC = $user->canPerform('reimbursements.create_special') || $user->authorizedCostCenters()->wherePivot('can_do_special', true)->exists();
+            $isPrivilegedInCC = $user->authorizedCostCenters()->wherePivot('can_do_special', true)->exists();
             $isMarkedInAnyCC = $isPrivilegedInCC || $hasActiveTrip;
             
             return view('reimbursements.select_type', compact('drafts', 'isMarkedInAnyCC', 'hasActiveTrip', 'isPrivilegedInCC'));
@@ -450,7 +457,10 @@ class ReimbursementController extends Controller
             });
             $costCenters = $costCenters->filter(function($cc) use ($user, $type) {
                 if (in_array($type, ['fondo_fijo', 'comida', 'viaje'])) {
-                    return $user->canPerform('reimbursements.create_special');
+                    return $user->authorizedCostCenters()
+                        ->where('cost_centers.id', $cc->id)
+                        ->wherePivot('can_do_special', true)
+                        ->exists();
                 }
                 return $user->canPerform('reimbursements.create');
             });
@@ -477,18 +487,11 @@ class ReimbursementController extends Controller
                     if (!$costCenters->contains('id', $ecc->id)) {
                         // Attach a virtual pivot to act like an authorized cost center
                         $ecc->setRelation('pivot', new \Illuminate\Database\Eloquent\Relations\Pivot([
-                            'can_do_special' => true, // Being an approver/role implies high trust, allow special types
+                            'can_do_special' => false,
                             'cost_center_id' => $ecc->id,
                             'user_id' => $user->id
                         ]));
                         $costCenters->push($ecc);
-                    } else {
-                        // If they are explicitly authorized but ALSO an approver/role-linked,
-                        // make sure they have can_do_special enabled if they didn't already
-                        $existingCc = $costCenters->firstWhere('id', $ecc->id);
-                        if ($existingCc && $existingCc->pivot) {
-                            $existingCc->pivot->can_do_special = true;
-                        }
                     }
                 }
             }
@@ -531,12 +534,10 @@ class ReimbursementController extends Controller
 
             // Filter based on type and "one reimbursement" rule
             $costCenters = $costCenters->filter(function($cc) use ($user, $type) {
-                // Special types (Fondo Fijo, Comida, Viaje) are restricted to those with 'create_special' permission
-                // or if they have the specific legacy pivot flag '$cc->pivot->can_do_special' (for backward compatibility if needed, though we can just check the new permission).
-                $isMarked = $cc->pivot->can_do_special;
+                $isMarked = (bool) ($cc->pivot->can_do_special ?? false);
                 
                 if (in_array($type, ['fondo_fijo', 'comida', 'viaje'])) {
-                    return $isMarked || $user->canPerform('reimbursements.create_special');
+                    return $isMarked;
                 }
 
                 // Standard reimbursement: since they are in this local list, they are authorized/associated
@@ -827,13 +828,16 @@ class ReimbursementController extends Controller
                         'nombre_emisor' => $item['nombre_emisor'],
                         'rfc_receptor' => $item['rfc_receptor'] ?? 'N/A',
                         'nombre_receptor' => $item['nombre_receptor'] ?? 'N/A',
-                        'folio' => 'SIN-FACTURA',
+                        'folio_interno_proveedor' => null,
                         'fecha' => $item['fecha'],
                         'total' => $item['total'],
                         'subtotal' => $item['subtotal'],
                         'impuestos' => $item['impuestos'] ?? 0,
                         'moneda' => 'MXN',
                         'tipo_comprobante' => 'I',
+                        'retencion_iva' => $item['retencion_iva'] ?? 0,
+                        'monto_iva' => $item['monto_iva'] ?? ($item['impuestos'] ?? 0),
+                        'monto_isr' => $item['monto_isr'] ?? 0,
                     ];
                 }
 
@@ -884,13 +888,16 @@ class ReimbursementController extends Controller
                     'nombre_emisor' => !empty($xmlData['nombre_emisor']) ? $xmlData['nombre_emisor'] : ($existingDraft ? $existingDraft->nombre_emisor : null),
                     'rfc_receptor' => !empty($xmlData['rfc_receptor']) ? $xmlData['rfc_receptor'] : ($existingDraft ? $existingDraft->rfc_receptor : null),
                     'nombre_receptor' => !empty($xmlData['nombre_receptor']) ? $xmlData['nombre_receptor'] : ($existingDraft ? $existingDraft->nombre_receptor : null),
-                    'folio' => !empty($xmlData['folio']) ? $xmlData['folio'] : ($existingDraft ? $existingDraft->folio : null),
+                    'folio_interno_proveedor' => array_key_exists('folio_interno_proveedor', $xmlData) ? $xmlData['folio_interno_proveedor'] : ($existingDraft ? $existingDraft->folio_interno_proveedor : null),
                     'fecha' => !empty($xmlData['fecha']) ? $xmlData['fecha'] : ($existingDraft ? $existingDraft->fecha : null),
                     'total' => !empty($xmlData['total']) ? $xmlData['total'] : ($existingDraft ? $existingDraft->total : 0),
                     'subtotal' => !empty($xmlData['subtotal']) ? $xmlData['subtotal'] : ($existingDraft ? $existingDraft->subtotal : 0),
                     'impuestos' => isset($xmlData['impuestos']) ? $xmlData['impuestos'] : ($existingDraft ? $existingDraft->impuestos : max(0, ($xmlData['total'] ?? 0) - ($xmlData['subtotal'] ?? 0))),
                     'moneda' => !empty($xmlData['moneda']) ? $xmlData['moneda'] : ($existingDraft ? $existingDraft->moneda : 'MXN'),
                     'tipo_comprobante' => !empty($xmlData['tipo_comprobante']) ? $xmlData['tipo_comprobante'] : ($existingDraft ? $existingDraft->tipo_comprobante : null),
+                    'retencion_iva' => array_key_exists('retencion_iva', $xmlData) ? $xmlData['retencion_iva'] : ($existingDraft ? $existingDraft->retencion_iva : 0),
+                    'monto_iva' => array_key_exists('monto_iva', $xmlData) ? $xmlData['monto_iva'] : ($existingDraft ? $existingDraft->monto_iva : ($xmlData['impuestos'] ?? 0)),
+                    'monto_isr' => array_key_exists('monto_isr', $xmlData) ? $xmlData['monto_isr'] : ($existingDraft ? $existingDraft->monto_isr : 0),
                     'xml_path' => $xmlPath,
                     'original_xml_name' => $originalXmlName ?? null,
                     'pdf_path' => $pdfPath,
@@ -1087,6 +1094,11 @@ class ReimbursementController extends Controller
                 'uso_cfdi' => $data['uso_cfdi'] ?? null,
                 'lugar_expedicion' => $data['lugar_expedicion'] ?? null,
                 'regimen_fiscal_emisor' => $data['regimen_fiscal_emisor'] ?? null,
+                'folio_interno_proveedor' => $data['folio_interno_proveedor'] ?? null,
+                'tipo_comprobante' => $data['tipo_comprobante'] ?? null,
+                'retencion_iva' => $data['retencion_iva'] ?? 0,
+                'monto_iva' => $data['monto_iva'] ?? 0,
+                'monto_isr' => $data['monto_isr'] ?? 0,
             ]));
 
         } catch (\Exception $e) {
@@ -1155,7 +1167,7 @@ class ReimbursementController extends Controller
         $total = (string)$xml['Total'];
         $subtotal = (string)$xml['SubTotal'];
         $moneda = (string)$xml['Moneda'];
-        $folio = (string)$xml['Folio'];
+        $folioInternoProveedor = (string)$xml['Folio'];
         $fecha = (string)$xml['Fecha'];
         if ($fecha) {
             $fecha = date('Y-m-d', strtotime($fecha));
@@ -1176,6 +1188,31 @@ class ReimbursementController extends Controller
                 }
             }
         }
+
+        $montoIva = $this->sumTaxAmounts(
+            $xml,
+            [
+                '//cfdi:Comprobante/cfdi:Impuestos/cfdi:Traslados/cfdi:Traslado',
+                '//cfdi:Concepto/cfdi:Impuestos/cfdi:Traslados/cfdi:Traslado',
+            ],
+            '002'
+        );
+        $retencionIva = $this->sumTaxAmounts(
+            $xml,
+            [
+                '//cfdi:Comprobante/cfdi:Impuestos/cfdi:Retenciones/cfdi:Retencion',
+                '//cfdi:Concepto/cfdi:Impuestos/cfdi:Retenciones/cfdi:Retencion',
+            ],
+            '002'
+        );
+        $montoIsr = $this->sumTaxAmounts(
+            $xml,
+            [
+                '//cfdi:Comprobante/cfdi:Impuestos/cfdi:Retenciones/cfdi:Retencion',
+                '//cfdi:Concepto/cfdi:Impuestos/cfdi:Retenciones/cfdi:Retencion',
+            ],
+            '001'
+        );
 
         // Emisor / Receptor
         $emisorArr = $xml->xpath('//cfdi:Emisor');
@@ -1198,7 +1235,7 @@ class ReimbursementController extends Controller
             'nombre_emisor' => $emisor ? (string)$emisor['Nombre'] : 'N/A',
             'rfc_receptor' => $receptor ? (string)$receptor['Rfc'] : 'N/A',
             'nombre_receptor' => $receptor ? (string)$receptor['Nombre'] : 'N/A',
-            'folio' => $folio,
+            'folio_interno_proveedor' => $folioInternoProveedor,
             'fecha' => $fecha,
             'total' => $total,
             'subtotal' => $subtotal,
@@ -1210,7 +1247,35 @@ class ReimbursementController extends Controller
             'uso_cfdi' => $usoCfdi,
             'lugar_expedicion' => $lugarExpedicion,
             'regimen_fiscal_emisor' => $regimenFiscalEmisor,
+            'retencion_iva' => $retencionIva,
+            'monto_iva' => $montoIva,
+            'monto_isr' => $montoIsr,
         ];
+    }
+
+    private function sumTaxAmounts(\SimpleXMLElement $xml, array $paths, string $taxCode): float
+    {
+        foreach ($paths as $path) {
+            $nodes = $xml->xpath($path);
+            if (!$nodes) {
+                continue;
+            }
+
+            $amount = 0.0;
+            foreach ($nodes as $node) {
+                if ((string) ($node['Impuesto'] ?? '') !== $taxCode) {
+                    continue;
+                }
+
+                $amount += (float) ($node['Importe'] ?? 0);
+            }
+
+            if ($amount > 0) {
+                return round($amount, 2);
+            }
+        }
+
+        return 0.0;
     }
 
     /**
@@ -1385,17 +1450,21 @@ class ReimbursementController extends Controller
             'nombre_emisor' => !empty($request->nombre_emisor) ? $request->nombre_emisor : ($existingDraft ? $existingDraft->nombre_emisor : null),
             'rfc_receptor' => !empty($request->rfc_receptor) ? $request->rfc_receptor : ($existingDraft ? $existingDraft->rfc_receptor : null),
             'nombre_receptor' => !empty($request->nombre_receptor) ? $request->nombre_receptor : ($existingDraft ? $existingDraft->nombre_receptor : null),
-            'folio' => !empty($request->folio) ? $request->folio : ($existingDraft ? $existingDraft->folio : null),
+            'folio_interno_proveedor' => $request->filled('folio_interno_proveedor') ? $request->folio_interno_proveedor : ($existingDraft ? $existingDraft->folio_interno_proveedor : null),
             'fecha' => !empty($request->fecha) ? $request->fecha : ($existingDraft ? $existingDraft->fecha : null),
             'total' => !empty($request->total) ? $request->total : ($existingDraft ? $existingDraft->total : 0),
             'subtotal' => !empty($request->subtotal) ? $request->subtotal : ($existingDraft ? $existingDraft->subtotal : 0),
             'impuestos' => !empty($request->impuestos) ? $request->impuestos : ($existingDraft ? $existingDraft->impuestos : max(0, (float)($request->total ?? 0) - (float)($request->subtotal ?? 0))),
             'moneda' => !empty($request->moneda) ? $request->moneda : ($existingDraft ? $existingDraft->moneda : 'MXN'),
+            'tipo_comprobante' => $request->tipo_comprobante,
             'metodo_pago' => $request->metodo_pago,
             'forma_pago' => $request->forma_pago,
             'uso_cfdi' => $request->uso_cfdi,
             'lugar_expedicion' => $request->lugar_expedicion,
             'regimen_fiscal_emisor' => $request->regimen_fiscal_emisor,
+            'retencion_iva' => $request->input('retencion_iva', 0),
+            'monto_iva' => $request->input('monto_iva', $request->input('impuestos', 0)),
+            'monto_isr' => $request->input('monto_isr', 0),
             'xml_path' => $xmlPath,
             'pdf_path' => $pdfPath,
             'ticket_path' => $ticketPath,
@@ -1660,8 +1729,16 @@ class ReimbursementController extends Controller
         ]);
 
         $correctionPayeeOptions = $this->correctionPayeeOptions($reimbursement, Auth::user());
+        $adminFlowCostCenters = $this->flowAssignableCostCenters(Auth::user());
 
-        return view('reimbursements.show', compact('reimbursement', 'correctionPayeeOptions'));
+        if ($reimbursement->cost_center_id && !$adminFlowCostCenters->contains('id', $reimbursement->cost_center_id)) {
+            $currentCostCenter = CostCenter::active()
+                ->whereKey($reimbursement->cost_center_id)
+                ->get(['id', 'name', 'code']);
+            $adminFlowCostCenters = $adminFlowCostCenters->concat($currentCostCenter)->unique('id')->values();
+        }
+
+        return view('reimbursements.show', compact('reimbursement', 'correctionPayeeOptions', 'adminFlowCostCenters'));
     }
 
     private function correctionPayeeOptions(Reimbursement $reimbursement, User $user)
@@ -2043,46 +2120,21 @@ class ReimbursementController extends Controller
                 ]),
             ],
             'type' => ['required', Rule::in(['reembolso', 'fondo_fijo'])],
+            'cost_center_id' => ['required', 'integer', Rule::exists('cost_centers', 'id')->where(fn ($query) => $query->where('is_active', true))],
             'admin_comment' => ['required', 'string', 'max:1000'],
         ]);
 
-        $oldStatus = $reimbursement->status;
-        $oldType = $reimbursement->type;
+        [$data, $changeLines, $errorMessage] = $this->prepareAdminFlowAdjustment($reimbursement, $user, $validated);
 
-        $data = [
-            'status' => $validated['status'],
-            'type' => $validated['type'],
-        ];
-
-        $data['travel_event_id'] = null;
-
-        if ($validated['status'] === 'pendiente') {
-            $data['current_step_id'] = $reimbursement->costCenter?->approvalSteps()->orderBy('order')->first()?->id;
-        } elseif (in_array($validated['status'], ['requiere_correccion', 'rechazado'], true)) {
-            $data['current_step_id'] = null;
-        }
-
-        $statusLabels = $this->adminFlowStatusLabels();
-        $typeLabels = $this->adminFlowTypeLabels();
-
-        $changeLines = [];
-        if ($oldStatus !== $validated['status']) {
-            $changeLines[] = 'estado de ' . ($statusLabels[$oldStatus] ?? $oldStatus) . ' a ' . $statusLabels[$validated['status']];
-        }
-        if ($oldType !== $validated['type']) {
-            $changeLines[] = 'tipo de ' . ($typeLabels[$oldType] ?? $oldType) . ' a ' . $typeLabels[$validated['type']];
+        if ($errorMessage) {
+            return back()->withInput()->with('error', $errorMessage);
         }
 
         if (empty($changeLines)) {
-            return back()->with('warning', 'No hubo cambios de estado o tipo para guardar.');
+            return back()->with('warning', 'No hubo cambios de estado, tipo o centro de costos para guardar.');
         }
 
-        $note = 'AJUSTE ADMINISTRATIVO por ' . $user->name . ' el ' . now()->format('d/m/Y H:i') . ': '
-            . implode('; ', $changeLines) . '. Motivo: ' . $validated['admin_comment'];
-        $data['observaciones'] = $reimbursement->observaciones
-            ? ($reimbursement->observaciones . "\n" . $note)
-            : $note;
-
+        $oldStatus = $reimbursement->status;
         $reimbursement->update($data);
 
         $reimbursement->approvals()->create([
@@ -2093,7 +2145,7 @@ class ReimbursementController extends Controller
         ]);
 
         $owner = $reimbursement->user;
-        if ($owner && $oldStatus !== $validated['status']) {
+        if ($owner && $oldStatus !== $data['status']) {
             NotificationBatchService::add($owner, $reimbursement);
             NotificationBatchService::process();
         }
@@ -2427,9 +2479,11 @@ class ReimbursementController extends Controller
 
                 $subtotal = (float) ($r->subtotal ?? 0);
                 $total = (float) ($r->total ?? 0);
-                $ivaAmount = $r->impuestos !== null
-                    ? (float) $r->impuestos
-                    : max(0, $total - $subtotal);
+                $ivaAmount = $r->monto_iva !== null
+                    ? (float) $r->monto_iva
+                    : ($r->impuestos !== null
+                        ? (float) $r->impuestos
+                        : max(0, $total - $subtotal));
                 $ivaPercent = $subtotal > 0 ? ($ivaAmount / $subtotal) * 100 : 0;
                 $currency = $r->moneda ?? 'MXN';
 
@@ -2487,88 +2541,9 @@ class ReimbursementController extends Controller
             ->unique()
             ->values();
 
-        $query = Reimbursement::with(['user', 'payee', 'costCenter.company'])
-            ->where('status', 'pendiente_pago')
-            ->whereNotNull('approved_by_treasury_at');
-
-        if ($ids->isNotEmpty()) {
-            $query->whereIn('id', $ids);
-        } else {
-            $paymentScope = Reimbursement::query()->where('status', '!=', 'borrador');
-            $this->applyTabScope($paymentScope, 'payment', $user);
-            $allowedWeeks = $this->availableWeeksForTab($paymentScope, 'payment');
-
-            if ($request->filled('week')) {
-                abort_unless($allowedWeeks->contains($request->week), 403, 'No puedes exportar una semana que no está disponible para pagos.');
-                $query->where('payment_week', $request->week);
-            }
-
-            if ($request->filled('cc')) {
-                $query->whereHas('costCenter', fn($ccQuery) => $ccQuery->where('name', $request->cc));
-            }
-
-            if ($request->filled('payee')) {
-                $query->where(function ($payeeQuery) use ($request) {
-                    $payeeQuery->where('payee_id', $request->payee)
-                        ->orWhere(function ($fallbackQuery) use ($request) {
-                            $fallbackQuery->whereNull('payee_id')
-                                ->where('user_id', $request->payee);
-                        });
-                });
-            }
-
-            if ($request->filled('search_audit')) {
-                $search = $request->search_audit;
-                $query->where(function ($searchQuery) use ($search) {
-                    $searchQuery->where('folio', 'like', "%{$search}%")
-                        ->orWhere('uuid', 'like', "%{$search}%")
-                        ->orWhere('nombre_emisor', 'like', "%{$search}%")
-                        ->orWhere('rfc_emisor', 'like', "%{$search}%")
-                        ->orWhere('title', 'like', "%{$search}%")
-                        ->orWhere('category', 'like', "%{$search}%");
-                });
-            }
-
-            if ($request->filled('xml_audit')) {
-                if ($request->xml_audit === 'with_xml') {
-                    $query->whereNotNull('uuid')->where('uuid', '!=', '');
-                } elseif ($request->xml_audit === 'no_xml') {
-                    $query->where(function ($xmlQuery) {
-                        $xmlQuery->whereNull('uuid')->orWhere('uuid', '');
-                    });
-                }
-            }
-
-            if ($request->filled('method_audit')) {
-                $query->where('metodo_pago', $request->method_audit);
-            }
-
-            if ($request->filled('usage_audit')) {
-                $query->where('uso_cfdi', $request->usage_audit);
-            }
-
-            $this->applyExportFilters($query, $request, $allowedWeeks, 'payment_week');
-
-            if ($request->filled('search')) {
-                $search = $request->search;
-                $query->where(function($q) use ($search) {
-                    $q->where('folio', 'like', "%{$search}%")
-                      ->orWhere('uuid', 'like', "%{$search}%")
-                      ->orWhere('nombre_emisor', 'like', "%{$search}%")
-                      ->orWhere('title', 'like', "%{$search}%");
-                });
-            }
-
-            if ($request->filled('cost_center_id')) {
-                $query->where('cost_center_id', $request->cost_center_id);
-            }
-
-            if ($request->filled('type')) {
-                $query->where('type', $request->type);
-            }
-        }
-
-        $reimbursements = $query->orderBy('created_at', 'asc')->get();
+        $reimbursements = $this->paymentExportQuery($request, $user, $ids)
+            ->orderBy('created_at', 'asc')
+            ->get();
 
         abort_if($reimbursements->isEmpty(), 404, 'No se encontraron reembolsos listos para pago en la selección.');
 
@@ -2682,11 +2657,136 @@ class ReimbursementController extends Controller
         }, $fileName, $headers);
     }
 
+    public function exportPaymentPolicy(Request $request)
+    {
+        set_time_limit(300);
+
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
+        $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());
+
+        abort_unless($canUsePaymentModule, 403, 'No tienes permiso para descargar la póliza.');
+
+        $ids = collect(explode(',', (string) $request->input('ids')))
+            ->map(fn($id) => trim($id))
+            ->filter(fn($id) => ctype_digit($id))
+            ->unique()
+            ->values();
+
+        $reimbursements = $this->paymentExportQuery($request, $user, $ids)
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        abort_if($reimbursements->isEmpty(), 404, 'No se encontraron reembolsos listos para pago en la selección.');
+
+        $fileName = 'poliza_pago_' . now()->format('Ymd_His') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"$fileName\"",
+        ];
+
+        return response()->streamDownload(function () use ($reimbursements) {
+            $file = fopen('php://output', 'w');
+            fprintf($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            fputcsv($file, [
+                'Folio del sistema',
+                'UUID',
+                'Folio interno de la factura',
+                'Fecha de emision de la factura',
+                'Tipo de CFDI',
+                'RFC Emisor',
+                'Nombre del emisor',
+                'Centro del sistema',
+                'Categoria del sistema',
+                'Cuenta provision',
+                'Nombre cuenta provision',
+                'Semana de pago',
+                'Nombre del receptor',
+                'Beneficiario',
+                'Banco',
+                'Cuenta CLABE',
+                'Metodo de pago XML',
+                'Forma de pago XML',
+                'Uso de CFDI',
+                'Regimen fiscal de emisor',
+                'Subtotal',
+                'IVA %',
+                'IVA Monto',
+                'Retencion de IVA %',
+                'Retencion de IVA Monto',
+                'Retencion de ISR %',
+                'Retencion de ISR Monto',
+                'Total',
+                'Propinas',
+            ]);
+
+            foreach ($reimbursements as $reimbursement) {
+                $payee = $reimbursement->payee ?: $reimbursement->user;
+                $subtotal = (float) ($reimbursement->subtotal ?? 0);
+                $ivaAmount = (float) ($reimbursement->monto_iva ?? $reimbursement->impuestos ?? 0);
+                $retencionIvaAmount = (float) ($reimbursement->retencion_iva ?? 0);
+                $retencionIsrAmount = (float) ($reimbursement->monto_isr ?? 0);
+                $ivaPercent = $subtotal > 0 ? ($ivaAmount / $subtotal) * 100 : 0;
+                $retencionIvaPercent = $subtotal > 0 ? ($retencionIvaAmount / $subtotal) * 100 : 0;
+                $retencionIsrPercent = $subtotal > 0 ? ($retencionIsrAmount / $subtotal) * 100 : 0;
+                $paymentWeek = $reimbursement->payment_week ?: $this->currentProcessingWeek();
+
+                fputcsv($file, [
+                    $reimbursement->true_folio ?? $reimbursement->folio ?? 'N/A',
+                    $reimbursement->uuid ?: 'vale azul',
+                    $reimbursement->folio_interno_proveedor ?? '',
+                    $reimbursement->fecha ? $reimbursement->fecha->format('d/m/Y H:i') : '',
+                    $this->cfdiTypeLabel($reimbursement->tipo_comprobante),
+                    $reimbursement->rfc_emisor ?? '',
+                    $reimbursement->nombre_emisor ?? '',
+                    $reimbursement->costCenter?->name ?? '',
+                    $reimbursement->category ?? '',
+                    '',
+                    '',
+                    $paymentWeek,
+                    $reimbursement->nombre_receptor ?? '',
+                    $payee?->name ?? '',
+                    $payee?->bank_name ?? '',
+                    $this->excelText($payee?->clabe ?? ''),
+                    $reimbursement->metodo_pago ?? '',
+                    $reimbursement->forma_pago ?? '',
+                    $reimbursement->uso_cfdi ?? '',
+                    $reimbursement->regimen_fiscal_emisor ?? '',
+                    number_format($subtotal, 2, '.', ''),
+                    number_format($ivaPercent, 2, '.', ''),
+                    number_format($ivaAmount, 2, '.', ''),
+                    number_format($retencionIvaPercent, 2, '.', ''),
+                    number_format($retencionIvaAmount, 2, '.', ''),
+                    number_format($retencionIsrPercent, 2, '.', ''),
+                    number_format($retencionIsrAmount, 2, '.', ''),
+                    number_format((float) ($reimbursement->total ?? 0), 2, '.', ''),
+                    number_format((float) ($reimbursement->propina ?? 0), 2, '.', ''),
+                ]);
+            }
+
+            fclose($file);
+        }, $fileName, $headers);
+    }
+
     private function paymentFileReason(?string $type): string
     {
         return match ($type) {
             'fondo_fijo' => 'fondo fijo',
             default => 'reembolso',
+        };
+    }
+
+    private function cfdiTypeLabel(?string $type): string
+    {
+        return match (strtoupper((string) $type)) {
+            'I' => 'Ingreso',
+            'E' => 'Egreso',
+            'T' => 'Traslado',
+            'N' => 'Nomina',
+            'P' => 'Pago',
+            default => (string) $type,
         };
     }
 
@@ -2706,6 +2806,92 @@ class ReimbursementController extends Controller
         $cleanValue = str_replace('"', '""', (string) $value);
 
         return '="' . $cleanValue . '"';
+    }
+
+    private function paymentExportQuery(Request $request, User $user, $ids)
+    {
+        $query = Reimbursement::with(['user', 'payee', 'costCenter.company'])
+            ->where('status', 'pendiente_pago')
+            ->whereNotNull('approved_by_treasury_at');
+
+        if ($ids->isNotEmpty()) {
+            return $query->whereIn('id', $ids);
+        }
+
+        $paymentScope = Reimbursement::query()->where('status', '!=', 'borrador');
+        $this->applyTabScope($paymentScope, 'payment', $user);
+        $allowedWeeks = $this->availableWeeksForTab($paymentScope, 'payment');
+
+        if ($request->filled('week')) {
+            abort_unless($allowedWeeks->contains($request->week), 403, 'No puedes exportar una semana que no está disponible para pagos.');
+            $query->where('payment_week', $request->week);
+        }
+
+        if ($request->filled('cc')) {
+            $query->whereHas('costCenter', fn($ccQuery) => $ccQuery->where('name', $request->cc));
+        }
+
+        if ($request->filled('payee')) {
+            $query->where(function ($payeeQuery) use ($request) {
+                $payeeQuery->where('payee_id', $request->payee)
+                    ->orWhere(function ($fallbackQuery) use ($request) {
+                        $fallbackQuery->whereNull('payee_id')
+                            ->where('user_id', $request->payee);
+                    });
+            });
+        }
+
+        if ($request->filled('search_audit')) {
+            $search = $request->search_audit;
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery->where('folio', 'like', "%{$search}%")
+                    ->orWhere('uuid', 'like', "%{$search}%")
+                    ->orWhere('nombre_emisor', 'like', "%{$search}%")
+                    ->orWhere('rfc_emisor', 'like', "%{$search}%")
+                    ->orWhere('title', 'like', "%{$search}%")
+                    ->orWhere('category', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('xml_audit')) {
+            if ($request->xml_audit === 'with_xml') {
+                $query->whereNotNull('uuid')->where('uuid', '!=', '');
+            } elseif ($request->xml_audit === 'no_xml') {
+                $query->where(function ($xmlQuery) {
+                    $xmlQuery->whereNull('uuid')->orWhere('uuid', '');
+                });
+            }
+        }
+
+        if ($request->filled('method_audit')) {
+            $query->where('metodo_pago', $request->method_audit);
+        }
+
+        if ($request->filled('usage_audit')) {
+            $query->where('uso_cfdi', $request->usage_audit);
+        }
+
+        $this->applyExportFilters($query, $request, $allowedWeeks, 'payment_week');
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('folio', 'like', "%{$search}%")
+                    ->orWhere('uuid', 'like', "%{$search}%")
+                    ->orWhere('nombre_emisor', 'like', "%{$search}%")
+                    ->orWhere('title', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('cost_center_id')) {
+            $query->where('cost_center_id', $request->cost_center_id);
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        return $query;
     }
 
     /**
@@ -2804,9 +2990,13 @@ class ReimbursementController extends Controller
         $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'exists:reimbursements,id',
-            'action' => 'required|in:aprobado,rechazado',
+            'action' => 'required|in:aprobado,rechazado,requiere_correccion,editar',
             'password' => 'required|string',
-            'rejection_reason' => 'nullable|string|required_if:action,rechazado',
+            'rejection_reason' => 'nullable|string|required_if:action,rechazado|required_if:action,requiere_correccion',
+            'status' => ['nullable', Rule::in(['pendiente', 'requiere_correccion', 'rechazado'])],
+            'type' => ['nullable', Rule::in(['reembolso', 'fondo_fijo'])],
+            'cost_center_id' => ['nullable', 'integer', Rule::exists('cost_centers', 'id')->where(fn ($query) => $query->where('is_active', true))],
+            'admin_comment' => ['nullable', Rule::requiredIf($request->action === 'editar'), 'string', 'max:1000'],
         ]);
 
         $user = Auth::user();
@@ -2816,90 +3006,126 @@ class ReimbursementController extends Controller
             return back()->with('error', 'ContraseÃƒÂ±a incorrecta.');
         }
 
+        if ($request->action === 'editar') {
+            if ($user->isAdminView()) {
+                abort(403, 'Tu rol es de solo consulta y no puede realizar modificaciones.');
+            }
+
+            if (!$user->canPerform('reimbursements.edit')) {
+                abort(403, 'No tienes permiso para editar el flujo de reembolsos.');
+            }
+
+            if (!$request->filled('status') && !$request->filled('type') && !$request->filled('cost_center_id')) {
+                return back()->withInput()->with('error', 'Selecciona al menos un campo para actualizar en la edición masiva.');
+            }
+        }
+
         $processed = 0;
         $failed = 0;
+        $editValidated = $request->action === 'editar'
+            ? $request->only(['status', 'type', 'cost_center_id', 'admin_comment'])
+            : [];
 
         foreach ($request->ids as $id) {
             $reimbursement = Reimbursement::find($id);
             if (!$reimbursement) continue;
 
-            // Authorization check: Admin or the user assigned to the current step
-            $canApprove = $reimbursement->canBeApprovedBy($user);
+            if ($request->action === 'editar') {
+                [$data, $changeLines, $errorMessage] = $this->prepareAdminFlowAdjustment($reimbursement, $user, $editValidated);
 
-            if (!$canApprove) {
-                $failed++;
-                continue;
-            }
-
-            $data = [];
-
-            $isSubstitute = false;
-            $substitutedName = '';
-            $substitutedUserId = null;
-            if ($reimbursement->currentStep && $reimbursement->currentStep->user_id !== $user->id && !$user->isAdmin()) {
-                 if ($user->substitutingFor()->where('original_user_id', $reimbursement->currentStep->user_id)->exists()) {
-                     $isSubstitute = true;
-                     $substitutedUserId = $reimbursement->currentStep->user_id;
-                     $substitutedName = $reimbursement->currentStep->user->name ?? '';
-                 }
-            }
-            $substituteText = $isSubstitute ? " (en sustitución de " . $substitutedName . ")" : "";
-
-            if ($request->action === 'rechazado') {
-                 $currentObs = $reimbursement->observaciones;
-                 $newObs = "[MASIVO] RECHAZADO por " . $user->name . $substituteText . " (Rechazo Masivo) el " . now()->format('d/m/Y H:i') . ": " . $request->rejection_reason;
-                 $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
-                 $data['status'] = 'rechazado';
-            } else {
-                 $currentObs = $reimbursement->observaciones;
-                 $newObs = "[MASIVO] APROBADO masivamente por " . $user->name . $substituteText . " el " . now()->format('d/m/Y H:i');
-                 $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
-                 // Action === 'aprobado'
-                $currentStep = $reimbursement->currentStep;
-                if ($currentStep) {
-                    $this->mapApprovalData($currentStep->order, $user->id, $data);
+                if ($errorMessage || empty($changeLines)) {
+                    $failed++;
+                    continue;
                 }
 
-                // Track bulk approval step in validation_data
-                $valData = $reimbursement->validation_data ?? [];
-                if (!isset($valData['bulk_approved_steps'])) {
-                    $valData['bulk_approved_steps'] = [];
-                }
-                $stepOrder = $currentStep->order ?? 1;
-                if (!in_array($stepOrder, $valData['bulk_approved_steps'])) {
-                    $valData['bulk_approved_steps'][] = $stepOrder;
-                }
-                $data['validation_data'] = $valData;
-                
-                // Note: We DO NOT advance current_step_id here manually anymore for bulk approvals.
-                // We let handleDynamicApprovals handle the advancement and logging consistently.
-                // We only ensure the status is 'pendiente' if it's not finished, or 'aprobado' if it is.
-                // However, handleDynamicApprovals will handle this too.
-            }
+                $oldStatus = $reimbursement->status;
+                $reimbursement->update($data);
 
-            $originalStatus = $reimbursement->status;
-            $reimbursement->update($data);
-            
-            // RECORD AUDIT LOG (BULK)
-            if ($request->action === 'rechazado') {
                 $reimbursement->approvals()->create([
                     'user_id' => $user->id,
-                    'step_name' => $reimbursement->currentStep->name ?? 'Auditoria',
-                    'action' => 'rechazado',
-                    'comment' => $request->rejection_reason,
+                    'step_name' => 'Ajuste administrativo',
+                    'action' => 'ajuste_flujo',
+                    'comment' => '[MASIVO] ' . implode('; ', $changeLines) . '. ' . $editValidated['admin_comment'],
                     'is_bulk' => true,
-                    'substituted_user_id' => $substitutedUserId ?? null
                 ]);
-                
-                // Notify owner of rejection
+
                 $owner = $reimbursement->user;
-                if ($owner) {
-                    \App\Services\NotificationBatchService::add($owner, $reimbursement);
+                if ($owner && $oldStatus !== $data['status']) {
+                    NotificationBatchService::add($owner, $reimbursement);
                 }
             } else {
-                // Check for Auto-Approvals (Bulk included)
-                // Note: handleDynamicApprovals handles the primary audit log for the current step too
-                $this->handleDynamicApprovals($reimbursement, $user, true, $originalStatus);
+                // Authorization check: Admin or the user assigned to the current step
+                $canApprove = $reimbursement->canBeApprovedBy($user);
+
+                if (!$canApprove) {
+                    $failed++;
+                    continue;
+                }
+
+                $data = [];
+
+                $isSubstitute = false;
+                $substitutedName = '';
+                $substitutedUserId = null;
+                if ($reimbursement->currentStep && $reimbursement->currentStep->user_id !== $user->id && !$user->isAdmin()) {
+                     if ($user->substitutingFor()->where('original_user_id', $reimbursement->currentStep->user_id)->exists()) {
+                         $isSubstitute = true;
+                         $substitutedUserId = $reimbursement->currentStep->user_id;
+                         $substitutedName = $reimbursement->currentStep->user->name ?? '';
+                     }
+                }
+                $substituteText = $isSubstitute ? " (en sustitución de " . $substitutedName . ")" : "";
+                $currentStepName = $reimbursement->currentStep?->name ?? 'Auditoria';
+
+                if (in_array($request->action, ['rechazado', 'requiere_correccion'], true)) {
+                     $currentObs = $reimbursement->observaciones;
+                     $actionLabel = $request->action === 'requiere_correccion'
+                        ? 'DEVUELTO PARA CORRECCION'
+                        : 'RECHAZADO';
+                     $newObs = "[MASIVO] {$actionLabel} por " . $user->name . $substituteText . " el " . now()->format('d/m/Y H:i') . ": " . $request->rejection_reason;
+                     $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
+                     $data['status'] = $request->action;
+                     $data['current_step_id'] = null;
+                } else {
+                     $currentObs = $reimbursement->observaciones;
+                     $newObs = "[MASIVO] APROBADO masivamente por " . $user->name . $substituteText . " el " . now()->format('d/m/Y H:i');
+                     $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
+                    $currentStep = $reimbursement->currentStep;
+                    if ($currentStep) {
+                        $this->mapApprovalData($currentStep->order, $user->id, $data);
+                    }
+
+                    $valData = $reimbursement->validation_data ?? [];
+                    if (!isset($valData['bulk_approved_steps'])) {
+                        $valData['bulk_approved_steps'] = [];
+                    }
+                    $stepOrder = $currentStep->order ?? 1;
+                    if (!in_array($stepOrder, $valData['bulk_approved_steps'])) {
+                        $valData['bulk_approved_steps'][] = $stepOrder;
+                    }
+                    $data['validation_data'] = $valData;
+                }
+
+                $originalStatus = $reimbursement->status;
+                $reimbursement->update($data);
+                
+                if (in_array($request->action, ['rechazado', 'requiere_correccion'], true)) {
+                    $reimbursement->approvals()->create([
+                        'user_id' => $user->id,
+                        'step_name' => $currentStepName,
+                        'action' => $request->action,
+                        'comment' => $request->rejection_reason,
+                        'is_bulk' => true,
+                        'substituted_user_id' => $substitutedUserId ?? null
+                    ]);
+                    
+                    $owner = $reimbursement->user;
+                    if ($owner) {
+                        \App\Services\NotificationBatchService::add($owner, $reimbursement);
+                    }
+                } else {
+                    $this->handleDynamicApprovals($reimbursement, $user, true, $originalStatus);
+                }
             }
 
             $processed++;
@@ -4049,6 +4275,7 @@ class ReimbursementController extends Controller
                         'nombre_emisor', 'fecha', 'total', 'subtotal', 'impuestos', 'moneda',
                         'rfc_emisor', 'rfc_receptor', 'nombre_receptor', 'observaciones',
                         'metodo_pago', 'forma_pago', 'uso_cfdi', 'lugar_expedicion', 'regimen_fiscal_emisor',
+                        'tipo_comprobante', 'folio_interno_proveedor', 'retencion_iva', 'monto_iva', 'monto_isr',
                         'trip_destination', 'trip_nights', 'trip_start_date', 'trip_end_date', 'location',
                         'uuid', 'folio', 'category', 'trip_type', 'propina',
                         'attendees_count', 'attendees_names',
@@ -4143,6 +4370,7 @@ class ReimbursementController extends Controller
                         'has_pdf' => !empty($reimbursement->pdf_path),
                         'has_ticket' => !empty($reimbursement->ticket_path),
                         'folio' => $reimbursement->folio,
+                        'folio_interno_proveedor' => $reimbursement->folio_interno_proveedor,
                         'xml_name' => $reimbursement->original_xml_name
                             ?: ($reimbursement->xml_path ? basename($reimbursement->xml_path) : null),
                         'pdf_name' => $reimbursement->original_pdf_name
@@ -4280,7 +4508,10 @@ class ReimbursementController extends Controller
 
         if ($user->canPerform('reimbursements.create_all_cost_centers')) {
             if (in_array($type, ['fondo_fijo', 'comida', 'viaje'])) {
-                return $user->canPerform('reimbursements.create_special');
+                return $cc->authorizedUsers()
+                    ->where('users.id', $user->id)
+                    ->wherePivot('can_do_special', true)
+                    ->exists();
             }
             return $user->canPerform('reimbursements.create');
         }
@@ -4303,7 +4534,6 @@ class ReimbursementController extends Controller
                   $cc->beneficiary_id === $user->id ||
                   $cc->fixedFunds()->where('user_id', $user->id)->where('is_active', true)->exists()) {
             $isAuthorized = true;
-            $isMarked = true; // Being an approver/director/role implies high trust, allow special types
         }
 
         // 2. Inherited Authorization via active Travel Event
@@ -4311,9 +4541,6 @@ class ReimbursementController extends Controller
             $event = \App\Models\TravelEvent::find($travelEventId);
             if ($event && $event->status === 'active' && $event->participants()->where('users.id', $user->id)->exists()) {
                 $isAuthorized = true;
-                if ($type === 'viaje') {
-                    $isMarked = true; // Event participants inherit "marked" status ONLY for travel expenses
-                }
             }
         }
 
@@ -4321,7 +4548,7 @@ class ReimbursementController extends Controller
 
         // Special types (Fondo Fijo, Comida, Viaje) are restricted to marked users
         if (in_array($type, ['fondo_fijo', 'comida', 'viaje'])) {
-            return $isMarked || $user->isCxp() || $user->isAdminView() || $user->isDirector() || $user->isControlObra() || $user->isExecutiveDirector() || $user->isDireccion();
+            return $isMarked;
         }
 
         // Standard reimbursement: unmarked users can create as many as needed
@@ -4662,6 +4889,132 @@ class ReimbursementController extends Controller
         return [
             'reembolso' => 'Reembolso',
             'fondo_fijo' => 'Fondo fijo',
+        ];
+    }
+
+    private function flowAssignableCostCenters(User $user)
+    {
+        if ($user->isAdmin()) {
+            return CostCenter::active()->orderBy('name')->get(['id', 'name', 'code']);
+        }
+
+        return $user->authorizedCostCenters()
+            ->active()
+            ->orderBy('name')
+            ->get(['cost_centers.id', 'cost_centers.name', 'cost_centers.code']);
+    }
+
+    private function prepareAdminFlowAdjustment(Reimbursement $reimbursement, User $user, array $validated): array
+    {
+        $oldStatus = $reimbursement->status;
+        $oldType = $reimbursement->type;
+        $oldCostCenterId = $reimbursement->cost_center_id;
+        $targetCostCenter = $reimbursement->costCenter?->load(['fixedFunds' => fn ($query) => $query->where('is_active', true)->with('user')]);
+
+        if (!empty($validated['cost_center_id'])) {
+            $targetCostCenter = CostCenter::with(['fixedFunds' => fn ($query) => $query->where('is_active', true)->with('user')])
+                ->findOrFail($validated['cost_center_id']);
+        }
+
+        if (!$targetCostCenter) {
+            return [[], [], 'No se encontró el centro de costos para aplicar el ajuste.'];
+        }
+
+        $newStatus = !empty($validated['status']) ? $validated['status'] : $oldStatus;
+        $newType = !empty($validated['type']) ? $validated['type'] : $oldType;
+
+        $data = [
+            'status' => $newStatus,
+            'type' => $newType,
+            'cost_center_id' => $targetCostCenter->id,
+            'travel_event_id' => null,
+        ];
+
+        $shouldResetFlow = $newStatus !== $oldStatus || $newType !== $oldType || (int) $targetCostCenter->id !== (int) $oldCostCenterId;
+
+        if ($shouldResetFlow) {
+            $data = array_merge($data, $this->adminFlowResetState());
+        }
+
+        if ($newType === 'fondo_fijo') {
+            $fixedFund = $targetCostCenter->fixedFunds->first();
+            if (!$fixedFund) {
+                return [[], [], 'El centro de costos seleccionado no tiene un fondo fijo activo para asignar esta solicitud.'];
+            }
+
+            $data['fixed_fund_id'] = $fixedFund->id;
+            $data['payee_id'] = $fixedFund->user_id;
+        } elseif ($newType !== $oldType || (int) $targetCostCenter->id !== (int) $oldCostCenterId) {
+            $data['fixed_fund_id'] = null;
+
+            $currentPayee = $reimbursement->payee;
+            $data['payee_id'] = ($currentPayee && $this->canRegisterOnBehalfInCostCenter($user, $currentPayee, $targetCostCenter->id))
+                ? $currentPayee->id
+                : $reimbursement->user_id;
+        }
+
+        if ($shouldResetFlow && $newStatus === 'pendiente') {
+            $workflowOwner = $reimbursement->user ?? User::find($reimbursement->user_id);
+            if ($workflowOwner) {
+                [$currentStepId, $initialStatus, $autoNote, $approvalData] = $this->buildInitialApprovalState($targetCostCenter, $workflowOwner);
+                $data['current_step_id'] = $currentStepId;
+                $data['status'] = $initialStatus;
+                $data = array_merge($data, $approvalData);
+
+                if ($autoNote !== '') {
+                    $data['observaciones'] = trim(($reimbursement->observaciones ? $reimbursement->observaciones . "\n" : '') . $autoNote);
+                }
+            } else {
+                $data['current_step_id'] = $targetCostCenter->approvalSteps()->orderBy('order')->first()?->id;
+            }
+        } elseif ($shouldResetFlow && in_array($newStatus, ['requiere_correccion', 'rechazado'], true)) {
+            $data['current_step_id'] = null;
+        }
+
+        $statusLabels = $this->adminFlowStatusLabels();
+        $typeLabels = $this->adminFlowTypeLabels();
+
+        $changeLines = [];
+        if ($oldStatus !== $newStatus) {
+            $changeLines[] = 'estado de ' . ($statusLabels[$oldStatus] ?? $oldStatus) . ' a ' . $statusLabels[$newStatus];
+        }
+        if ($oldType !== $newType) {
+            $changeLines[] = 'tipo de ' . ($typeLabels[$oldType] ?? $oldType) . ' a ' . $typeLabels[$newType];
+        }
+        if ((int) $oldCostCenterId !== (int) $targetCostCenter->id) {
+            $changeLines[] = 'centro de costos a ' . $targetCostCenter->name;
+        }
+
+        if (empty($changeLines)) {
+            return [$data, [], null];
+        }
+
+        $note = 'AJUSTE ADMINISTRATIVO por ' . $user->name . ' el ' . now()->format('d/m/Y H:i') . ': '
+            . implode('; ', $changeLines) . '. Motivo: ' . $validated['admin_comment'];
+        $baseObservaciones = $data['observaciones'] ?? $reimbursement->observaciones;
+        $data['observaciones'] = $baseObservaciones
+            ? ($baseObservaciones . "\n" . $note)
+            : $note;
+
+        return [$data, $changeLines, null];
+    }
+
+    private function adminFlowResetState(): array
+    {
+        return [
+            'current_step_id' => null,
+            'approved_by_director_id' => null,
+            'approved_by_director_at' => null,
+            'approved_by_control_id' => null,
+            'approved_by_control_at' => null,
+            'approved_by_executive_id' => null,
+            'approved_by_executive_at' => null,
+            'approved_by_cxp_id' => null,
+            'approved_by_cxp_at' => null,
+            'approved_by_direccion_id' => null,
+            'approved_by_direccion_at' => null,
+            'approved_by_treasury_id' => null,
+            'approved_by_treasury_at' => null,
         ];
     }
 

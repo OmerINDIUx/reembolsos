@@ -46,6 +46,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('reimbursements/bulk-delete', [ReimbursementController::class, 'bulkDestroy'])->name('reimbursements.bulk_destroy');
     Route::get('reimbursements/export', [ReimbursementController::class, 'export'])->name('reimbursements.export');
     Route::get('reimbursements/payment-file', [ReimbursementController::class, 'exportPaymentFile'])->name('reimbursements.payment_file');
+    Route::get('reimbursements/payment-policy', [ReimbursementController::class, 'exportPaymentPolicy'])->name('reimbursements.payment_policy');
     Route::get('reimbursements/export/xml', [ReimbursementController::class, 'exportXml'])->name('reimbursements.export_xml');
     Route::get('reimbursements/audit', [ReimbursementController::class, 'audit'])->name('reimbursements.audit');
     Route::patch('reimbursements/{reimbursement}/admin-flow', [ReimbursementController::class, 'adminFlowUpdate'])->name('reimbursements.admin_flow_update');

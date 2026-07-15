@@ -361,7 +361,7 @@
                                 
                                 <div class="flex items-center space-x-5">
                                     <div class="flex items-center justify-center w-10 h-10 border border-transparent">
-                                        <input type="checkbox" value="{{ $r->id }}" x-model="selectedIds" data-amount="{{ (float) $r->total + (float) ($r->propina ?? 0) }}" data-has-uuid="{{ $r->uuid ? '1' : '0' }}" data-mismatch="{{ (!$uuidMatch || !$totalMatch) ? '1' : '0' }}" @click.stop class="reimbursement-checkbox w-6 h-6 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200 cursor-pointer" />
+                                        <input type="checkbox" value="{{ $r->id }}" x-model="selectedIds" data-amount="{{ (float) $r->total + (float) ($r->propina ?? 0) }}" data-has-uuid="{{ $r->uuid ? '1' : '0' }}" data-mismatch="{{ (!$uuidMatch || !$totalMatch) ? '1' : '0' }}" data-status="{{ $r->status }}" data-type="{{ $r->type }}" data-cost-center-id="{{ $r->cost_center_id }}" @click.stop class="reimbursement-checkbox w-6 h-6 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200 cursor-pointer" />
 
                                     </div>
                                     <div class="flex flex-col">
@@ -686,6 +686,9 @@
                                                            data-amount="{{ $totalTypeAmount }}"
                                                            data-has-uuid="{{ $tickets }}"
                                                            data-mismatch="{{ $mismatchCount }}"
+                                                           data-statuses='@json($typeItems->pluck("status")->filter()->unique()->values())'
+                                                           data-types='@json($typeItems->pluck("type")->filter()->unique()->values())'
+                                                           data-cost-center-ids='@json($typeItems->pluck("cost_center_id")->filter()->unique()->values())'
                                                            class="cc-group-checkbox w-6 h-6 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200 cursor-pointer" 
                                                            @change="toggleGroupData($event.target)" />
                                                 </div>
@@ -895,6 +898,9 @@
             openModal: false,
             confirmed: false,
             selectedAction: '',
+            bulkEditStatus: '',
+            bulkEditType: '',
+            bulkEditCostCenterId: '',
             
             get selectedCount() {
                 return this.selectedIds.length;
@@ -902,6 +908,12 @@
             
             get allCheckboxes() {
                 return Array.from(document.querySelectorAll('input[type="checkbox"][data-amount]'));
+            },
+
+            get selectedCheckboxes() {
+                return this.selectedIds
+                    .map(id => document.querySelector(`input[type="checkbox"][value="${id}"]`))
+                    .filter(Boolean);
             },
             
             get totalAmount() {
@@ -934,6 +946,28 @@
             get totalAlerts() {
                 return this.missingUuidCount + this.mismatchCount;
             },
+
+            get uniformStatus() {
+                const values = [...new Set(this.selectedCheckboxes.map(el => el.dataset.status).filter(Boolean))];
+                return values.length === 1 ? values[0] : '';
+            },
+
+            get uniformType() {
+                const values = [...new Set(this.selectedCheckboxes.map(el => el.dataset.type).filter(Boolean))];
+                return values.length === 1 ? values[0] : '';
+            },
+
+            get uniformCostCenterId() {
+                const values = [...new Set(this.selectedCheckboxes.map(el => String(el.dataset.costCenterId || '')).filter(Boolean))];
+                return values.length === 1 ? values[0] : '';
+            },
+
+            syncBulkEditDefaults() {
+                if (this.selectedAction !== 'editar') return;
+                this.bulkEditStatus = this.uniformStatus;
+                this.bulkEditType = this.uniformType;
+                this.bulkEditCostCenterId = this.uniformCostCenterId;
+            },
             
             toggleAll() {
                 if (this.selectAll) {
@@ -941,6 +975,7 @@
                 } else {
                     this.selectedIds = [];
                 }
+                this.syncBulkEditDefaults();
             },
 
             formatMoney(amount) {
@@ -1077,6 +1112,14 @@
 
             init() {
                 // Modal is now inline.
+                this.$watch('selectedAction', (value) => {
+                    if (value === 'editar') {
+                        this.syncBulkEditDefaults();
+                    }
+                });
+                this.$watch('selectedIds', () => {
+                    this.syncBulkEditDefaults();
+                });
             }
         }));
     });
@@ -1104,6 +1147,9 @@
                 confirmed: false,
                 selectedAction: '',
                 selectAll: false,
+                bulkEditStatus: '',
+                bulkEditType: '',
+                bulkEditCostCenterId: '',
                 
                 // Track metadata manually because DOM inputs can be detached during re-render
                 metadata: [],
@@ -1121,6 +1167,7 @@
                         this.selectedIds = [];
                         this.metadata = [];
                     }
+                    this.syncBulkEditDefaults();
                 },
                 
                 get selectedGroupCount() {
@@ -1142,22 +1189,49 @@
                 get totalAlerts() {
                     return this.missingUuidCount + this.mismatchCount;
                 },
+
+                get uniformStatus() {
+                    const values = [...new Set(this.metadata.flatMap(item => item.statuses || []).filter(Boolean))];
+                    return values.length === 1 ? values[0] : '';
+                },
+
+                get uniformType() {
+                    const values = [...new Set(this.metadata.flatMap(item => item.types || []).filter(Boolean))];
+                    return values.length === 1 ? values[0] : '';
+                },
+
+                get uniformCostCenterId() {
+                    const values = [...new Set(this.metadata.flatMap(item => item.costCenterIds || []).filter(Boolean).map(String))];
+                    return values.length === 1 ? values[0] : '';
+                },
+
+                syncBulkEditDefaults() {
+                    if (this.selectedAction !== 'editar') return;
+                    this.bulkEditStatus = this.uniformStatus;
+                    this.bulkEditType = this.uniformType;
+                    this.bulkEditCostCenterId = this.uniformCostCenterId;
+                },
                 
                 toggleGroupData(target) {
                     const idsArr = JSON.parse(target.dataset.ids || "[]");
                     const amount = parseFloat(target.dataset.amount || 0);
                     const hasUuid = parseInt(target.dataset.hasUuid || 0);
                     const mismatch = parseInt(target.dataset.mismatch || 0);
+                    const statuses = JSON.parse(target.dataset.statuses || "[]");
+                    const types = JSON.parse(target.dataset.types || "[]");
+                    const costCenterIds = JSON.parse(target.dataset.costCenterIds || "[]");
                     
                     if (target.checked) {
                         idsArr.forEach(id => {
                             if (!this.selectedIds.includes(String(id))) this.selectedIds.push(String(id));
                         });
-                        this.metadata.push({ idsArr, amount, hasUuid, mismatch });
+                        this.metadata.push({ idsArr, amount, hasUuid, mismatch, statuses, types, costCenterIds });
                     } else {
                         this.selectedIds = this.selectedIds.filter(id => !idsArr.map(String).includes(String(id)));
                         this.metadata = this.metadata.filter(m => JSON.stringify(m.idsArr) !== JSON.stringify(idsArr));
                     }
+
+                    this.syncBulkEditDefaults();
                 },
                 
                 formatMoney(amount) {
@@ -1247,6 +1321,11 @@
 
                 init() {
                     // Modal is now inline, no need to move it.
+                    this.$watch('selectedAction', (value) => {
+                        if (value === 'editar') {
+                            this.syncBulkEditDefaults();
+                        }
+                    });
                 }
             }));
 

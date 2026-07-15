@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\NotificationRouteHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -29,16 +30,17 @@ class NotificationController extends Controller
         $notification = $user->notifications()->findOrFail($id);
         $notification->markAsRead();
 
-        // Check if there is a URL to redirect to
-        if (isset($notification->data['url'])) {
-            $url = $notification->data['url'];
-            
-            // If it's a "show" route and user is admin, they have access to everything
-            if (str_contains($url, '/reimbursements/') && $user->isAdmin()) {
-                return redirect($url);
-            }
-            
-            // For other users, the ReimbursementController@show already handles sequential visibility
+        $url = $notification->data['url'] ?? null;
+
+        if (!$url && !empty($notification->data['reimbursement_id'])) {
+            $url = route('reimbursements.show', $notification->data['reimbursement_id']);
+        }
+
+        if (!$url && !empty($notification->data['reimbursement_ids'])) {
+            $url = NotificationRouteHelper::reimbursementsByIds((array) $notification->data['reimbursement_ids'], 'management');
+        }
+
+        if ($url) {
             return redirect($url);
         }
 
