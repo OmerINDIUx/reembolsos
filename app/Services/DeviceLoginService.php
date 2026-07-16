@@ -13,6 +13,7 @@ use Illuminate\Support\Str;
 class DeviceLoginService
 {
     public const COOKIE_NAME = 'reembolsos_device';
+    public const RISK_MEMORY_WINDOW_DAYS = 30;
 
     public function record(User $user, Request $request): ?DeviceLogin
     {
@@ -43,6 +44,7 @@ class DeviceLoginService
         $isNewDevice = false;
         $simultaneousDevicesCount = 0;
         $sharedAccountsCount = 0;
+        $previousResidualRisk = 0;
         $riskScore = 0;
         $riskReasons = [];
 
@@ -72,11 +74,13 @@ class DeviceLoginService
                 ->where('last_seen_at', '>=', now()->subDays(90))
                 ->distinct()
                 ->count('user_id');
+            $previousResidualRisk = $this->previousResidualRisk($user);
             $recentDeviceChanges = DeviceLogin::where('user_id', $user->id)
                 ->where('last_seen_at', '>=', now()->subDays(7))
                 ->distinct()
                 ->count('device_hash');
             [$riskScore, $riskReasons] = $this->riskSignal(
+                $previousResidualRisk,
                 $isNewDevice,
                 $simultaneousDevicesCount,
                 $sharedAccountsCount,
@@ -102,10 +106,20 @@ class DeviceLoginService
         return $login;
     }
 
-    private function riskSignal(bool $isNewDevice, int $simultaneousDevicesCount, int $sharedAccountsCount, int $recentDeviceChanges): array
+    private function riskSignal(
+        int $previousResidualRisk,
+        bool $isNewDevice,
+        int $simultaneousDevicesCount,
+        int $sharedAccountsCount,
+        int $recentDeviceChanges
+    ): array
     {
-        $score = 0;
+        $score = $previousResidualRisk;
         $reasons = [];
+
+        if ($previousResidualRisk > 0) {
+            $reasons[] = "Se conservaron {$previousResidualRisk} puntos de riesgo recientes de accesos anteriores.";
+        }
 
         if ($sharedAccountsCount > 0) {
             $score += 60;
@@ -128,6 +142,14 @@ class DeviceLoginService
         }
 
         return [min($score, 100), $reasons];
+    }
+
+    private function previousResidualRisk(User $user): int
+    {
+        return (int) DeviceLogin::where('user_id', $user->id)
+            ->where('last_seen_at', '>=', now()->subDays(self::RISK_MEMORY_WINDOW_DAYS))
+            ->latest('logged_in_at')
+            ->value('risk_score');
     }
 
     private function approximateLocation(Request $request): string

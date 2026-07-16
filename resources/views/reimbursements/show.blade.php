@@ -51,6 +51,23 @@
                                             </div>
                                         </div>
 
+                                        @if(isset($correctionCostCenters) && $correctionCostCenters->isNotEmpty())
+                                            <div class="md:col-span-2 space-y-2">
+                                                <label class="text-sm font-semibold text-indigo-700 dark:text-indigo-400">Centro de Costos</label>
+                                                <select name="cost_center_id" class="w-full rounded-lg border-indigo-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:border-indigo-900/50 dark:text-gray-200">
+                                                    @php
+                                                        $currentCorrectionCostCenterId = old('cost_center_id', $reimbursement->cost_center_id);
+                                                    @endphp
+                                                    @foreach($correctionCostCenters as $costCenterOption)
+                                                        <option value="{{ $costCenterOption->id }}" {{ (int) $currentCorrectionCostCenterId === (int) $costCenterOption->id ? 'selected' : '' }}>
+                                                            {{ $costCenterOption->name }}{{ $costCenterOption->code ? ' (' . $costCenterOption->code . ')' : '' }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                                <p class="text-[11px] text-indigo-600 dark:text-indigo-300 font-semibold">Si cambias el centro de costos, el reembolso se reenviará con los aprobadores del nuevo centro.</p>
+                                            </div>
+                                        @endif
+
                                         @if(isset($correctionPayeeOptions) && $correctionPayeeOptions->isNotEmpty())
                                             <div class="md:col-span-2 space-y-2">
                                                 <label class="text-sm font-semibold text-indigo-700 dark:text-indigo-400">Destinatario del Pago</label>
@@ -1012,16 +1029,56 @@
                                     </select>
                                 </div>
 
-                                <div>
+                                <div
+                                    x-data="{
+                                        query: '',
+                                        selectedValue: '{{ (string) old('cost_center_id', $reimbursement->cost_center_id) }}',
+                                        options: @js($adminFlowCostCenters->values()->map(fn ($costCenterOption) => [
+                                            'value' => (string) $costCenterOption->id,
+                                            'label' => $costCenterOption->name . ($costCenterOption->code ? ' (' . $costCenterOption->code . ')' : ''),
+                                        ])->all()),
+                                        get filteredOptions() {
+                                            const term = this.query.trim().toLowerCase();
+                                            if (!term) return this.options;
+                                            return this.options.filter(option => option.label.toLowerCase().includes(term));
+                                        },
+                                        get hasExactMatch() {
+                                            return this.options.some(option => option.value === String(this.selectedValue));
+                                        }
+                                    }"
+                                    class="relative"
+                                >
                                     <label class="block mb-1 font-medium text-gray-700 dark:text-gray-300">Centro de costos</label>
-                                    <select name="cost_center_id" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>
-                                        @foreach($adminFlowCostCenters as $costCenterOption)
-                                            <option value="{{ $costCenterOption->id }}" @selected((int) old('cost_center_id', $reimbursement->cost_center_id) === (int) $costCenterOption->id)>
-                                                {{ $costCenterOption->name }}{{ $costCenterOption->code ? ' (' . $costCenterOption->code . ')' : '' }}
-                                            </option>
-                                        @endforeach
+                                    <div class="relative">
+                                        <input
+                                            type="text"
+                                            x-model="query"
+                                            class="w-full rounded-md border-gray-300 pr-10 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                            placeholder="Escribe para filtrar centros de costos..."
+                                            autocomplete="off"
+                                        >
+                                        <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                        </svg>
+                                    </div>
+                                    <select
+                                        name="cost_center_id"
+                                        x-model="selectedValue"
+                                        class="mt-2 w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        size="6"
+                                        required
+                                    >
+                                        <template x-for="option in filteredOptions" :key="option.value">
+                                            <option :value="option.value" x-text="option.label"></option>
+                                        </template>
                                     </select>
-                                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Si eliges tipo fondo fijo, se tomará automáticamente un fondo fijo activo del centro seleccionado.</p>
+                                    <template x-if="filteredOptions.length === 0">
+                                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">No se encontraron centros de costos.</p>
+                                    </template>
+                                    <template x-if="!hasExactMatch">
+                                        <p class="mt-2 text-sm text-amber-600 dark:text-amber-400">Selecciona un centro válido de la lista para guardar el cambio.</p>
+                                    </template>
+                                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Si cambias el centro de costos, el flujo se reasigna con los aprobadores del nuevo centro. Si eliges tipo fondo fijo, se tomará automáticamente un fondo fijo activo del centro seleccionado.</p>
                                 </div>
 
                                 <div>

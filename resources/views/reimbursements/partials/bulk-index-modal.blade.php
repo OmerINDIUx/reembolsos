@@ -8,7 +8,11 @@
         'reembolso' => 'Reembolso',
         'fondo_fijo' => 'Fondo fijo',
     ];
-    $bulkEditableCostCenters = collect($editableCostCenters ?? $authorizedCCs ?? [])->where('is_active', true);
+    $bulkEditableSource = collect($editableCostCenters ?? []);
+    if ($bulkEditableSource->isEmpty()) {
+        $bulkEditableSource = collect($authorizedCCs ?? []);
+    }
+    $bulkEditableCostCenters = $bulkEditableSource->where('is_active', true)->values();
 @endphp
 <div x-show="openModal" class="fixed z-[60] inset-0 overflow-y-auto" style="display: none;" id="bulk-index-modal-target">
     <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -125,14 +129,96 @@
                                         </select>
                                     </div>
 
-                                    <div>
+                                    <div
+                                        x-data="{
+                                            open: false,
+                                            query: '',
+                                            options: @js($bulkEditableCostCenters->map(fn ($costCenterOption) => [
+                                                'value' => (string) $costCenterOption->id,
+                                                'label' => $costCenterOption->name . ($costCenterOption->code ? ' (' . $costCenterOption->code . ')' : ''),
+                                            ])->all()),
+                                            get filteredOptions() {
+                                                const term = this.query.trim().toLowerCase();
+                                                if (!term) return this.options;
+                                                return this.options.filter(option => option.label.toLowerCase().includes(term));
+                                            },
+                                            syncFromValue() {
+                                                const selected = this.options.find(option => option.value === String(bulkEditCostCenterId));
+                                                this.query = selected ? selected.label : '';
+                                            },
+                                            selectOption(option) {
+                                                bulkEditCostCenterId = option.value;
+                                                this.query = option.label;
+                                                this.open = false;
+                                            },
+                                            clearSelection() {
+                                                bulkEditCostCenterId = '';
+                                                this.query = '';
+                                                this.open = false;
+                                            },
+                                            init() {
+                                                this.syncFromValue();
+                                                this.$watch('bulkEditCostCenterId', () => this.syncFromValue());
+                                            }
+                                        }"
+                                        class="relative"
+                                    >
                                         <label class="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Centro de costos</label>
-                                        <select name="cost_center_id" x-model="bulkEditCostCenterId" class="block w-full rounded-xl border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                            <option value="">No cambiar centro de costos</option>
-                                            @foreach($bulkEditableCostCenters as $costCenterOption)
-                                                <option value="{{ $costCenterOption->id }}">{{ $costCenterOption->name }}{{ $costCenterOption->code ? ' (' . $costCenterOption->code . ')' : '' }}</option>
-                                            @endforeach
-                                        </select>
+                                        <input type="hidden" name="cost_center_id" x-model="bulkEditCostCenterId">
+                                        <div class="relative">
+                                            <input
+                                                type="text"
+                                                x-model="query"
+                                                @focus="open = true"
+                                                @input="open = true"
+                                                @keydown.escape.window="open = false"
+                                                @click.outside="open = false"
+                                                class="block w-full rounded-xl border-gray-300 pr-24 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                                placeholder="Busca y cambia el centro de costos..."
+                                                autocomplete="off"
+                                            >
+                                            <div class="absolute inset-y-0 right-0 flex items-center gap-2 pr-3">
+                                                <button
+                                                    type="button"
+                                                    x-show="bulkEditCostCenterId || query"
+                                                    @click="clearSelection()"
+                                                    class="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-500"
+                                                >
+                                                    Limpiar
+                                                </button>
+                                                <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                </svg>
+                                            </div>
+                                        </div>
+
+                                        <div x-show="open" x-transition class="absolute z-20 mt-2 w-full overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
+                                            <button
+                                                type="button"
+                                                @click="clearSelection()"
+                                                class="flex w-full items-center justify-between border-b border-gray-100 px-4 py-3 text-left text-sm font-semibold text-gray-600 hover:bg-indigo-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
+                                            >
+                                                <span>No cambiar centro de costos</span>
+                                                <span x-show="!bulkEditCostCenterId" class="text-[10px] font-black uppercase tracking-widest text-indigo-500">Actual</span>
+                                            </button>
+
+                                            <div class="max-h-56 overflow-y-auto">
+                                                <template x-if="filteredOptions.length === 0">
+                                                    <div class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">No se encontraron centros de costos.</div>
+                                                </template>
+
+                                                <template x-for="option in filteredOptions" :key="option.value">
+                                                    <button
+                                                        type="button"
+                                                        @click="selectOption(option)"
+                                                        class="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-gray-700 hover:bg-indigo-50 dark:text-gray-200 dark:hover:bg-gray-700"
+                                                    >
+                                                        <span x-text="option.label"></span>
+                                                        <span x-show="String(bulkEditCostCenterId) === option.value" class="text-[10px] font-black uppercase tracking-widest text-indigo-500">Seleccionado</span>
+                                                    </button>
+                                                </template>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div>

@@ -1740,6 +1740,7 @@ class ReimbursementController extends Controller
             'treasuryApprover'
         ]);
 
+        $correctionCostCenters = $this->correctionAssignableCostCenters($reimbursement, Auth::user());
         $correctionPayeeOptions = $this->correctionPayeeOptions($reimbursement, Auth::user());
         $adminFlowCostCenters = $this->flowAssignableCostCenters(Auth::user());
 
@@ -1750,7 +1751,52 @@ class ReimbursementController extends Controller
             $adminFlowCostCenters = $adminFlowCostCenters->concat($currentCostCenter)->unique('id')->values();
         }
 
-        return view('reimbursements.show', compact('reimbursement', 'correctionPayeeOptions', 'adminFlowCostCenters'));
+        return view('reimbursements.show', compact('reimbursement', 'correctionCostCenters', 'correctionPayeeOptions', 'adminFlowCostCenters'));
+    }
+
+    private function correctionAssignableCostCenters(Reimbursement $reimbursement, User $user)
+    {
+        if (
+            $reimbursement->status !== 'requiere_correccion'
+            || !$this->canRequesterManageReimbursement($reimbursement, $user)
+        ) {
+            return collect();
+        }
+
+        if ($user->isAdmin() || $user->canPerform('reimbursements.create_all_cost_centers')) {
+            return CostCenter::active()->orderBy('name')->get(['id', 'name', 'code', 'is_active']);
+        }
+
+        $allowed = $user->authorizedCostCenters()->active()->orderBy('name')->get(['cost_centers.id', 'cost_centers.name', 'cost_centers.code', 'cost_centers.is_active']);
+
+        $extraIds = \App\Models\ApprovalStep::where('user_id', $user->id)->pluck('cost_center_id')
+            ->concat(
+                CostCenter::query()
+                    ->where('director_id', $user->id)
+                    ->orWhere('control_obra_id', $user->id)
+                    ->orWhere('director_ejecutivo_id', $user->id)
+                    ->orWhere('accountant_id', $user->id)
+                    ->orWhere('direccion_id', $user->id)
+                    ->orWhere('tesoreria_id', $user->id)
+                    ->orWhere('beneficiary_id', $user->id)
+                    ->pluck('id')
+            )
+            ->concat(CostCenter::whereHas('fixedFunds', fn ($query) => $query->where('user_id', $user->id)->where('is_active', true))->pluck('id'))
+            ->unique();
+
+        if ($extraIds->isNotEmpty()) {
+            $extraCenters = CostCenter::active()->whereIn('id', $extraIds)->get(['id', 'name', 'code', 'is_active']);
+            $allowed = $allowed->concat($extraCenters)->unique('id')->values();
+        }
+
+        if ($reimbursement->cost_center_id && !$allowed->contains('id', $reimbursement->cost_center_id)) {
+            $currentCostCenter = CostCenter::active()
+                ->whereKey($reimbursement->cost_center_id)
+                ->get(['id', 'name', 'code', 'is_active']);
+            $allowed = $allowed->concat($currentCostCenter)->unique('id')->values();
+        }
+
+        return $allowed->sortBy('name')->values();
     }
 
     private function correctionPayeeOptions(Reimbursement $reimbursement, User $user)
@@ -1819,6 +1865,7 @@ class ReimbursementController extends Controller
             $request->validate([
                 'pdf_file' => 'nullable|file',
                 'user_correction_comment' => 'required|string',
+                'cost_center_id' => ['nullable', 'integer', Rule::exists('cost_centers', 'id')->where(fn ($query) => $query->where('is_active', true))],
                 'payee_id' => 'nullable|exists:users,id',
                 'attendees_count' => 'nullable|integer',
                 'location' => 'nullable|string',
@@ -1851,6 +1898,26 @@ class ReimbursementController extends Controller
                 'nombre_emisor', 'fecha', 'subtotal', 'total'
             ]), function($value) { return !is_null($value); });
 
+            $targetCostCenterId = (int) ($request->input('cost_center_id') ?: $reimbursement->cost_center_id);
+            $costCenterChanged = $targetCostCenterId !== (int) $reimbursement->cost_center_id;
+
+            if ($costCenterChanged) {
+                $targetCostCenter = CostCenter::active()->with('approvalSteps.user.profile')->find($targetCostCenterId);
+                if (!$targetCostCenter) {
+                    return back()->withInput()->with('error', 'El centro de costos seleccionado no está disponible.');
+                }
+
+                $allowedCorrectionCenters = $this->correctionAssignableCostCenters($reimbursement, $user);
+                if (!$allowedCorrectionCenters->contains('id', $targetCostCenterId) && !$user->isAdmin()) {
+                    return back()->withInput()->with('error', 'No tienes permiso para reenviar este reembolso a ese centro de costos.');
+                }
+
+                $data['cost_center_id'] = $targetCostCenterId;
+                $data['travel_event_id'] = null;
+                $data['fixed_fund_id'] = null;
+                $data = array_merge($data, $this->adminFlowResetState());
+            }
+
             // Persist propina for any meal reimbursement, with or without XML.
             if ($reimbursement->type === 'comida' && $request->has('propina')) {
                 $data['propina'] = (float)$request->propina;
@@ -1866,12 +1933,23 @@ class ReimbursementController extends Controller
                     }
 
                     $requestedPayee = User::findOrFail($requestedPayeeId);
-                    if (!$this->canRegisterOnBehalfInCostCenter($user, $requestedPayee, $reimbursement->cost_center_id)) {
-                        return back()->withInput()->with('error', 'El destinatario del pago debe pertenecer al mismo Centro de Costos.');
+                    if (!$this->canRegisterOnBehalfInCostCenter($user, $requestedPayee, $targetCostCenterId)) {
+                        if ($costCenterChanged) {
+                            $data['payee_id'] = $reimbursement->user_id;
+                        } else {
+                            return back()->withInput()->with('error', 'El destinatario del pago debe pertenecer al mismo Centro de Costos.');
+                        }
+                    } else {
+                        $data['payee_id'] = $requestedPayeeId;
                     }
-
-                    $data['payee_id'] = $requestedPayeeId;
                 }
+            }
+
+            if ($costCenterChanged && !isset($data['payee_id'])) {
+                $currentPayee = $reimbursement->payee;
+                $data['payee_id'] = ($currentPayee && $this->canRegisterOnBehalfInCostCenter($user, $currentPayee, $targetCostCenterId))
+                    ? $currentPayee->id
+                    : $reimbursement->user_id;
             }
 
             // Safety: If reimbursement has a UUID, we MUST NOT allow changing core fiscal fields manually
@@ -1931,30 +2009,48 @@ class ReimbursementController extends Controller
             }
             $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
 
-            // Direct routing rule: return to the stage that requested the correction.
-            $lastCorrection = $reimbursement->approvals()
-                ->where('action', 'requiere_correccion')
-                ->latest()
-                ->first();
-            $lastCorrectionStep = $lastCorrection->step_name ?? '';
-
-            if (str_contains($lastCorrectionStep, 'Cuentas por Pagar Revisadores')) {
-                $data['status'] = 'pendiente_revision_cxp';
-            } elseif (str_contains($lastCorrectionStep, 'Cuentas por Pagar Pagadores')) {
-                $data['status'] = 'pendiente_pago';
-                $data['payment_week'] = $reimbursement->payment_week ?: $this->currentProcessingWeek();
-            } elseif ($reimbursement->approved_by_direccion_id !== null) {
-                $data['status'] = 'aprobado_direccion'; // Back to Treasury
-            } elseif ($reimbursement->approved_by_cxp_id !== null) {
-                $data['status'] = 'aprobado_cxp'; // Back to DirecciÃƒÂ³n
-            } elseif ($reimbursement->approved_by_executive_id !== null) {
-                $data['status'] = 'aprobado_ejecutivo'; // Back to CXP
-            } elseif ($reimbursement->approved_by_control_id !== null) {
-                $data['status'] = 'aprobado_control'; // Back to Executive
-            } elseif ($reimbursement->approved_by_director_id !== null) {
-                $data['status'] = 'aprobado_director'; // Back to Control
+            if ($costCenterChanged) {
+                $workflowOwner = $reimbursement->user ?? User::find($reimbursement->user_id);
+                if ($workflowOwner) {
+                    [$currentStepId, $initialStatus, $autoNote, $approvalData] = $this->buildInitialApprovalState($targetCostCenter, $workflowOwner);
+                    $data['current_step_id'] = $currentStepId;
+                    $data['status'] = $initialStatus;
+                    $data['payment_week'] = null;
+                    $data = array_merge($data, $approvalData);
+                    if ($autoNote !== '') {
+                        $data['observaciones'] = trim(($data['observaciones'] ?? $reimbursement->observaciones ? ($data['observaciones'] ?? $reimbursement->observaciones) . "\n" : '') . $autoNote);
+                    }
+                } else {
+                    $data['current_step_id'] = $targetCostCenter->approvalSteps()->orderBy('order')->first()?->id;
+                    $data['status'] = 'pendiente';
+                    $data['payment_week'] = null;
+                }
             } else {
-                $data['status'] = 'pendiente'; // Back to Director
+                // Direct routing rule: return to the stage that requested the correction.
+                $lastCorrection = $reimbursement->approvals()
+                    ->where('action', 'requiere_correccion')
+                    ->latest()
+                    ->first();
+                $lastCorrectionStep = $lastCorrection->step_name ?? '';
+
+                if (str_contains($lastCorrectionStep, 'Cuentas por Pagar Revisadores')) {
+                    $data['status'] = 'pendiente_revision_cxp';
+                } elseif (str_contains($lastCorrectionStep, 'Cuentas por Pagar Pagadores')) {
+                    $data['status'] = 'pendiente_pago';
+                    $data['payment_week'] = $reimbursement->payment_week ?: $this->currentProcessingWeek();
+                } elseif ($reimbursement->approved_by_direccion_id !== null) {
+                    $data['status'] = 'aprobado_direccion';
+                } elseif ($reimbursement->approved_by_cxp_id !== null) {
+                    $data['status'] = 'aprobado_cxp';
+                } elseif ($reimbursement->approved_by_executive_id !== null) {
+                    $data['status'] = 'aprobado_ejecutivo';
+                } elseif ($reimbursement->approved_by_control_id !== null) {
+                    $data['status'] = 'aprobado_control';
+                } elseif ($reimbursement->approved_by_director_id !== null) {
+                    $data['status'] = 'aprobado_director';
+                } else {
+                    $data['status'] = 'pendiente';
+                }
             }
         } else {
             $request->validate([
@@ -2147,6 +2243,8 @@ class ReimbursementController extends Controller
         }
 
         $oldStatus = $reimbursement->status;
+        $oldCostCenterId = $reimbursement->cost_center_id;
+        $oldCurrentStepId = $reimbursement->current_step_id;
         $reimbursement->update($data);
 
         $reimbursement->approvals()->create([
@@ -2156,11 +2254,21 @@ class ReimbursementController extends Controller
             'comment' => implode('; ', $changeLines) . '. ' . $validated['admin_comment'],
         ]);
 
+        $reimbursement->loadMissing('currentStep.user', 'user');
+
         $owner = $reimbursement->user;
-        if ($owner && $oldStatus !== $data['status']) {
+        $flowReassigned = (int) $oldCurrentStepId !== (int) $reimbursement->current_step_id
+            || (int) $oldCostCenterId !== (int) $reimbursement->cost_center_id;
+
+        if ($owner && ($oldStatus !== $data['status'] || $flowReassigned)) {
             NotificationBatchService::add($owner, $reimbursement);
-            NotificationBatchService::process();
         }
+
+        if ($reimbursement->status === 'pendiente' && $reimbursement->currentStep?->user && $flowReassigned) {
+            NotificationBatchService::add($reimbursement->currentStep->user, $reimbursement);
+        }
+
+        NotificationBatchService::process();
 
         return back()->with('success', 'Flujo del reembolso actualizado correctamente.');
     }
@@ -4951,14 +5059,37 @@ class ReimbursementController extends Controller
 
     private function flowAssignableCostCenters(User $user)
     {
-        if ($user->isAdmin()) {
-            return CostCenter::active()->orderBy('name')->get(['id', 'name', 'code']);
+        if (
+            $user->isAdmin()
+            || $user->canPerform('cost_centers.view')
+            || $user->canPerform('reimbursements.bulk_approve')
+        ) {
+            return CostCenter::active()->orderBy('name')->get(['id', 'name', 'code', 'is_active']);
         }
 
-        return $user->authorizedCostCenters()
+        $authorizedIds = $user->authorizedCostCenters()->pluck('cost_centers.id')
+            ->concat(
+                \App\Models\ApprovalStep::where('user_id', $user->id)->pluck('cost_center_id')
+            )
+            ->concat(
+                CostCenter::query()
+                    ->where('director_id', $user->id)
+                    ->orWhere('control_obra_id', $user->id)
+                    ->orWhere('director_ejecutivo_id', $user->id)
+                    ->orWhere('accountant_id', $user->id)
+                    ->orWhere('direccion_id', $user->id)
+                    ->orWhere('tesoreria_id', $user->id)
+                    ->orWhere('beneficiary_id', $user->id)
+                    ->pluck('id')
+            )
+            ->unique()
+            ->values();
+
+        return CostCenter::query()
+            ->whereIn('id', $authorizedIds)
             ->active()
             ->orderBy('name')
-            ->get(['cost_centers.id', 'cost_centers.name', 'cost_centers.code']);
+            ->get(['id', 'name', 'code', 'is_active']);
     }
 
     private function prepareAdminFlowAdjustment(Reimbursement $reimbursement, User $user, array $validated): array

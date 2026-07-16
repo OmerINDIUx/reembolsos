@@ -16,6 +16,7 @@ class LoginSecurityChallengeService
     public const SESSION_KEY = 'login_security_challenge_id';
     public const HIGH_RISK_THRESHOLD = 50;
     public const MAX_ATTEMPTS = 5;
+    public const VERIFICATION_RISK_REDUCTION = 30;
 
     public function shouldChallenge(?DeviceLogin $deviceLogin): bool
     {
@@ -75,6 +76,30 @@ class LoginSecurityChallengeService
 
         $challenge->forceFill([
             'verified_at' => now(),
+        ])->save();
+
+        if ($challenge->deviceLogin) {
+            $this->reduceRiskAfterVerification($challenge->deviceLogin);
+        }
+    }
+
+    private function reduceRiskAfterVerification(DeviceLogin $deviceLogin): void
+    {
+        $currentRisk = (int) $deviceLogin->risk_score;
+        $reducedRisk = max(0, $currentRisk - self::VERIFICATION_RISK_REDUCTION);
+        $reasons = collect($deviceLogin->risk_reasons ?? [])
+            ->reject(fn (string $reason) => $reason === 'La verificación adicional fue completada y el riesgo residual bajó.')
+            ->values()
+            ->all();
+
+        if ($reducedRisk < $currentRisk) {
+            $reasons[] = 'La verificación adicional fue completada y el riesgo residual bajó.';
+        }
+
+        $deviceLogin->forceFill([
+            'risk_score' => $reducedRisk,
+            'risk_reasons' => $reasons,
+            'last_seen_at' => now(),
         ])->save();
     }
 }
