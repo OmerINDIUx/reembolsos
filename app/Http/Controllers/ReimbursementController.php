@@ -2651,7 +2651,7 @@ class ReimbursementController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-        $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());
+        $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury() || $identity->isCxp());
 
         abort_unless($canUsePaymentModule, 403, 'No tienes permiso para descargar el archivo de pago.');
 
@@ -2784,7 +2784,7 @@ class ReimbursementController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-        $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());
+        $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury() || $identity->isCxp());
 
         abort_unless($canUsePaymentModule, 403, 'No tienes permiso para descargar la póliza.');
 

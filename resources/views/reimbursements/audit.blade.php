@@ -33,7 +33,7 @@
     @php
         $user = Auth::user();
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-        $canDownloadPaymentFile = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());
+        $canDownloadPaymentFile = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury() || $identity->isCxp());
     @endphp
 
     <div class="py-12">
