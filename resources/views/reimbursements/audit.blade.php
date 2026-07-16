@@ -324,6 +324,13 @@
 
                                     @if($canDownloadPaymentFile)
                                         <button type="button"
+                                            @click="downloadPaymentPolicySelected()"
+                                            class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M9 8h6m-9 12h12a2 2 0 002-2V6a2 2 0 00-2-2H8l-4 4v10a2 2 0 002 2z"/></svg>
+                                            <span>Descargar Póliza</span>
+                                        </button>
+
+                                        <button type="button"
                                             @click="downloadPaymentFileSelected()"
                                             class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
                                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
@@ -642,7 +649,7 @@
                                         <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Seleccionar Todos</span>
                                     </label>
                                     
-                                    <div x-show="selectedGroupCount > 0" x-transition.opacity class="flex items-center space-x-4">
+                                    <div x-show="selectedGroupCount > 0" x-transition.opacity class="flex flex-wrap items-center justify-end gap-4">
                                         <span class="text-xs font-black text-indigo-600 uppercase tracking-widest" x-text="selectedGroupCount + ' Seleccionados'"></span>
                                         
                                         <button type="button" @click="downloadCaratula()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-emerald-200 flex items-center space-x-2">
@@ -662,6 +669,11 @@
                                             </button>
 
                                             @if($canDownloadPaymentFile)
+                                                <button type="button" @click="downloadPaymentPolicy()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-200 flex items-center space-x-2">
+                                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M9 8h6m-9 12h12a2 2 0 002-2V6a2 2 0 00-2-2H8l-4 4v10a2 2 0 002 2z"/></svg>
+                                                    <span>Descargar Póliza</span>
+                                                </button>
+
                                                 <button type="button" @click="downloadPaymentFile()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                                                     <span>Archivo de Pago</span>
@@ -1054,6 +1066,15 @@
                 window.location.href = `{{ route('reimbursements.payment_file') }}?${params.toString()}`;
             },
 
+            downloadPaymentPolicySelected() {
+                if (this.selectedIds.length === 0) return;
+                const ids = this.selectedIds.join(',');
+                const params = new URLSearchParams(window.location.search);
+                params.set('ids', ids);
+                params.set('tab', 'payment');
+                window.location.href = `{{ route('reimbursements.payment_policy') }}?${params.toString()}`;
+            },
+
             async bulkDeleteSelected() {
                 if (this.selectedIds.length === 0) return;
 
@@ -1308,6 +1329,15 @@
                     params.set('ids', ids);
                     params.set('tab', 'payment');
                     window.location.href = `{{ route('reimbursements.payment_file') }}?${params.toString()}`;
+                },
+
+                downloadPaymentPolicy() {
+                    if (this.selectedIds.length === 0) return;
+                    const ids = this.selectedIds.join(',');
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('ids', ids);
+                    params.set('tab', 'payment');
+                    window.location.href = `{{ route('reimbursements.payment_policy') }}?${params.toString()}`;
                 },
                 
                 async downloadCaratula() {
