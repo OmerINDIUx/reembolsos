@@ -1290,6 +1290,128 @@ class ReimbursementController extends Controller
         return 0.0;
     }
 
+    private function paymentPolicyTaxSummary(Reimbursement $reimbursement): array
+    {
+        $subtotal = (float) ($reimbursement->subtotal ?? 0);
+        $ivaAmount = (float) ($reimbursement->monto_iva ?? $reimbursement->impuestos ?? 0);
+        $retencionIvaAmount = (float) ($reimbursement->retencion_iva ?? 0);
+        $retencionIsrAmount = (float) ($reimbursement->monto_isr ?? 0);
+
+        $summary = [
+            'subtotal' => $subtotal,
+            'iva_amount' => $ivaAmount,
+            'retencion_iva_amount' => $retencionIvaAmount,
+            'retencion_isr_amount' => $retencionIsrAmount,
+            'iva_percent' => $subtotal > 0 ? ($ivaAmount / $subtotal) * 100 : 0.0,
+            'retencion_iva_percent' => $subtotal > 0 ? ($retencionIvaAmount / $subtotal) * 100 : 0.0,
+            'retencion_isr_percent' => $subtotal > 0 ? ($retencionIsrAmount / $subtotal) * 100 : 0.0,
+        ];
+
+        $hasStoredTaxBreakdown = $ivaAmount > 0 || $retencionIvaAmount > 0 || $retencionIsrAmount > 0;
+        if ($hasStoredTaxBreakdown) {
+            return $summary;
+        }
+
+        if (!$reimbursement->xml_path || !Storage::exists($reimbursement->xml_path)) {
+            return $summary;
+        }
+
+        try {
+            $xml = simplexml_load_string(Storage::get($reimbursement->xml_path));
+            if (!$xml) {
+                return $summary;
+            }
+
+            $namespaces = $xml->getNamespaces(true);
+            $xml->registerXPathNamespace('cfdi', $namespaces['cfdi'] ?? 'http://www.sat.gob.mx/cfd/4');
+
+            $xmlSubtotal = (float) ($xml['SubTotal'] ?? 0);
+            if ($xmlSubtotal > 0) {
+                $summary['subtotal'] = $xmlSubtotal;
+            }
+
+            $iva = $this->extractTaxRateAndAmount(
+                $xml,
+                [
+                    '//cfdi:Comprobante/cfdi:Impuestos/cfdi:Traslados/cfdi:Traslado',
+                    '//cfdi:Conceptos/cfdi:Concepto/cfdi:Impuestos/cfdi:Traslados/cfdi:Traslado',
+                ],
+                '002'
+            );
+            $retencionIva = $this->extractTaxRateAndAmount(
+                $xml,
+                [
+                    '//cfdi:Comprobante/cfdi:Impuestos/cfdi:Retenciones/cfdi:Retencion',
+                    '//cfdi:Conceptos/cfdi:Concepto/cfdi:Impuestos/cfdi:Retenciones/cfdi:Retencion',
+                ],
+                '002'
+            );
+            $retencionIsr = $this->extractTaxRateAndAmount(
+                $xml,
+                [
+                    '//cfdi:Comprobante/cfdi:Impuestos/cfdi:Retenciones/cfdi:Retencion',
+                    '//cfdi:Conceptos/cfdi:Concepto/cfdi:Impuestos/cfdi:Retenciones/cfdi:Retencion',
+                ],
+                '001'
+            );
+
+            if ($iva['amount'] > 0 || $iva['percent'] !== null) {
+                $summary['iva_amount'] = $iva['amount'];
+                $summary['iva_percent'] = $iva['percent'] ?? ($summary['subtotal'] > 0 ? ($iva['amount'] / $summary['subtotal']) * 100 : 0.0);
+            }
+
+            if ($retencionIva['amount'] > 0 || $retencionIva['percent'] !== null) {
+                $summary['retencion_iva_amount'] = $retencionIva['amount'];
+                $summary['retencion_iva_percent'] = $retencionIva['percent'] ?? ($summary['subtotal'] > 0 ? ($retencionIva['amount'] / $summary['subtotal']) * 100 : 0.0);
+            }
+
+            if ($retencionIsr['amount'] > 0 || $retencionIsr['percent'] !== null) {
+                $summary['retencion_isr_amount'] = $retencionIsr['amount'];
+                $summary['retencion_isr_percent'] = $retencionIsr['percent'] ?? ($summary['subtotal'] > 0 ? ($retencionIsr['amount'] / $summary['subtotal']) * 100 : 0.0);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo reconstruir el desglose fiscal del XML para la poliza.', [
+                'reimbursement_id' => $reimbursement->id,
+                'xml_path' => $reimbursement->xml_path,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $summary;
+    }
+
+    private function extractTaxRateAndAmount(\SimpleXMLElement $xml, array $paths, string $taxCode): array
+    {
+        $amount = 0.0;
+        $base = 0.0;
+        $hasRate = false;
+
+        foreach ($paths as $path) {
+            $nodes = $xml->xpath($path);
+            if (!$nodes) {
+                continue;
+            }
+
+            foreach ($nodes as $node) {
+                if ((string) ($node['Impuesto'] ?? '') !== $taxCode) {
+                    continue;
+                }
+
+                $amount += (float) ($node['Importe'] ?? 0);
+
+                if (isset($node['Base']) && isset($node['TasaOCuota'])) {
+                    $base += (float) ($node['Base'] ?? 0);
+                    $hasRate = true;
+                }
+            }
+        }
+
+        return [
+            'amount' => round($amount, 2),
+            'percent' => $hasRate && $base > 0 ? round(($amount / $base) * 100, 2) : null,
+        ];
+    }
+
     /**
      * Store a newly created resource in storage.
      */
@@ -2844,13 +2966,14 @@ class ReimbursementController extends Controller
 
             foreach ($reimbursements as $reimbursement) {
                 $payee = $reimbursement->payee ?: $reimbursement->user;
-                $subtotal = (float) ($reimbursement->subtotal ?? 0);
-                $ivaAmount = (float) ($reimbursement->monto_iva ?? $reimbursement->impuestos ?? 0);
-                $retencionIvaAmount = (float) ($reimbursement->retencion_iva ?? 0);
-                $retencionIsrAmount = (float) ($reimbursement->monto_isr ?? 0);
-                $ivaPercent = $subtotal > 0 ? ($ivaAmount / $subtotal) * 100 : 0;
-                $retencionIvaPercent = $subtotal > 0 ? ($retencionIvaAmount / $subtotal) * 100 : 0;
-                $retencionIsrPercent = $subtotal > 0 ? ($retencionIsrAmount / $subtotal) * 100 : 0;
+                $taxSummary = $this->paymentPolicyTaxSummary($reimbursement);
+                $subtotal = $taxSummary['subtotal'];
+                $ivaAmount = $taxSummary['iva_amount'];
+                $retencionIvaAmount = $taxSummary['retencion_iva_amount'];
+                $retencionIsrAmount = $taxSummary['retencion_isr_amount'];
+                $ivaPercent = $taxSummary['iva_percent'];
+                $retencionIvaPercent = $taxSummary['retencion_iva_percent'];
+                $retencionIsrPercent = $taxSummary['retencion_isr_percent'];
                 $paymentWeek = $reimbursement->payment_week ?: $this->currentProcessingWeek();
 
                 fputcsv($file, [
