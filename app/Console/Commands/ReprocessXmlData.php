@@ -95,8 +95,10 @@ class ReprocessXmlData extends Command
                     'lugar_expedicion' => $data['lugar_expedicion'],
                     'regimen_fiscal_emisor' => $data['regimen_fiscal_emisor'],
                     'retencion_iva' => $data['retencion_iva'] ?? 0,
-                    'monto_iva' => $data['monto_iva'] ?? $data['impuestos'],
+                    'monto_iva' => $data['monto_iva'] ?? 0,
                     'monto_isr' => $data['monto_isr'] ?? 0,
+                    'cfdi_conceptos' => $data['cfdi_conceptos'] ?? [],
+                    'impuestos_locales' => $data['impuestos_locales'] ?? [],
                 ]);
 
                 // NUEVO: Validar contra el PDF si existe para marcar si UUID y Monto están "OK"
@@ -215,6 +217,38 @@ class ReprocessXmlData extends Command
                 '001'
             );
 
+            $cfdiNamespace = $ns['cfdi'] ?? 'http://www.sat.gob.mx/cfd/4';
+            $conceptos = collect($xml->xpath('//cfdi:Conceptos/cfdi:Concepto') ?: [])
+                ->map(function (\SimpleXMLElement $concepto) use ($cfdiNamespace) {
+                    $concepto->registerXPathNamespace('cfdi', $cfdiNamespace);
+                    $ivaTraslados = collect($concepto->xpath('./cfdi:Impuestos/cfdi:Traslados/cfdi:Traslado') ?: [])
+                        ->filter(fn (\SimpleXMLElement $traslado) => (string) ($traslado['Impuesto'] ?? '') === '002')
+                        ->map(fn (\SimpleXMLElement $traslado) => [
+                            'base' => isset($traslado['Base']) ? round((float) $traslado['Base'], 2) : 'NH',
+                            'tasa_o_cuota' => isset($traslado['TasaOCuota']) && (string) $traslado['TasaOCuota'] !== '' ? (string) $traslado['TasaOCuota'] : 'NH',
+                            'importe' => isset($traslado['Importe']) ? round((float) $traslado['Importe'], 2) : 'NH',
+                        ])
+                        ->values()
+                        ->all();
+
+                    return [
+                        'clave_prod_serv' => (string) ($concepto['ClaveProdServ'] ?? ''),
+                        'descripcion' => (string) ($concepto['Descripcion'] ?? ''),
+                        'importe' => round((float) ($concepto['Importe'] ?? 0), 2),
+                        'iva_traslados' => $ivaTraslados,
+                    ];
+                })
+                ->values()
+                ->all();
+
+            $impuestosLocales = collect($xml->xpath('//*[local-name()="TrasladosLocales"]') ?: [])
+                ->map(fn (\SimpleXMLElement $traslado) => [
+                    'imp_loc_trasladado' => (string) ($traslado['ImpLocTrasladado'] ?? ''),
+                    'importe' => round((float) ($traslado['Importe'] ?? 0), 2),
+                ])
+                ->values()
+                ->all();
+
             // Emisor / Receptor
             $emisorArr = $xml->xpath('//cfdi:Emisor');
             $emisor = $emisorArr ? $emisorArr[0] : null;
@@ -251,6 +285,8 @@ class ReprocessXmlData extends Command
                 'retencion_iva' => $retencionIva,
                 'monto_iva' => $montoIva,
                 'monto_isr' => $montoIsr,
+                'cfdi_conceptos' => $conceptos,
+                'impuestos_locales' => $impuestosLocales,
             ];
         } catch (\Exception $e) {
             return null;

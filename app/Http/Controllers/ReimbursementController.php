@@ -848,8 +848,10 @@ class ReimbursementController extends Controller
                         'moneda' => 'MXN',
                         'tipo_comprobante' => 'I',
                         'retencion_iva' => $item['retencion_iva'] ?? 0,
-                        'monto_iva' => $item['monto_iva'] ?? ($item['impuestos'] ?? 0),
+                        'monto_iva' => $item['monto_iva'] ?? 0,
                         'monto_isr' => $item['monto_isr'] ?? 0,
+                        'cfdi_conceptos' => [],
+                        'impuestos_locales' => [],
                     ];
                 }
 
@@ -904,12 +906,14 @@ class ReimbursementController extends Controller
                     'fecha' => !empty($xmlData['fecha']) ? $xmlData['fecha'] : ($existingDraft ? $existingDraft->fecha : null),
                     'total' => !empty($xmlData['total']) ? $xmlData['total'] : ($existingDraft ? $existingDraft->total : 0),
                     'subtotal' => !empty($xmlData['subtotal']) ? $xmlData['subtotal'] : ($existingDraft ? $existingDraft->subtotal : 0),
-                    'impuestos' => isset($xmlData['impuestos']) ? $xmlData['impuestos'] : ($existingDraft ? $existingDraft->impuestos : max(0, ($xmlData['total'] ?? 0) - ($xmlData['subtotal'] ?? 0))),
+                    'impuestos' => array_key_exists('impuestos', $xmlData) ? $xmlData['impuestos'] : ($existingDraft ? $existingDraft->impuestos : 0),
                     'moneda' => !empty($xmlData['moneda']) ? $xmlData['moneda'] : ($existingDraft ? $existingDraft->moneda : 'MXN'),
                     'tipo_comprobante' => !empty($xmlData['tipo_comprobante']) ? $xmlData['tipo_comprobante'] : ($existingDraft ? $existingDraft->tipo_comprobante : null),
                     'retencion_iva' => array_key_exists('retencion_iva', $xmlData) ? $xmlData['retencion_iva'] : ($existingDraft ? $existingDraft->retencion_iva : 0),
-                    'monto_iva' => array_key_exists('monto_iva', $xmlData) ? $xmlData['monto_iva'] : ($existingDraft ? $existingDraft->monto_iva : ($xmlData['impuestos'] ?? 0)),
+                    'monto_iva' => array_key_exists('monto_iva', $xmlData) ? $xmlData['monto_iva'] : ($existingDraft ? $existingDraft->monto_iva : 0),
                     'monto_isr' => array_key_exists('monto_isr', $xmlData) ? $xmlData['monto_isr'] : ($existingDraft ? $existingDraft->monto_isr : 0),
+                    'cfdi_conceptos' => array_key_exists('cfdi_conceptos', $xmlData) ? $xmlData['cfdi_conceptos'] : ($existingDraft ? $existingDraft->cfdi_conceptos : []),
+                    'impuestos_locales' => array_key_exists('impuestos_locales', $xmlData) ? $xmlData['impuestos_locales'] : ($existingDraft ? $existingDraft->impuestos_locales : []),
                     'xml_path' => $xmlPath,
                     'original_xml_name' => $originalXmlName ?? null,
                     'pdf_path' => $pdfPath,
@@ -1171,8 +1175,12 @@ class ReimbursementController extends Controller
     private function extractXmlData($xmlContent)
     {
         $xml = simplexml_load_string($xmlContent);
+        if ($xml === false) {
+            throw new \RuntimeException('El contenido no es un XML CFDI válido.');
+        }
+
         $ns = $xml->getNamespaces(true);
-        $xml->registerXPathNamespace('cfdi', $ns['cfdi']);
+        $xml->registerXPathNamespace('cfdi', $ns['cfdi'] ?? 'http://www.sat.gob.mx/cfd/4');
         $xml->registerXPathNamespace('tfd', $ns['tfd'] ?? ($ns['tfd'] ?? 'http://www.sat.gob.mx/TimbreFiscalDigital')); // Fallback
 
         // Parse XML Data
@@ -1226,6 +1234,40 @@ class ReimbursementController extends Controller
             '001'
         );
 
+        $cfdiNamespace = $ns['cfdi'] ?? 'http://www.sat.gob.mx/cfd/4';
+        $conceptos = collect($xml->xpath('//cfdi:Conceptos/cfdi:Concepto') ?: [])
+            ->map(function (\SimpleXMLElement $concepto) use ($cfdiNamespace) {
+                $concepto->registerXPathNamespace('cfdi', $cfdiNamespace);
+                $ivaTraslados = collect($concepto->xpath('./cfdi:Impuestos/cfdi:Traslados/cfdi:Traslado') ?: [])
+                    ->filter(fn (\SimpleXMLElement $traslado) => (string) ($traslado['Impuesto'] ?? '') === '002')
+                    ->map(fn (\SimpleXMLElement $traslado) => [
+                        'base' => isset($traslado['Base']) ? round((float) $traslado['Base'], 2) : 'NH',
+                        'tasa_o_cuota' => isset($traslado['TasaOCuota']) && (string) $traslado['TasaOCuota'] !== '' ? (string) $traslado['TasaOCuota'] : 'NH',
+                        'importe' => isset($traslado['Importe']) ? round((float) $traslado['Importe'], 2) : 'NH',
+                    ])
+                    ->values()
+                    ->all();
+
+                return [
+                    'clave_prod_serv' => (string) ($concepto['ClaveProdServ'] ?? ''),
+                    'descripcion' => (string) ($concepto['Descripcion'] ?? ''),
+                    'importe' => round((float) ($concepto['Importe'] ?? 0), 2),
+                    'iva_traslados' => $ivaTraslados,
+                ];
+            })
+            ->values()
+            ->all();
+
+        // El complemento de impuestos locales puede usar distintos prefijos.
+        // local-name() permite leerlo sin depender del prefijo declarado por el emisor.
+        $impuestosLocales = collect($xml->xpath('//*[local-name()="TrasladosLocales"]') ?: [])
+            ->map(fn (\SimpleXMLElement $traslado) => [
+                'imp_loc_trasladado' => (string) ($traslado['ImpLocTrasladado'] ?? ''),
+                'importe' => round((float) ($traslado['Importe'] ?? 0), 2),
+            ])
+            ->values()
+            ->all();
+
         // Emisor / Receptor
         $emisorArr = $xml->xpath('//cfdi:Emisor');
         $emisor = $emisorArr ? $emisorArr[0] : null;
@@ -1262,6 +1304,8 @@ class ReimbursementController extends Controller
             'retencion_iva' => $retencionIva,
             'monto_iva' => $montoIva,
             'monto_isr' => $montoIsr,
+            'cfdi_conceptos' => $conceptos,
+            'impuestos_locales' => $impuestosLocales,
         ];
     }
 
@@ -1290,10 +1334,25 @@ class ReimbursementController extends Controller
         return 0.0;
     }
 
+    private function decodeXmlDetailList(mixed $value): array
+    {
+        if (is_array($value)) {
+            return array_values($value);
+        }
+
+        if (!is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+
+        return is_array($decoded) ? array_values($decoded) : [];
+    }
+
     private function paymentPolicyTaxSummary(Reimbursement $reimbursement): array
     {
         $subtotal = (float) ($reimbursement->subtotal ?? 0);
-        $ivaAmount = (float) ($reimbursement->monto_iva ?? $reimbursement->impuestos ?? 0);
+        $ivaAmount = (float) ($reimbursement->monto_iva ?? 0);
         $retencionIvaAmount = (float) ($reimbursement->retencion_iva ?? 0);
         $retencionIsrAmount = (float) ($reimbursement->monto_isr ?? 0);
 
@@ -1308,7 +1367,12 @@ class ReimbursementController extends Controller
         ];
 
         $hasStoredTaxBreakdown = $ivaAmount > 0 || $retencionIvaAmount > 0 || $retencionIsrAmount > 0;
-        if ($hasStoredTaxBreakdown) {
+        $hasStoredXmlDetails = $this->hasStoredXmlDetail($reimbursement, 'cfdi_conceptos')
+            || $this->hasStoredXmlDetail($reimbursement, 'impuestos_locales');
+
+        // Los datos ya persistidos son la fuente principal, incluso cuando contienen NH o cero.
+        // El XML solo se consulta para registros antiguos que aún no tienen el nuevo detalle.
+        if ($hasStoredTaxBreakdown || $hasStoredXmlDetails) {
             return $summary;
         }
 
@@ -1380,6 +1444,92 @@ class ReimbursementController extends Controller
         return $summary;
     }
 
+    private function paymentPolicyXmlDetails(Reimbursement $reimbursement): array
+    {
+        $hasStoredConcepts = $this->hasStoredXmlDetail($reimbursement, 'cfdi_conceptos');
+        $hasStoredLocalTaxes = $this->hasStoredXmlDetail($reimbursement, 'impuestos_locales');
+
+        $concepts = $hasStoredConcepts ? ($reimbursement->cfdi_conceptos ?? []) : null;
+        $localTaxes = $hasStoredLocalTaxes ? ($reimbursement->impuestos_locales ?? []) : null;
+
+        if ((!$hasStoredConcepts || !$hasStoredLocalTaxes) && $reimbursement->xml_path && Storage::exists($reimbursement->xml_path)) {
+            try {
+                $xmlData = $this->extractXmlData(Storage::get($reimbursement->xml_path));
+                if (!$hasStoredConcepts) {
+                    $concepts = $xmlData['cfdi_conceptos'] ?? [];
+                }
+                if (!$hasStoredLocalTaxes) {
+                    $localTaxes = $xmlData['impuestos_locales'] ?? [];
+                }
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo recuperar el detalle XML para la poliza.', [
+                    'reimbursement_id' => $reimbursement->id,
+                    'xml_path' => $reimbursement->xml_path,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return [
+            'concepts' => is_array($concepts) ? array_values($concepts) : [],
+            'local_taxes' => is_array($localTaxes) ? array_values($localTaxes) : [],
+        ];
+    }
+
+    private function hasStoredXmlDetail(Reimbursement $reimbursement, string $field): bool
+    {
+        $rawValue = $reimbursement->getRawOriginal($field);
+
+        return $rawValue !== null && $rawValue !== '';
+    }
+
+    private function paymentPolicyXmlDetailColumns(array $details): array
+    {
+        $concepts = collect($details['concepts'] ?? []);
+        $localTaxes = collect($details['local_taxes'] ?? []);
+
+        $conceptColumn = fn (callable $formatter) => $concepts->isEmpty()
+            ? 'NH'
+            : $concepts->map($formatter)->implode(' | ');
+
+        $taxColumn = function (string $field, bool $currency = false) use ($concepts) {
+            if ($concepts->isEmpty()) {
+                return 'NH';
+            }
+
+            return $concepts->map(function ($concept) use ($field, $currency) {
+                $transfers = collect($concept['iva_traslados'] ?? []);
+                if ($transfers->isEmpty()) {
+                    return 'NH';
+                }
+
+                return $transfers->map(function ($transfer) use ($field, $currency) {
+                    $value = $transfer[$field] ?? 'NH';
+                    if ($value === 'NH' || $value === null || $value === '') {
+                        return 'NH';
+                    }
+
+                    return $currency ? number_format((float) $value, 2, '.', '') : (string) $value;
+                })->implode(' / ');
+            })->implode(' | ');
+        };
+
+        return [
+            $conceptColumn(fn ($concept) => ($concept['clave_prod_serv'] ?? '') !== '' ? (string) $concept['clave_prod_serv'] : 'NH'),
+            $conceptColumn(fn ($concept) => ($concept['descripcion'] ?? '') !== '' ? (string) $concept['descripcion'] : 'NH'),
+            $conceptColumn(fn ($concept) => isset($concept['importe']) ? number_format((float) $concept['importe'], 2, '.', '') : 'NH'),
+            $taxColumn('base', true),
+            $taxColumn('tasa_o_cuota'),
+            $taxColumn('importe', true),
+            $localTaxes->isEmpty()
+                ? 'NH'
+                : $localTaxes->map(fn ($tax) => ($tax['imp_loc_trasladado'] ?? '') !== '' ? (string) $tax['imp_loc_trasladado'] : 'NH')->implode(' | '),
+            $localTaxes->isEmpty()
+                ? 'NH'
+                : $localTaxes->map(fn ($tax) => isset($tax['importe']) ? number_format((float) $tax['importe'], 2, '.', '') : 'NH')->implode(' | '),
+        ];
+    }
+
     private function extractTaxRateAndAmount(\SimpleXMLElement $xml, array $paths, string $taxCode): array
     {
         $amount = 0.0;
@@ -1392,17 +1542,32 @@ class ReimbursementController extends Controller
                 continue;
             }
 
+            $pathAmount = 0.0;
+            $pathBase = 0.0;
+            $pathHasRate = false;
+            $pathHasTax = false;
+
             foreach ($nodes as $node) {
                 if ((string) ($node['Impuesto'] ?? '') !== $taxCode) {
                     continue;
                 }
 
-                $amount += (float) ($node['Importe'] ?? 0);
+                $pathHasTax = true;
+                $pathAmount += (float) ($node['Importe'] ?? 0);
 
                 if (isset($node['Base']) && isset($node['TasaOCuota'])) {
-                    $base += (float) ($node['Base'] ?? 0);
-                    $hasRate = true;
+                    $pathBase += (float) ($node['Base'] ?? 0);
+                    $pathHasRate = true;
                 }
+            }
+
+            // El CFDI suele repetir el mismo impuesto en el resumen y por concepto.
+            // Se usa el primer nivel que lo declare para no duplicar el IVA.
+            if ($pathHasTax) {
+                $amount = $pathAmount;
+                $base = $pathBase;
+                $hasRate = $pathHasRate;
+                break;
             }
         }
 
@@ -1588,7 +1753,7 @@ class ReimbursementController extends Controller
             'fecha' => !empty($request->fecha) ? $request->fecha : ($existingDraft ? $existingDraft->fecha : null),
             'total' => !empty($request->total) ? $request->total : ($existingDraft ? $existingDraft->total : 0),
             'subtotal' => !empty($request->subtotal) ? $request->subtotal : ($existingDraft ? $existingDraft->subtotal : 0),
-            'impuestos' => !empty($request->impuestos) ? $request->impuestos : ($existingDraft ? $existingDraft->impuestos : max(0, (float)($request->total ?? 0) - (float)($request->subtotal ?? 0))),
+            'impuestos' => $request->input('impuestos', $existingDraft ? $existingDraft->impuestos : 0),
             'moneda' => !empty($request->moneda) ? $request->moneda : ($existingDraft ? $existingDraft->moneda : 'MXN'),
             'tipo_comprobante' => $request->tipo_comprobante,
             'metodo_pago' => $request->metodo_pago,
@@ -1597,8 +1762,10 @@ class ReimbursementController extends Controller
             'lugar_expedicion' => $request->lugar_expedicion,
             'regimen_fiscal_emisor' => $request->regimen_fiscal_emisor,
             'retencion_iva' => $request->input('retencion_iva', 0),
-            'monto_iva' => $request->input('monto_iva', $request->input('impuestos', 0)),
+            'monto_iva' => $request->input('monto_iva', $existingDraft ? $existingDraft->monto_iva : 0),
             'monto_isr' => $request->input('monto_isr', 0),
+            'cfdi_conceptos' => $this->decodeXmlDetailList($request->input('cfdi_conceptos')),
+            'impuestos_locales' => $this->decodeXmlDetailList($request->input('impuestos_locales')),
             'xml_path' => $xmlPath,
             'pdf_path' => $pdfPath,
             'ticket_path' => $ticketPath,
@@ -2721,11 +2888,9 @@ class ReimbursementController extends Controller
 
                 $subtotal = (float) ($r->subtotal ?? 0);
                 $total = (float) ($r->total ?? 0);
-                $ivaAmount = $r->monto_iva !== null
-                    ? (float) $r->monto_iva
-                    : ($r->impuestos !== null
-                        ? (float) $r->impuestos
-                        : max(0, $total - $subtotal));
+                $ivaAmount = $r->xml_path
+                    ? (float) ($r->monto_iva ?? 0)
+                    : (float) ($r->monto_iva ?? $r->impuestos ?? 0);
                 $ivaPercent = $subtotal > 0 ? ($ivaAmount / $subtotal) * 100 : 0;
                 $currency = $r->moneda ?? 'MXN';
 
@@ -2953,6 +3118,14 @@ class ReimbursementController extends Controller
                 'Forma de pago XML',
                 'Uso de CFDI',
                 'Regimen fiscal de emisor',
+                'ClaveProdServ',
+                'Descripcion del concepto',
+                'Importe del concepto',
+                'Base IVA',
+                'TasaOCuota IVA',
+                'Importe IVA por concepto',
+                'ImpLocTrasladado',
+                'Importe impuesto local',
                 'Subtotal',
                 'IVA %',
                 'IVA Monto',
@@ -2975,6 +3148,9 @@ class ReimbursementController extends Controller
                 $retencionIvaPercent = $taxSummary['retencion_iva_percent'];
                 $retencionIsrPercent = $taxSummary['retencion_isr_percent'];
                 $paymentWeek = $reimbursement->payment_week ?: $this->currentProcessingWeek();
+                $xmlDetailColumns = $this->paymentPolicyXmlDetailColumns(
+                    $this->paymentPolicyXmlDetails($reimbursement)
+                );
 
                 fputcsv($file, [
                     $reimbursement->true_folio ?? $reimbursement->folio ?? 'N/A',
@@ -2997,6 +3173,7 @@ class ReimbursementController extends Controller
                     $reimbursement->forma_pago ?? '',
                     $reimbursement->uso_cfdi ?? '',
                     $reimbursement->regimen_fiscal_emisor ?? '',
+                    ...$xmlDetailColumns,
                     number_format($subtotal, 2, '.', ''),
                     number_format($ivaPercent, 2, '.', ''),
                     number_format($ivaAmount, 2, '.', ''),
@@ -4519,6 +4696,7 @@ class ReimbursementController extends Controller
                         'rfc_emisor', 'rfc_receptor', 'nombre_receptor', 'observaciones',
                         'metodo_pago', 'forma_pago', 'uso_cfdi', 'lugar_expedicion', 'regimen_fiscal_emisor',
                         'tipo_comprobante', 'folio_interno_proveedor', 'retencion_iva', 'monto_iva', 'monto_isr',
+                        'cfdi_conceptos', 'impuestos_locales',
                         'trip_destination', 'trip_nights', 'trip_start_date', 'trip_end_date', 'location',
                         'uuid', 'folio', 'category', 'trip_type', 'propina',
                         'attendees_count', 'attendees_names',
@@ -4536,7 +4714,9 @@ class ReimbursementController extends Controller
                         // PREVENT DATA LOSS: Only update if the field in the request is NOT empty
                         // This prevents a cleared frontend state from wiping valid DB data
                         if (isset($itemData[$field]) && $itemData[$field] !== "" && $itemData[$field] !== "null" && $itemData[$field] !== null) {
-                            $data[$field] = $itemData[$field];
+                            $data[$field] = in_array($field, ['cfdi_conceptos', 'impuestos_locales'], true)
+                                ? $this->decodeXmlDetailList($itemData[$field])
+                                : $itemData[$field];
                         }
                     }
 

@@ -501,6 +501,33 @@
                                                 <input type="text" :name="'items['+index+'][regimen_fiscal_emisor]'" :value="item.data.regimen_fiscal_emisor" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
                                             </div>
 
+                                            <div x-show="hasInvoice && (item.data.cfdi_conceptos || []).length" class="col-span-1 md:col-span-2">
+                                                <input type="hidden" :name="'items['+index+'][cfdi_conceptos]'" :value="JSON.stringify(item.data.cfdi_conceptos || [])">
+                                                <p class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Conceptos del CFDI</p>
+                                                <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                                                    <table class="min-w-full text-xs">
+                                                        <thead class="bg-gray-50 dark:bg-gray-900/50 text-gray-500 uppercase">
+                                                            <tr><th class="px-3 py-2 text-left">ClaveProdServ</th><th class="px-3 py-2 text-left">Descripción</th><th class="px-3 py-2 text-right">Importe concepto</th><th class="px-3 py-2 text-right">Base IVA</th><th class="px-3 py-2 text-right">TasaOCuota</th><th class="px-3 py-2 text-right">Importe IVA</th></tr>
+                                                        </thead>
+                                                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                                            <template x-for="(concepto, conceptoIndex) in (item.data.cfdi_conceptos || [])" :key="conceptoIndex">
+                                                                <tr><td class="px-3 py-2 font-mono" x-text="concepto.clave_prod_serv || 'N/A'"></td><td class="px-3 py-2" x-text="concepto.descripcion || 'N/A'"></td><td class="px-3 py-2 text-right font-bold" x-text="'$ ' + Number(concepto.importe || 0).toFixed(2)"></td><td class="px-3 py-2 text-right" x-text="(concepto.iva_traslados || []).length ? concepto.iva_traslados.map(iva => iva.base === 'NH' || iva.base === null || iva.base === undefined ? 'NH' : '$ ' + Number(iva.base).toFixed(2)).join(' / ') : 'NH'"></td><td class="px-3 py-2 text-right font-mono" x-text="(concepto.iva_traslados || []).length ? concepto.iva_traslados.map(iva => iva.tasa_o_cuota || 'NH').join(' / ') : 'NH'"></td><td class="px-3 py-2 text-right font-bold" x-text="(concepto.iva_traslados || []).length ? concepto.iva_traslados.map(iva => iva.importe === 'NH' || iva.importe === null || iva.importe === undefined ? 'NH' : '$ ' + Number(iva.importe).toFixed(2)).join(' / ') : 'NH'"></td></tr>
+                                                            </template>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+
+                                            <div x-show="hasInvoice && (item.data.impuestos_locales || []).length" class="col-span-1 md:col-span-2">
+                                                <input type="hidden" :name="'items['+index+'][impuestos_locales]'" :value="JSON.stringify(item.data.impuestos_locales || [])">
+                                                <p class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Impuestos locales trasladados</p>
+                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                    <template x-for="(impuesto, impuestoIndex) in (item.data.impuestos_locales || [])" :key="impuestoIndex">
+                                                        <div class="flex justify-between rounded-xl bg-gray-50 dark:bg-gray-900/50 px-3 py-2 text-xs"><span x-text="impuesto.imp_loc_trasladado || 'N/A'"></span><strong x-text="'$ ' + Number(impuesto.importe || 0).toFixed(2)"></strong></div>
+                                                    </template>
+                                                </div>
+                                            </div>
+
                                             <div :class="!hasInvoice ? 'col-span-2' : ''">
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Nombre Emisor *</label>
                                                 <input type="text" :name="'items['+index+'][nombre_emisor]'" x-model="item.data.nombre_emisor" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" :readonly="hasInvoice" :required="!hasInvoice" placeholder="Nombre de la empresa o negocio">
@@ -538,13 +565,12 @@
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2 text-indigo-600">Subtotal *</label>
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">$</span>
-                                                    <input type="number" step="0.01" :name="'items['+index+'][subtotal]'" x-model="item.data.subtotal" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-indigo-600 pl-8" :readonly="hasInvoice" :required="!hasInvoice"
-                                                        @input="if(!hasInvoice) { const iva = Math.max(0, (parseFloat(item.data.total || 0) - parseFloat(item.data.subtotal || 0))).toFixed(2); item.data.impuestos = iva; item.data.monto_iva = iva; }">
+                                                    <input type="number" step="0.01" :name="'items['+index+'][subtotal]'" x-model="item.data.subtotal" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-indigo-600 pl-8" :readonly="hasInvoice" :required="!hasInvoice">
                                                 </div>
                                             </div>
 
                                             <div>
-                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2 text-amber-600">Impuestos (IVA)</label>
+                                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2 text-amber-600" x-text="hasInvoice ? 'IVA indicado en el XML' : 'IVA'"></label>
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">$</span>
                                                     <input type="number" step="0.01" :name="'items['+index+'][monto_iva]'" x-model="item.data.monto_iva" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-amber-600 pl-8" readonly>
@@ -569,8 +595,7 @@
                                                 <label class="block text-[10px] font-black text-white bg-indigo-600 rounded-t-lg px-2 py-1 uppercase mb-0 tracking-widest inline-block">Total del Gasto *</label>
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-indigo-300">$</span>
-                                                    <input type="number" step="0.01" :name="'items['+index+'][total]'" x-model="item.data.total" class="w-full bg-indigo-50 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-800 rounded-xl rounded-tl-none text-xl font-black text-indigo-700 dark:text-indigo-300 py-3 pl-10" :readonly="hasInvoice" :required="!hasInvoice" 
-                                                        @input="if(!hasInvoice) { const iva = Math.max(0, (parseFloat(item.data.total || 0) - parseFloat(item.data.subtotal || 0))).toFixed(2); item.data.impuestos = iva; item.data.monto_iva = iva; }">
+                                                    <input type="number" step="0.01" :name="'items['+index+'][total]'" x-model="item.data.total" class="w-full bg-indigo-50 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-800 rounded-xl rounded-tl-none text-xl font-black text-indigo-700 dark:text-indigo-300 py-3 pl-10" :readonly="hasInvoice" :required="!hasInvoice">
                                                 </div>
                                                 
                                                 <template x-if="!hasInvoice && parseFloat(item.data.subtotal) > parseFloat(item.data.total)">
@@ -935,9 +960,11 @@
                                 total: {{ $reimbursement->total ?: 0 }},
                                 subtotal: {{ $reimbursement->subtotal ?: 0 }},
                                 impuestos: {{ $reimbursement->impuestos ?: 0 }},
-                                monto_iva: {{ $reimbursement->monto_iva ?? ($reimbursement->impuestos ?: 0) }},
+                                monto_iva: {{ $reimbursement->monto_iva ?? 0 }},
                                 retencion_iva: {{ $reimbursement->retencion_iva ?: 0 }},
                                 monto_isr: {{ $reimbursement->monto_isr ?: 0 }},
+                                cfdi_conceptos: @json($reimbursement->cfdi_conceptos ?? []),
+                                impuestos_locales: @json($reimbursement->impuestos_locales ?? []),
                                 moneda: @json($reimbursement->moneda ?: "MXN"),
                                 tipo_comprobante: @json($reimbursement->tipo_comprobante),
                                 metodo_pago: @json($reimbursement->metodo_pago),
@@ -984,9 +1011,11 @@
                                     total: {{ $child->total ?: 0 }},
                                     subtotal: {{ $child->subtotal ?: 0 }},
                                     impuestos: {{ $child->impuestos ?: 0 }},
-                                    monto_iva: {{ $child->monto_iva ?? ($child->impuestos ?: 0) }},
+                                    monto_iva: {{ $child->monto_iva ?? 0 }},
                                     retencion_iva: {{ $child->retencion_iva ?: 0 }},
                                     monto_isr: {{ $child->monto_isr ?: 0 }},
+                                    cfdi_conceptos: @json($child->cfdi_conceptos ?? []),
+                                    impuestos_locales: @json($child->impuestos_locales ?? []),
                                     moneda: @json($child->moneda ?: "MXN"),
                                     tipo_comprobante: @json($child->tipo_comprobante),
                                     metodo_pago: @json($child->metodo_pago),
@@ -1169,7 +1198,7 @@
                         data: initialData ? initialData.data : { 
                             uuid: '', folio_interno_proveedor: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', 
                             nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, 
-                            impuestos: 0, monto_iva: 0, retencion_iva: 0, monto_isr: 0, tipo_comprobante: '', metodo_pago: '', forma_pago: '', uso_cfdi: '', 
+                            impuestos: 0, monto_iva: 0, retencion_iva: 0, monto_isr: 0, cfdi_conceptos: [], impuestos_locales: [], tipo_comprobante: '', metodo_pago: '', forma_pago: '', uso_cfdi: '',
                             lugar_expedicion: '', regimen_fiscal_emisor: '', category: this.lockedCategory || '', observaciones: '',
                             attendees_count: '', location: '', attendees_names: '', propina: 0
                         }
@@ -1608,7 +1637,7 @@
                             item.xmlParsed = false; 
                             xmlInput.value = ''; 
                             item.fileName = ''; 
-                            item.data = { uuid: '', folio_interno_proveedor: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, impuestos: 0, monto_iva: 0, retencion_iva: 0, monto_isr: 0, tipo_comprobante: '', metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '', category: this.lockedCategory || '' };
+                            item.data = { uuid: '', folio_interno_proveedor: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, impuestos: 0, monto_iva: 0, retencion_iva: 0, monto_isr: 0, cfdi_conceptos: [], impuestos_locales: [], tipo_comprobante: '', metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '', category: this.lockedCategory || '' };
                         }
                         else { 
                             // Check for duplicates in current session list
@@ -1628,7 +1657,7 @@
                                 xmlInput.value = '';
                                 item.xmlParsed = false;
                                 item.fileName = '';
-                                item.data = { uuid: '', folio_interno_proveedor: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, impuestos: 0, monto_iva: 0, retencion_iva: 0, monto_isr: 0, tipo_comprobante: '', metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '', category: this.lockedCategory || '' };
+                                item.data = { uuid: '', folio_interno_proveedor: '', rfc_emisor: '', nombre_emisor: '', rfc_receptor: '', nombre_receptor: '', fecha: '', moneda: 'MXN', subtotal: 0, total: 0, impuestos: 0, monto_iva: 0, retencion_iva: 0, monto_isr: 0, cfdi_conceptos: [], impuestos_locales: [], tipo_comprobante: '', metodo_pago: '', forma_pago: '', uso_cfdi: '', lugar_expedicion: '', regimen_fiscal_emisor: '', category: this.lockedCategory || '' };
                                 return;
                             }
 

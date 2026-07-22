@@ -217,7 +217,7 @@ class DashboardController extends Controller
                 DB::raw("sum(case when xml_path is not null and xml_path <> '' then coalesce(total, 0) else 0 end) as with_xml_total"),
                 DB::raw("sum(case when xml_path is null or xml_path = '' then coalesce(total, 0) else 0 end) as without_xml_total"),
                 DB::raw("sum(case when xml_path is not null and xml_path <> '' then coalesce(subtotal, 0) else 0 end) as subtotal"),
-                DB::raw("sum(case when xml_path is not null and xml_path <> '' then coalesce(nullif(impuestos, 0), coalesce(total, 0) - coalesce(subtotal, 0), 0) else 0 end) as taxes"),
+                DB::raw("sum(case when xml_path is not null and xml_path <> '' then coalesce(monto_iva, 0) else 0 end) as taxes"),
                 DB::raw('sum(coalesce(total, 0)) as total'),
                 DB::raw("sum(case when xml_path is null or xml_path = '' then coalesce(total, 0) * {$ivaFactor} else 0 end) as lost_iva_estimate")
             )

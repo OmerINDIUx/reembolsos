@@ -150,7 +150,7 @@ class SimulateData extends Command
                     'lugar_expedicion' => $data['lugar_expedicion'],
                     'regimen_fiscal_emisor' => $data['regimen_fiscal_emisor'],
                     'retencion_iva' => $data['retencion_iva'] ?? 0,
-                    'monto_iva' => $data['monto_iva'] ?? $data['impuestos'],
+                    'monto_iva' => $data['monto_iva'] ?? 0,
                     'monto_isr' => $data['monto_isr'] ?? 0,
                     'xml_path' => $storagePathXml,
                     'pdf_path' => $storagePathPdf,
@@ -232,6 +232,23 @@ class SimulateData extends Command
             $tfd = $xml->xpath('//tfd:TimbreFiscalDigital');
             $uuid = $tfd ? (string)$tfd[0]['UUID'] : null;
 
+            $totalImpuestosTrasladados = 0.0;
+            $impuestosNode = $xml->xpath('//cfdi:Comprobante/cfdi:Impuestos');
+            if ($impuestosNode && isset($impuestosNode[0]['TotalImpuestosTrasladados'])) {
+                $totalImpuestosTrasladados = (float) $impuestosNode[0]['TotalImpuestosTrasladados'];
+            }
+
+            $ivaNodes = $xml->xpath('//cfdi:Comprobante/cfdi:Impuestos/cfdi:Traslados/cfdi:Traslado') ?: [];
+            if (!$ivaNodes) {
+                $ivaNodes = $xml->xpath('//cfdi:Conceptos/cfdi:Concepto/cfdi:Impuestos/cfdi:Traslados/cfdi:Traslado') ?: [];
+            }
+            $montoIva = 0.0;
+            foreach ($ivaNodes as $ivaNode) {
+                if ((string) ($ivaNode['Impuesto'] ?? '') === '002') {
+                    $montoIva += (float) ($ivaNode['Importe'] ?? 0);
+                }
+            }
+
             return [
                 'uuid' => $uuid,
                 'rfc_emisor' => $emisor ? (string)$emisor['Rfc'] : 'N/A',
@@ -242,7 +259,8 @@ class SimulateData extends Command
                 'fecha' => $fecha ? date('Y-m-d', strtotime($fecha)) : null,
                 'total' => $total,
                 'subtotal' => $subtotal,
-                'impuestos' => (float)$total - (float)$subtotal,
+                'impuestos' => round($totalImpuestosTrasladados, 2),
+                'monto_iva' => round($montoIva, 2),
                 'moneda' => $moneda,
                 'metodo_pago' => (string)$xml['MetodoPago'] ?? 'PUE',
                 'forma_pago' => (string)$xml['FormaPago'] ?? '03',

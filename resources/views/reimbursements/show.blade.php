@@ -483,7 +483,9 @@
                         $regDesc = $satRegimenFiscal[$reg] ?? '';
                         $tipoCfdi = $reimbursement->tipo_comprobante;
                         $tipoCfdiDesc = $satTipoComprobante[$tipoCfdi] ?? '';
-                        $montoIva = $reimbursement->monto_iva ?? $reimbursement->impuestos ?? 0;
+                        $montoIva = $reimbursement->xml_path
+                            ? ($reimbursement->monto_iva ?? 0)
+                            : ($reimbursement->monto_iva ?? $reimbursement->impuestos ?? 0);
                         $retencionIva = $reimbursement->retencion_iva ?? 0;
                         $montoIsr = $reimbursement->monto_isr ?? 0;
                     @endphp
@@ -589,6 +591,36 @@
                                 @endif
                             </div>
                         </div>
+
+                        @if(!empty($reimbursement->cfdi_conceptos))
+                            <div class="border-t border-gray-200 dark:border-gray-700">
+                                <div class="px-6 py-3 bg-gray-50/50 dark:bg-gray-900/20"><h4 class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Conceptos del CFDI</h4></div>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full text-xs">
+                                        <thead class="text-gray-500 uppercase"><tr><th class="px-6 py-3 text-left">ClaveProdServ</th><th class="px-6 py-3 text-left">Descripción</th><th class="px-6 py-3 text-right">Importe concepto</th><th class="px-6 py-3 text-right">Base IVA</th><th class="px-6 py-3 text-right">TasaOCuota</th><th class="px-6 py-3 text-right">Importe IVA</th></tr></thead>
+                                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                            @foreach($reimbursement->cfdi_conceptos as $concepto)
+                                                @php
+                                                    $ivaTraslados = $concepto['iva_traslados'] ?? [];
+                                                @endphp
+                                                <tr><td class="px-6 py-3 font-mono">{{ $concepto['clave_prod_serv'] ?? 'N/A' }}</td><td class="px-6 py-3">{{ $concepto['descripcion'] ?? 'N/A' }}</td><td class="px-6 py-3 text-right font-bold">$ {{ number_format((float) ($concepto['importe'] ?? 0), 2) }}</td><td class="px-6 py-3 text-right">{{ $ivaTraslados ? collect($ivaTraslados)->map(fn ($iva) => isset($iva['base']) && $iva['base'] !== 'NH' ? '$ ' . number_format((float) $iva['base'], 2) : 'NH')->implode(' / ') : 'NH' }}</td><td class="px-6 py-3 text-right font-mono">{{ $ivaTraslados ? collect($ivaTraslados)->map(fn ($iva) => $iva['tasa_o_cuota'] ?? 'NH')->implode(' / ') : 'NH' }}</td><td class="px-6 py-3 text-right font-bold">{{ $ivaTraslados ? collect($ivaTraslados)->map(fn ($iva) => isset($iva['importe']) && $iva['importe'] !== 'NH' ? '$ ' . number_format((float) $iva['importe'], 2) : 'NH')->implode(' / ') : 'NH' }}</td></tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endif
+
+                        @if(!empty($reimbursement->impuestos_locales))
+                            <div class="border-t border-gray-200 dark:border-gray-700 px-6 py-4">
+                                <h4 class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Impuestos locales trasladados</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    @foreach($reimbursement->impuestos_locales as $impuestoLocal)
+                                        <div class="flex justify-between rounded-xl bg-gray-50 dark:bg-gray-900/40 px-4 py-3 text-xs"><span>{{ $impuestoLocal['imp_loc_trasladado'] ?? 'N/A' }}</span><strong>$ {{ number_format((float) ($impuestoLocal['importe'] ?? 0), 2) }}</strong></div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
                     </div>
                     @endif
 
