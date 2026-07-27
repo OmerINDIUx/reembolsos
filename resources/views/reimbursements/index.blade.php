@@ -25,6 +25,7 @@
                         $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isAdminView() || $identity->isTreasury() || $identity->isCxp());
                         $canDownloadPaymentFile = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury() || $identity->isCxp());
                         $defaultTab = $canManage ? 'management' : 'active';
+                        $tab = request('tab', $defaultTab);
                     @endphp
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
                         <h3 class="text-lg font-medium">Listado de Reembolsos</h3>
@@ -177,26 +178,15 @@
 
                     <!-- Search & Filter Form -->
                     <div class="mb-6 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                        <form id="filter-form" action="{{ route('reimbursements.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4" novalidate>
+                        <form id="filter-form" action="{{ route('reimbursements.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-12 gap-4" novalidate>
                             <input type="hidden" name="tab" value="{{ request('tab', $defaultTab) }}">
                             <input type="hidden" name="sort_by" id="input-sort-by" value="{{ request('sort_by', 'created_at') }}">
                             <input type="hidden" name="sort_order" id="input-sort-order" value="{{ request('sort_order', 'desc') }}">
                             
                             <!-- Search Input -->
-                            <div class="col-span-1 md:col-span-3">
+                            <div class="col-span-1 md:col-span-6 md:order-1">
                                 <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscador General</label>
                                 <input type="text" name="search" id="search" value="{{ request('search') }}" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Busca cualquier dato del reembolso...">
-                            </div>
-
-                            <!-- Cost Center Filter -->
-                            <div class="col-span-1 md:col-span-3">
-                                <label for="cost_center_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Centro de Costos / Obra</label>
-                                <select name="cost_center_id" id="cost_center_id" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                    <option value="">Todos los permitidos</option>
-                                    @foreach($authorizedCCs as $acc)
-                                        <option value="{{ $acc->id }}" {{ request('cost_center_id') == $acc->id ? 'selected' : '' }}>{{ $acc->name }}</option>
-                                    @endforeach
-                                </select>
                             </div>
 
                             @php
@@ -207,8 +197,8 @@
                             @endphp
 
                             <!-- Week From -->
-                            <div class="col-span-1 md:col-span-2">
-                                <label for="from_week" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana Desde</label>
+                            <div class="col-span-1 md:col-span-3 md:order-4">
+                                <label for="from_week" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $tab === 'payment' ? 'Semana de pago desde' : 'Semana desde' }}</label>
                                 <select name="from_week" id="from_week" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                     <option value="">Cualquiera</option>
                                     @foreach($availableWeeksByYear as $year => $weeks)
@@ -222,8 +212,8 @@
                             </div>
 
                             <!-- Week To -->
-                            <div class="col-span-1 md:col-span-2">
-                                <label for="to_week" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Semana Hasta</label>
+                            <div class="col-span-1 md:col-span-3 md:order-5">
+                                <label for="to_week" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $tab === 'payment' ? 'Semana de pago hasta' : 'Semana hasta' }}</label>
                                 <select name="to_week" id="to_week" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                     <option value="">Cualquiera</option>
                                     @foreach($availableWeeksByYear as $year => $weeks)
@@ -236,8 +226,71 @@
                                 </select>
                             </div>
 
+                            <!-- Cost Center Searchable Filter -->
+                            <div class="col-span-1 md:col-span-6 md:order-2" x-data="searchableFilter({{ Illuminate\Support\Js::from($authorizedCCs->map(fn($cc) => ['id' => $cc->id, 'label' => $cc->name])->values()) }}, '{{ request('cost_center_id') }}', 'Todos los centros permitidos')" @click.outside="open = false">
+                                <label for="cost_center_search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Centro de Costos / Obra</label>
+                                <div class="relative">
+                                    <input type="hidden" name="cost_center_id" :value="selected">
+                                    <input id="cost_center_search" type="text" x-model="search" @focus="open = true" @input="open = true" autocomplete="off" placeholder="Buscar centro de costos..." class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    <div x-cloak x-show="open" class="absolute z-30 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-600 dark:bg-gray-800">
+                                        <button type="button" @click="choose('', 'Todos los centros permitidos')" class="block w-full px-3 py-2 text-left text-sm hover:bg-indigo-50 dark:hover:bg-gray-700">Todos los centros permitidos</button>
+                                        <template x-for="option in filteredOptions" :key="option.id">
+                                            <button type="button" @click="choose(option.id, option.label)" class="block w-full px-3 py-2 text-left text-sm hover:bg-indigo-50 dark:hover:bg-gray-700" x-text="option.label"></button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- User / Payee Searchable Filter -->
+                            <div class="col-span-1 md:col-span-6 md:order-3" x-data="searchableFilter({{ Illuminate\Support\Js::from($filterUsers->map(fn($filterUser) => ['id' => $filterUser->id, 'label' => $filterUser->name])->values()) }}, '{{ request('user_id') }}', 'Todos los usuarios')" @click.outside="open = false">
+                                <label for="user_search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Usuario / beneficiario</label>
+                                <div class="relative">
+                                    <input type="hidden" name="user_id" :value="selected">
+                                    <input id="user_search" type="text" x-model="search" @focus="open = true" @input="open = true" autocomplete="off" placeholder="Buscar usuario o beneficiario..." class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    <div x-cloak x-show="open" class="absolute z-30 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-600 dark:bg-gray-800">
+                                        <button type="button" @click="choose('', 'Todos los usuarios')" class="block w-full px-3 py-2 text-left text-sm hover:bg-indigo-50 dark:hover:bg-gray-700">Todos los usuarios</button>
+                                        <template x-for="option in filteredOptions" :key="option.id">
+                                            <button type="button" @click="choose(option.id, option.label)" class="block w-full px-3 py-2 text-left text-sm hover:bg-indigo-50 dark:hover:bg-gray-700" x-text="option.label"></button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Exact Upload Week -->
+                            <div class="col-span-1 md:col-span-4 md:order-6">
+                                <label for="upload_week" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subidos en semana exacta</label>
+                                <select name="upload_week" id="upload_week" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    <option value="">Cualquiera</option>
+                                    @foreach($availableUploadWeeks as $uploadWeek)
+                                        <option value="{{ $uploadWeek }}" {{ request('upload_week') == $uploadWeek ? 'selected' : '' }}>Semana {{ $uploadWeek }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <!-- Upload Week From -->
+                            <div class="col-span-1 md:col-span-4 md:order-7">
+                                <label for="upload_from_week" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subido desde semana</label>
+                                <select name="upload_from_week" id="upload_from_week" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    <option value="">Cualquiera</option>
+                                    @foreach($availableUploadWeeks as $uploadWeek)
+                                        <option value="{{ $uploadWeek }}" {{ request('upload_from_week') == $uploadWeek ? 'selected' : '' }}>Semana {{ $uploadWeek }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <!-- Upload Week To -->
+                            <div class="col-span-1 md:col-span-4 md:order-8">
+                                <label for="upload_to_week" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subido hasta semana</label>
+                                <select name="upload_to_week" id="upload_to_week" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    <option value="">Cualquiera</option>
+                                    @foreach($availableUploadWeeks as $uploadWeek)
+                                        <option value="{{ $uploadWeek }}" {{ request('upload_to_week') == $uploadWeek ? 'selected' : '' }}>Semana {{ $uploadWeek }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
                             <!-- Buttons -->
-                            <div class="col-span-1 md:col-span-2 flex justify-end items-end space-x-2">
+                            <div class="col-span-1 md:col-span-12 md:order-10 flex justify-end items-end space-x-2">
                                 <a href="{{ route('reimbursements.index') }}" class="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-widest hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 h-[38px]">
                                     Limpiar
                                 </a>
@@ -296,6 +349,8 @@
                                             }
                                         }
                                         
+                                        // La semana de subida solo filtra los elementos incluidos;
+                                        // no debe separar el acumulado visual.
                                         $groupKey = $week . '|||' . $ctx;
                                 if (!isset($groupedData[$groupKey])) {
                                     $groupedData[$groupKey] = [
@@ -371,7 +426,7 @@
                                                     <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                                                 </div>
                                                 <div>
-                                                    <h3 class="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest italic">Semana {{ $week }}</h3>
+                                                    <h3 class="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest italic">{{ $tab === 'payment' ? 'Semana de pago' : 'Semana' }} {{ $week }}</h3>
                                                     <p class="text-xl font-black text-gray-900 dark:text-white leading-none mt-1">{{ $userName }}</p>
                                                 </div>
                                             </div>
@@ -824,6 +879,26 @@
         </div>
     </div>    
     <script>
+        window.searchableFilter = function(options, selected, emptyLabel) {
+            const selectedOption = options.find(option => String(option.id) === String(selected));
+            return {
+                options,
+                selected: selected || '',
+                search: selectedOption ? selectedOption.label : '',
+                emptyLabel,
+                open: false,
+                get filteredOptions() {
+                    const needle = this.search.trim().toLowerCase();
+                    return needle ? this.options.filter(option => option.label.toLowerCase().includes(needle)) : this.options;
+                },
+                choose(id, label) {
+                    this.selected = id;
+                    this.search = label;
+                    this.open = false;
+                }
+            };
+        };
+
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('filter-form');
             const container = document.getElementById('results-container');
