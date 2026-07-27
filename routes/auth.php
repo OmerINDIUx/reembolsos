@@ -8,17 +8,20 @@ use App\Http\Controllers\Auth\LoginSecurityChallengeController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
-use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
-// Registration routes removed
+    // Registration routes removed
 
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
 
-    Route::post('login', [AuthenticatedSessionController::class, 'store']);
+    Route::get('auth/microsoft', [AuthenticatedSessionController::class, 'redirectToMicrosoft'])
+        ->name('auth.microsoft');
+
+    Route::get('auth/microsoft/callback', [AuthenticatedSessionController::class, 'handleMicrosoftCallback'])
+        ->name('auth.microsoft.callback');
 
     Route::get('login/security-code', [LoginSecurityChallengeController::class, 'show'])
         ->name('login.security_code.show');
