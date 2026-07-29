@@ -923,9 +923,9 @@
                                                                 {{ $actionLabel }} por:
 
                                                                 @if($approval->substituted_user_id)
-                                                                    {{ $approval->user->name }} <span class="text-indigo-600 dark:text-indigo-400 text-[10px] uppercase font-black tracking-tighter mx-1">a nombre de {{ $approval->substitutedUser->name }}</span>
+                                                                    {{ $approval->user?->name ?? 'Sistema' }} <span class="text-indigo-600 dark:text-indigo-400 text-[10px] uppercase font-black tracking-tighter mx-1">a nombre de {{ $approval->substitutedUser?->name ?? 'Usuario no disponible' }}</span>
                                                                 @else
-                                                                    {{ $approval->user->name ?? 'Sistema' }}
+                                                                    {{ $approval->user?->name ?? 'Sistema' }}
                                                                 @endif
                                                             </span>
                                                             en el paso 

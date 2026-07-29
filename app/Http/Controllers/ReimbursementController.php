@@ -1997,6 +1997,8 @@ class ReimbursementController extends Controller
             'costCenter.beneficiary',
             'fixedFund.user',
             'costCenter.approvalSteps.user',
+            'approvals.user',
+            'approvals.substitutedUser',
             'directorApprover',
             'controlApprover',
             'executiveApprover',
