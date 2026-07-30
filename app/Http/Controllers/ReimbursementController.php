@@ -4671,10 +4671,6 @@ class ReimbursementController extends Controller
                 ? \App\Models\FixedFund::whereKey($request->input('fixed_fund_id'))->where('cost_center_id', $requestCostCenterId)->where('is_active', true)->first()
                 : null;
 
-            if (in_array($type, ['fondo_fijo', 'comida', 'viaje'], true) && !$fixedFund) {
-                return response()->json(['success' => false, 'error' => 'Selecciona un fondo fijo activo.'], 422);
-            }
-
             if ($requestCostCenterId) {
                 $cc = \App\Models\CostCenter::find($requestCostCenterId);
                 if ($cc && !$cc->is_active) {

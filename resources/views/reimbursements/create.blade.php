@@ -1048,8 +1048,22 @@
                         }
                     });
 
-                    // Auto-save every 30 seconds
+                    // Synchronize server-rendered select values with Alpine before the
+                    // first auto-save, otherwise fixed_fund_id can be submitted empty.
+                    this.$nextTick(() => this.initializeFormSelections());
                     setInterval(() => this.saveDraft(true), 30000);
+                },
+                initializeFormSelections() {
+                    const ccSelect = document.querySelector('select[name="cost_center_id"]');
+                    const travelEventSelect = document.querySelector('select[name="travel_event_id"]');
+
+                    if (travelEventSelect?.value && this.type === "viaje" && this.chargeType === "travel_event") {
+                        this.updateTravelEvent({ target: travelEventSelect });
+                    } else if (ccSelect?.value) {
+                        this.updateBeneficiary({ target: ccSelect });
+                    }
+
+                    this.updateFixedFund();
                 },
                 restoreDraftStep1() {
                     @if(isset($reimbursement))
@@ -1241,7 +1255,12 @@
                     const globalFields = ['type', 'has_invoice', 'cost_center_id', 'travel_event_id', 'fixed_fund_id', 'week', 'user_id', 'payee_id', 'title'];
 
                     formData.append('_token', '{{ csrf_token() }}');
-                    globalFields.forEach(name => formData.append(name, this.getFieldValue(name)));
+                    globalFields.forEach(name => {
+                        const value = name === 'fixed_fund_id'
+                            ? (this.selectedFixedFundId || '')
+                            : this.getFieldValue(name);
+                        formData.append(name, value);
+                    });
                     if (this.draftId) formData.append('draft_id', this.draftId);
                     if (item.draftId) formData.append(`items[${index}][draft_id]`, item.draftId);
                     if (item.companyConfirmed) formData.append(`items[${index}][confirm_company]`, '1');
