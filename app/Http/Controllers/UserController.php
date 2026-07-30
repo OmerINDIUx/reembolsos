@@ -124,6 +124,61 @@ class UserController extends Controller
     {
         $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
         $user->load(['director', 'subordinates', 'costCenters', 'substitutes.user']);
+        // Centros donde el usuario participa, ya sea como solicitante, aprobador,
+        // responsable de fondo fijo o dentro de alguno de los puestos del flujo.
+        $costCenterAssignments = \App\Models\CostCenter::query()
+            ->where(function ($query) use ($user) {
+                $query->where('director_id', $user->id)
+                    ->orWhere('control_obra_id', $user->id)
+                    ->orWhere('director_ejecutivo_id', $user->id)
+                    ->orWhere('accountant_id', $user->id)
+                    ->orWhere('direccion_id', $user->id)
+                    ->orWhere('tesoreria_id', $user->id)
+                    ->orWhere('beneficiary_id', $user->id)
+                    ->orWhereHas('approvalSteps', fn ($steps) => $steps->where('user_id', $user->id))
+                    ->orWhereHas('authorizedUsers', fn ($users) => $users->where('users.id', $user->id))
+                    ->orWhereHas('fixedFunds', fn ($funds) => $funds
+                        ->where('user_id', $user->id)
+                        ->where('is_active', true));
+            })
+            ->with([
+                'approvalSteps' => fn ($steps) => $steps->where('user_id', $user->id),
+                'authorizedUsers' => fn ($users) => $users->where('users.id', $user->id),
+                'fixedFunds' => fn ($funds) => $funds
+                    ->where('user_id', $user->id)
+                    ->where('is_active', true),
+            ])
+            ->orderBy('name')
+            ->get()
+            ->map(function ($costCenter) use ($user) {
+                $positions = collect([
+                    $costCenter->director_id === $user->id ? 'Director N1' : null,
+                    $costCenter->control_obra_id === $user->id ? 'Control de Obra N2' : null,
+                    $costCenter->director_ejecutivo_id === $user->id ? 'Director Ejecutivo N3' : null,
+                    $costCenter->accountant_id === $user->id ? 'Cuentas por Pagar Revisador' : null,
+                    $costCenter->direccion_id === $user->id ? 'Subdirección N5' : null,
+                    $costCenter->tesoreria_id === $user->id ? 'Cuentas por Pagar Pagador' : null,
+                    $costCenter->beneficiary_id === $user->id ? 'Beneficiario' : null,
+                    $costCenter->authorizedUsers->isNotEmpty()
+                        ? ($costCenter->authorizedUsers->first()->pivot->can_do_special
+                            ? 'Usuario autorizado (con permisos especiales)'
+                            : 'Usuario autorizado')
+                        : null,
+                ])->filter();
+
+                $costCenter->approvalSteps->each(function ($step) use ($positions) {
+                    $positions->push($step->name ?: 'Aprobador N' . $step->order);
+                });
+
+                $costCenter->fixedFunds->each(function ($fund) use ($positions) {
+                    $positions->push('Responsable de fondo fijo' . ($fund->name ? ': ' . $fund->name : ''));
+                });
+
+                return [
+                    'costCenter' => $costCenter,
+                    'positions' => $positions->unique()->values(),
+                ];
+            });
 
         // 1. Personal Spending Stats
         $pendingQuery = $user->reimbursements()->applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
@@ -182,7 +237,7 @@ class UserController extends Controller
         // 7. Substitutes
         $allUsers = User::where('id', '!=', $user->id)->orderBy('name')->get();
 
-        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount', 'periods', 'allUsers'));
+        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount', 'periods', 'allUsers', 'costCenterAssignments'));
     }
 
     /**
