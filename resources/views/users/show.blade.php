@@ -129,7 +129,9 @@
 
                 <div class="divide-y divide-gray-100 dark:divide-gray-700">
                     @forelse($costCenterAssignments as $assignment)
-                        @php($costCenter = $assignment['costCenter'])
+                        @php
+                            $costCenter = $assignment['costCenter'];
+                        @endphp
                         <div class="px-8 py-5 flex flex-col md:flex-row md:items-center gap-4">
                             <div class="flex items-center gap-3 md:w-1/3">
                                 <div class="w-11 h-11 shrink-0 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-[10px] font-black uppercase">
@@ -177,23 +179,25 @@
                         Mis Categorías
                     </h3>
                     <div class="space-y-6">
-                        @forelse($categoryBreakdown->take(5) as $cat)
-                            @php
-                                $maxAmount = $categoryBreakdown->max('amount') ?: 1;
-                                $percent = ($cat->amount / $maxAmount) * 100;
-                            @endphp
-                            <div>
-                                <div class="flex justify-between items-center mb-2">
-                                    <span class="text-[10px] font-black uppercase text-gray-500 dark:text-gray-400 truncate w-2/3">{{ $cat->category }}</span>
-                                    <span class="text-xs font-black text-gray-900 dark:text-white">${{ number_format($cat->amount, 0) }}</span>
+                        @if($categoryBreakdown->isNotEmpty())
+                            @foreach($categoryBreakdown->take(5) as $cat)
+                                @php
+                                    $maxAmount = $categoryBreakdown->max('amount') ?: 1;
+                                    $percent = ($cat->amount / $maxAmount) * 100;
+                                @endphp
+                                <div>
+                                    <div class="flex justify-between items-center mb-2">
+                                        <span class="text-[10px] font-black uppercase text-gray-500 dark:text-gray-400 truncate w-2/3">{{ $cat->category }}</span>
+                                        <span class="text-xs font-black text-gray-900 dark:text-white">${{ number_format($cat->amount, 0) }}</span>
+                                    </div>
+                                    <div class="w-full bg-gray-50 dark:bg-gray-900 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-indigo-600 h-full rounded-full transition-all duration-700" style="width: {{ $percent }}%"></div>
+                                    </div>
                                 </div>
-                                <div class="w-full bg-gray-50 dark:bg-gray-900 rounded-full h-1.5 overflow-hidden">
-                                    <div class="bg-indigo-600 h-full rounded-full transition-all duration-700" style="width: {{ $percent }}%"></div>
-                                </div>
-                            </div>
-                        @empty
+                            @endforeach
+                        @else
                             <p class="text-xs text-center text-gray-400 py-10">Sin datos registrados</p>
-                        @endforelse
+                        @endif
                     </div>
                 </div>
             </div>
