@@ -214,6 +214,39 @@ class DeviceAuditController extends Controller
         ));
     }
 
+    public function exportUsers(Request $request)
+    {
+        $search = trim((string) $request->input('search'));
+        $users = User::with(['profile', 'authorizedCostCenters:id,name'])
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($innerQuery) use ($search) {
+                    $innerQuery->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('name')
+            ->get();
+
+        $fileName = 'usuarios_' . now()->format('Ymd_His') . '.csv';
+
+        return response()->streamDownload(function () use ($users) {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, ['Nombre', 'Correo', 'Puesto', 'Centro(s) de costos']);
+
+            foreach ($users as $user) {
+                fputcsv($handle, [
+                    $user->name,
+                    $user->email,
+                    $user->profile?->display_name ?: $user->role_name,
+                    $user->authorizedCostCenters->pluck('name')->implode(' | '),
+                ]);
+            }
+
+            fclose($handle);
+        }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
     public function block(Request $request, User $user, AccountBlockService $service): RedirectResponse
     {
         $validated = $request->validate([

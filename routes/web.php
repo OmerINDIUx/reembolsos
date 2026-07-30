@@ -29,6 +29,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/device-audit', [DeviceAuditController::class, 'index'])
         ->middleware('admin')
         ->name('admin.device-audit.index');
+    Route::get('/admin/device-audit/users/export', [DeviceAuditController::class, 'exportUsers'])
+        ->middleware('admin')
+        ->name('admin.device-audit.users.export');
     Route::post('/admin/device-audit/users/{user}/block', [DeviceAuditController::class, 'block'])
         ->middleware('admin')
         ->name('admin.device-audit.block');

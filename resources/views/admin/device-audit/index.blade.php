@@ -22,6 +22,9 @@
                 <button class="rounded-xl bg-gray-900 px-5 py-2 text-sm font-black uppercase tracking-wide text-white hover:bg-black">
                     Buscar
                 </button>
+                <a href="{{ route('admin.device-audit.users.export', ['search' => $search]) }}" class="rounded-xl bg-emerald-600 px-5 py-2 text-center text-sm font-black uppercase tracking-wide text-white hover:bg-emerald-700">
+                    Descargar usuarios
+                </a>
                 @if($search !== '')
                     <a href="{{ route('admin.device-audit.index', ['days' => $days]) }}" class="rounded-xl bg-gray-100 px-5 py-2 text-center text-sm font-black uppercase tracking-wide text-gray-700 hover:bg-gray-200">
                         Limpiar
