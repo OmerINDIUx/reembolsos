@@ -156,7 +156,7 @@
                                             @csrf
                                             @method('DELETE')
                                             <input type="hidden" name="transfer_to_user_id" value="">
-                                            <button type="button" onclick="confirmUserDeletion({{ $user->id }}, @js($user->name), {{ $user->active_fixed_funds_count }})" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Eliminar</button>
+                                            <button type="button" onclick="confirmUserDeletion({{ $user->id }}, @js($user->name), {{ $user->active_fixed_funds_count }})" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Deshabilitar</button>
                                         </form>
                                         @endif
                                         @else
@@ -287,53 +287,23 @@
             })->values();
         @endphp
         const fixedFundTransferCandidates = @js($fixedFundTransferCandidateOptions);
+        const affectedCostCenters = @js($affectedCostCenters);
 
-        async function confirmUserDeletion(userId, userName, activeFundCount) {
+        async function confirmUserDeletion(userId, userName) {
             const form = document.getElementById(`delete-user-${userId}`);
             if (!form) return;
-
-            if (activeFundCount > 0) {
-                const candidates = fixedFundTransferCandidates.filter(candidate => Number(candidate.id) !== Number(userId));
-                const options = candidates.map(candidate =>
-                    `<option value="${candidate.id}">${candidate.name} — ${candidate.profile}</option>`
-                ).join('');
-
-                const result = await Swal.fire({
-                    icon: 'warning',
-                    title: 'Transferir fondos antes de eliminar',
-                    html: `<p class="mb-4 text-sm">${userName} tiene ${activeFundCount} fondo(s) fijo(s). Selecciona quién los recibirá.</p>
-                           <select id="fixed-fund-replacement" class="swal2-select" style="display:block;width:85%;margin:1rem auto">
-                               <option value="">Selecciona nuevo responsable...</option>${options}
-                           </select>
-                           <p class="text-xs text-gray-500">Cuentas por Pagar Pagadores no está disponible como destinatario.</p>`,
-                    showCancelButton: true,
-                    confirmButtonText: 'TRANSFERIR Y ELIMINAR',
-                    cancelButtonText: 'CANCELAR',
-                    confirmButtonColor: '#dc2626',
-                    preConfirm: () => {
-                        const replacementId = document.getElementById('fixed-fund-replacement')?.value;
-                        if (!replacementId) {
-                            Swal.showValidationMessage('Selecciona el nuevo responsable del fondo fijo.');
-                            return false;
-                        }
-                        return replacementId;
-                    }
-                });
-
-                if (result.isConfirmed) {
-                    form.querySelector('[name="transfer_to_user_id"]').value = result.value;
-                    form.submit();
-                }
-                return;
-            }
-
-            const result = await AppConfirm({
-                type: 'danger',
-                title: '¿Eliminar usuario?',
-                message: 'Se eliminará el usuario del sistema. Esta acción no se puede deshacer.',
-                confirmText: 'SÍ, ELIMINAR'
-            });
+            const centers = (affectedCostCenters[userId] || []);
+            const candidates = fixedFundTransferCandidates.filter(candidate => Number(candidate.id) !== Number(userId));
+            const options = candidates.map(candidate => `<option value="${candidate.id}">${candidate.name} — ${candidate.profile}</option>`).join('');
+            const centerHtml = centers.length ? centers.map((center, index) => `
+                <div class="text-left border rounded-lg p-3 mb-3"><p class="font-bold text-sm mb-2">${center.name}</p>
+                ${center.steps.some(step => Number(step.user_id) === Number(userId)) ? `<select id="approval-action-${index}" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="replace">Reemplazar aprobador en todo el ciclo</option><option value="previous">Enviar pendientes al aprobador anterior</option><option value="next">Enviar pendientes al aprobador siguiente</option><option value="remove">Eliminar este paso del ciclo</option></select><select id="approval-replacement-${index}" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="">Nuevo aprobador...</option>${options}</select>` : ''}
+                ${center.funds.some(fund => Number(fund.user_id) === Number(userId)) ? `<select id="fund-replacement-${index}" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="">Desactivar fondo fijo</option>${options}</select>` : ''}
+                <select id="reimbursement-route-${index}" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="keep">Pendientes: usar el flujo configurado</option><option value="fixed_fund">Pendientes: enviarlos al responsable de fondo fijo</option><option value="user">Pendientes: enviarlos a una persona específica</option></select><select id="reimbursement-user-${index}" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="">Persona destinataria...</option>${options}</select></div>`).join('') : '<p class="text-sm text-gray-600">No tiene ciclos ni fondos fijos asignados. Solo se deshabilitará la cuenta.</p>';
+            const result = await Swal.fire({ icon: 'warning', title: 'Deshabilitar usuario', html: `<p class="text-sm mb-4">${userName} conservará su historial, pero ya no podrá iniciar sesión. Define qué ocurre con sus responsabilidades.</p>${centerHtml}`, width: 700, showCancelButton: true, confirmButtonText: 'DESHABILITAR Y APLICAR', cancelButtonText: 'CANCELAR', confirmButtonColor: '#dc2626', preConfirm: () => {
+                form.querySelectorAll('.generated-reassignment').forEach(el => el.remove());
+                centers.forEach((center, index) => { const add = (name, value) => { const input = document.createElement('input'); input.type='hidden'; input.name=name; input.value=value || ''; input.className='generated-reassignment'; form.appendChild(input); }; const action = document.getElementById(`approval-action-${index}`); const replacement = document.getElementById(`approval-replacement-${index}`); if (action) { add(`approval_actions[${center.id}]`, action.value); if (action.value === 'replace' && !replacement.value) { Swal.showValidationMessage(`Selecciona el reemplazo de ${center.name}.`); return false; } add(`approval_replacements[${center.id}]`, replacement.value); } const fund = document.getElementById(`fund-replacement-${index}`); if (fund) add(`fund_replacements[${center.id}]`, fund.value); const route = document.getElementById(`reimbursement-route-${index}`); const routeUser = document.getElementById(`reimbursement-user-${index}`); if (route) { add(`reimbursement_routes[${center.id}]`, route.value); if (route.value === 'user' && !routeUser.value) { Swal.showValidationMessage(`Selecciona el destinatario de ${center.name}.`); return false; } add(`reimbursement_route_users[${center.id}]`, routeUser.value); } }); return true;
+            }});
             if (result.isConfirmed) form.submit();
-        }
-    </script>
+        }    </script>
 </x-app-layout>
