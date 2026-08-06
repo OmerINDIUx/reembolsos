@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\PdfNormalizationException;
 use App\Models\Reimbursement;
 use App\Models\CostCenter;
 use App\Models\User;
@@ -17,8 +18,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Smalot\PdfParser\Parser;
 use App\Services\NotificationBatchService;
+use App\Services\AttachmentFilePreparer;
+use App\Services\QpdfPdfNormalizer;
+use App\Support\PreparedAttachment;
 use Barryvdh\DomPDF\Facade\Pdf;
 use setasign\Fpdi\Fpdi;
+use setasign\Fpdi\PdfParser\CrossReference\CrossReferenceException;
 use App\Mail\MenfisInvoiceMail;
 use Illuminate\Support\Facades\Mail;
 
@@ -77,54 +82,22 @@ class ReimbursementController extends Controller
                 $q->where('folio', 'like', "%{$globalSearch}%")
                   ->orWhere('uuid', 'like', "%{$globalSearch}%");
             });
+            $this->applyIndexFilters($query, $request, $tab);
             $availableWeeks = $this->availableWeeksForTab($query, $tab);
+            $availableUploadWeeks = $this->availableUploadWeeksForQuery($query);
             $reimbursements = $query->paginate(10)->appends($request->all());
             $this->attachOperationalWeek($reimbursements->getCollection(), $tab);
             $editableCostCenters = $this->flowAssignableCostCenters($user);
-            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'authorizedCCs', 'availableWeeks', 'editableCostCenters'));
+            $filterUsers = User::orderBy('name')->get(['id', 'name']);
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'authorizedCCs', 'availableWeeks', 'availableUploadWeeks', 'filterUsers', 'editableCostCenters'));
         }
 
         // Apply Tab Scoping
         $this->applyTabScope($query, $tab, $user);
         $availableWeeks = $this->availableWeeksForTab($query, $tab);
+        $availableUploadWeeks = $this->availableUploadWeeksForQuery($query);
 
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('folio', 'like', "%{$search}%")
-                  ->orWhere('uuid', 'like', "%{$search}%")
-                  ->orWhere('nombre_emisor', 'like', "%{$search}%")
-                  ->orWhere('title', 'like', "%{$search}%");
-            });
-        }
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->filled('cost_center_id')) {
-            $query->where('cost_center_id', $request->cost_center_id);
-        }
-
-        if ($request->filled('type')) {
-            $query->where('type', $request->type);
-        }
-
-        $weekColumn = $this->filterableWeekColumn($tab);
-        if ($weekColumn && ($request->filled('from_week') || $request->filled('to_week'))) {
-            $fromWeek = $request->from_week;
-            $toWeek = $request->to_week;
-
-            if ($fromWeek) {
-                $query->whereRaw("CONCAT(SUBSTRING_INDEX({$weekColumn}, '-', -1), LPAD(SUBSTRING_INDEX({$weekColumn}, '-', 1), 2, '0')) >= ?", [
-                    explode('-', $fromWeek)[1] . str_pad(explode('-', $fromWeek)[0], 2, '0', STR_PAD_LEFT)
-                ]);
-            }
-            if ($toWeek) {
-                $query->whereRaw("CONCAT(SUBSTRING_INDEX({$weekColumn}, '-', -1), LPAD(SUBSTRING_INDEX({$weekColumn}, '-', 1), 2, '0')) <= ?", [
-                    explode('-', $toWeek)[1] . str_pad(explode('-', $toWeek)[0], 2, '0', STR_PAD_LEFT)
-                ]);
-            }
-        }
+        $this->applyIndexFilters($query, $request, $tab);
 
         $sortField = $request->input('sort_by', 'created_at');
         $sortOrder = $request->input('sort_order', 'desc');
@@ -146,7 +119,8 @@ class ReimbursementController extends Controller
             $this->attachOperationalWeek($reimbursements, $tab);
 
             $editableCostCenters = $this->flowAssignableCostCenters($user);
-            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'authorizedCCs', 'editableCostCenters'));
+            $filterUsers = User::orderBy('name')->get(['id', 'name']);
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'availableUploadWeeks', 'filterUsers', 'authorizedCCs', 'editableCostCenters'));
         }
 
         if ($tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history') {
@@ -170,13 +144,15 @@ class ReimbursementController extends Controller
                 ->get();
 
             $editableCostCenters = $this->flowAssignableCostCenters($user);
-            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'weeksPaginator', 'availableWeeks', 'authorizedCCs', 'editableCostCenters'));
+            $filterUsers = User::orderBy('name')->get(['id', 'name']);
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'weeksPaginator', 'availableWeeks', 'availableUploadWeeks', 'filterUsers', 'authorizedCCs', 'editableCostCenters'));
         }
 
         $reimbursements = $query->paginate(10)->appends($request->all());
 
         $editableCostCenters = $this->flowAssignableCostCenters($user);
-        return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'authorizedCCs', 'editableCostCenters'));
+        $filterUsers = User::orderBy('name')->get(['id', 'name']);
+        return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'availableUploadWeeks', 'filterUsers', 'authorizedCCs', 'editableCostCenters'));
     }
 
     /**
@@ -2021,6 +1997,8 @@ class ReimbursementController extends Controller
             'costCenter.beneficiary',
             'fixedFund.user',
             'costCenter.approvalSteps.user',
+            'approvals.user',
+            'approvals.substitutedUser',
             'directorApprover',
             'controlApprover',
             'executiveApprover',
@@ -4062,35 +4040,7 @@ class ReimbursementController extends Controller
             $path = Storage::path($reimbursement->pdf_path);
             $mime = Storage::mimeType($reimbursement->pdf_path);
             
-            if (str_contains($mime, 'pdf')) {
-                try {
-                    $reimPageCount = $pdf->setSourceFile($path);
-                    for ($i = 1; $i <= $reimPageCount; $i++) {
-                        $pageId = $pdf->importPage($i);
-                        $pdf->addPage();
-                        $pdf->useTemplate($pageId);
-                        
-                        // Overlay Title - High Visibility
-                        $pdf->SetFillColor(0, 82, 199); // Brand Blue
-                        $pdf->SetTextColor(255, 255, 255);
-                        $pdf->SetFont('Arial', 'B', 7);
-                        $pdf->SetXY(10, 3);
-                        $pdf->Cell(190, 5, mb_convert_encoding($itemTitle . " (PAG. $i)", 'ISO-8859-1', 'UTF-8'), 0, 0, 'R', true);
-                    }
-                } catch (\Exception $e) {
-                    Log::error("FPDI merge error (PDF): " . $e->getMessage());
-                    // Add a placeholder page instead of failing
-                    $pdf->addPage();
-                    $pdf->SetFont('Arial', 'B', 12);
-                    $pdf->SetTextColor(200, 0, 0);
-                    $pdf->Cell(0, 10, 'ARCHIVO PDF NO COMPATIBLE PARA UNIR (PDF v1.5+)', 0, 1, 'C');
-                    $pdf->SetFont('Arial', '', 10);
-                    $pdf->SetTextColor(100, 100, 100);
-                    $pdf->MultiCell(0, 10, "\nReferencia: " . mb_convert_encoding($itemTitle, 'ISO-8859-1', 'UTF-8') . "\n\nEste archivo utiliza una tÃƒÂ©cnica de compresiÃƒÂ³n no soportada por el motor gratuito de PDF.\nPor favor, descargue el anexo individualmente si es necesario.", 0, 'C');
-                }
-            } else {
-                $this->addImageToPdf($pdf, $path, $itemTitle);
-            }
+            $this->addStoredAttachment($pdf, $path, $mime ?: null, $itemTitle, 'ARCHIVO');
         }
 
         // 2. Ticket Attachment
@@ -4099,31 +4049,7 @@ class ReimbursementController extends Controller
             $mime = Storage::mimeType($reimbursement->ticket_path);
             $ticketTitle = $itemTitle . " [TICKET]";
             
-            if (str_contains($mime, 'pdf')) {
-                try {
-                    $reimPageCount = $pdf->setSourceFile($path);
-                    for ($i = 1; $i <= $reimPageCount; $i++) {
-                        $pageId = $pdf->importPage($i);
-                        $pdf->addPage();
-                        $pdf->useTemplate($pageId);
-                        
-                        // Overlay Title
-                        $pdf->SetFillColor(0, 82, 199); // Brand Blue
-                        $pdf->SetTextColor(255, 255, 255);
-                        $pdf->SetFont('Arial', 'B', 7);
-                        $pdf->SetXY(10, 3);
-                        $pdf->Cell(190, 5, mb_convert_encoding($ticketTitle . " (PAG. $i)", 'ISO-8859-1', 'UTF-8'), 0, 0, 'R', true);
-                    }
-                } catch (\Exception $e) {
-                    Log::error("FPDI merge error (Ticket PDF): " . $e->getMessage());
-                    $pdf->addPage();
-                    $pdf->SetFont('Arial', 'B', 12);
-                    $pdf->SetTextColor(200, 0, 0);
-                    $pdf->Cell(0, 10, 'TICKET PDF NO COMPATIBLE', 0, 1, 'C');
-                }
-            } else {
-                $this->addImageToPdf($pdf, $path, $ticketTitle);
-            }
+            $this->addStoredAttachment($pdf, $path, $mime ?: null, $ticketTitle, 'TICKET');
         }
 
         // 3. Extra files
@@ -4132,50 +4058,191 @@ class ReimbursementController extends Controller
                 $path = Storage::path($extra->file_path);
                 $mime = $extra->mime_type;
                 $extraTitle = $itemTitle . " [" . strtoupper($extra->original_name ?? 'ANEXO') . "]";
-                if (str_contains($mime, 'pdf')) {
-                    try {
-                        $extraPageCount = $pdf->setSourceFile($path);
-                        for ($i = 1; $i <= $extraPageCount; $i++) {
-                            $pageId = $pdf->importPage($i);
-                            $pdf->addPage();
-                            $pdf->useTemplate($pageId);
-                            
-                            // Overlay Title
-                            $pdf->SetFillColor(0, 82, 199); // Brand Blue
-                            $pdf->SetTextColor(255, 255, 255);
-                            $pdf->SetFont('Arial', 'B', 7);
-                            $pdf->SetXY(10, 3);
-                            $pdf->Cell(190, 5, mb_convert_encoding($extraTitle . " (PAG. $i)", 'ISO-8859-1', 'UTF-8'), 0, 0, 'R', true);
-                        }
-                    } catch (\Exception $e) {
-                        Log::error("FPDI merge error (Extra PDF): " . $e->getMessage());
-                        // Add a placeholder page instead of failing
-                        $pdf->addPage();
-                        $pdf->SetFont('Arial', 'B', 12);
-                        $pdf->SetTextColor(200, 0, 0);
-                        $pdf->Cell(0, 10, 'ANEXO PDF NO COMPATIBLE PARA UNIR (PDF v1.5+)', 0, 1, 'C');
-                        $pdf->SetFont('Arial', '', 10);
-                        $pdf->SetTextColor(100, 100, 100);
-                        $pdf->MultiCell(0, 10, "\nReferencia: " . mb_convert_encoding($extraTitle, 'ISO-8859-1', 'UTF-8') . "\n\nEste archivo utiliza una tÃƒÂ©cnica de compresiÃƒÂ³n no soportada por el motor gratuito de PDF.\nPor favor, descargue el anexo individualmente si es necesario.", 0, 'C');
-                    }
-                } else {
-                    $this->addImageToPdf($pdf, $path, $extraTitle);
-                }
+                $this->addStoredAttachment($pdf, $path, $mime, $extraTitle, 'ANEXO');
             }
         }
+    }
+
+    /**
+     * Classify an attachment by its actual signature. Some stored .bin files
+     * contain a complete HTTP response followed by the real PDF or image.
+     */
+    private function addStoredAttachment(
+        $pdf,
+        string $path,
+        ?string $declaredMime,
+        string $title,
+        string $attachmentType,
+    ): void {
+        $prepared = null;
+
+        try {
+            $prepared = app(AttachmentFilePreparer::class)->prepare($path, $declaredMime);
+
+            if ($prepared->type === PreparedAttachment::PDF) {
+                $this->addPdfAttachment($pdf, $prepared->path, $title, $attachmentType);
+
+                return;
+            }
+
+            if ($prepared->type === PreparedAttachment::IMAGE) {
+                $this->addImageToPdf($pdf, $prepared->path, $title, $prepared->imageType);
+
+                return;
+            }
+
+            $this->addPdfErrorPage(
+                $pdf,
+                "{$attachmentType} NO COMPATIBLE",
+                $title,
+                'El archivo no contiene un PDF ni una imagen JPG, PNG o GIF reconocible.'
+            );
+
+            Log::warning("Unsupported attachment ({$attachmentType}).", [
+                'source' => $path,
+                'declared_mime' => $declaredMime,
+            ]);
+        } catch (\Throwable $e) {
+            $this->addPdfErrorPage(
+                $pdf,
+                "{$attachmentType} NO SE PUDO LEER",
+                $title,
+                'No fue posible identificar o preparar este archivo.'
+            );
+
+            Log::error("Attachment preparation error ({$attachmentType}): ".$e->getMessage(), [
+                'source' => $path,
+                'declared_mime' => $declaredMime,
+            ]);
+        } finally {
+            $prepared?->cleanup();
+        }
+    }
+
+    /**
+     * Add a PDF attachment, normalizing compressed PDF 1.5+ structures only
+     * when FPDI reports that exact limitation.
+     */
+    private function addPdfAttachment($pdf, string $path, string $title, string $attachmentType): void
+    {
+        $normalizedPath = null;
+
+        try {
+            try {
+                $this->importPdfPages($pdf, $path, $title);
+            } catch (CrossReferenceException $e) {
+                if ($e->getCode() !== CrossReferenceException::COMPRESSED_XREF) {
+                    throw $e;
+                }
+
+                Log::info('FPDI detectó referencias comprimidas; se intentará normalizar con qpdf.', [
+                    'source' => $path,
+                    'reference' => $title,
+                ]);
+
+                $normalizedPath = app(QpdfPdfNormalizer::class)->normalize($path);
+                $this->importPdfPages($pdf, $normalizedPath, $title);
+            }
+        } catch (CrossReferenceException $e) {
+            if ($e->getCode() === CrossReferenceException::ENCRYPTED) {
+                $this->addPdfErrorPage(
+                    $pdf,
+                    "{$attachmentType} PDF PROTEGIDO",
+                    $title,
+                    'El archivo está cifrado o protegido con contraseña y no se puede unir automáticamente.'
+                );
+            } else {
+                $this->addPdfErrorPage(
+                    $pdf,
+                    "{$attachmentType} PDF NO COMPATIBLE",
+                    $title,
+                    'La estructura del archivo PDF no pudo ser interpretada.'
+                );
+            }
+
+            Log::error("FPDI merge error ({$attachmentType}): ".$e->getMessage(), [
+                'code' => $e->getCode(),
+                'source' => $path,
+            ]);
+        } catch (PdfNormalizationException $e) {
+            $this->addPdfErrorPage(
+                $pdf,
+                "{$attachmentType} PDF NO SE PUDO NORMALIZAR",
+                $title,
+                'El archivo requiere qpdf, pero el normalizador no está disponible o no pudo procesarlo.'
+            );
+
+            Log::error("qpdf normalization error ({$attachmentType}): ".$e->getMessage(), [
+                'source' => $path,
+            ]);
+        } catch (\Throwable $e) {
+            $this->addPdfErrorPage(
+                $pdf,
+                "{$attachmentType} PDF NO COMPATIBLE",
+                $title,
+                'No fue posible incorporar este archivo al documento.'
+            );
+
+            Log::error("PDF merge error ({$attachmentType}): ".$e->getMessage(), [
+                'source' => $path,
+            ]);
+        } finally {
+            if ($normalizedPath !== null) {
+                @unlink($normalizedPath);
+            }
+        }
+    }
+
+    private function importPdfPages($pdf, string $path, string $title): void
+    {
+        $pageCount = $pdf->setSourceFile($path);
+
+        for ($i = 1; $i <= $pageCount; $i++) {
+            $pageId = $pdf->importPage($i);
+            $pdf->addPage();
+            $pdf->useTemplate($pageId);
+
+            $pdf->SetFillColor(0, 82, 199);
+            $pdf->SetTextColor(255, 255, 255);
+            $pdf->SetFont('Arial', 'B', 7);
+            $pdf->SetXY(10, 3);
+            $pdf->Cell(190, 5, $this->encodePdfText($title." (PÁG. {$i})"), 0, 0, 'R', true);
+        }
+    }
+
+    private function addPdfErrorPage($pdf, string $heading, string $reference, string $detail): void
+    {
+        $pdf->addPage();
+        $pdf->SetFont('Arial', 'B', 12);
+        $pdf->SetTextColor(200, 0, 0);
+        $pdf->Cell(0, 10, $this->encodePdfText($heading), 0, 1, 'C');
+        $pdf->SetFont('Arial', '', 10);
+        $pdf->SetTextColor(100, 100, 100);
+        $pdf->MultiCell(
+            0,
+            10,
+            $this->encodePdfText("\nReferencia: {$reference}\n\n{$detail}\nPor favor, descargue el anexo individualmente si es necesario."),
+            0,
+            'C'
+        );
+    }
+
+    private function encodePdfText(string $text): string
+    {
+        return mb_convert_encoding($text, 'Windows-1252', 'UTF-8');
     }
 
     /**
      * Helper to add a scaled image to the PDF that fits on one page.
      * @param \setasign\Fpdi\Fpdi|\FPDF|mixed $pdf
      */
-    private function addImageToPdf($pdf, $path, $title = '')
+    private function addImageToPdf($pdf, $path, $title = '', ?string $imageType = null)
     {
         try {
             list($width, $height) = getimagesize($path);
             if (!$width || !$height) {
                 $pdf->addPage();
-                $pdf->Image($path, 10, 10, 190);
+                $pdf->Image($path, 10, 10, 190, 0, $imageType ?? '');
                 return;
             }
 
@@ -4210,7 +4277,7 @@ class ReimbursementController extends Controller
             }
 
             $x = (210 - $w) / 2;
-            $pdf->Image($path, $x, $yOffset, $w, $h);
+            $pdf->Image($path, $x, $yOffset, $w, $h, $imageType ?? '');
         } catch (\Exception $e) {
             Log::error("FPDF Image Error on $path: " . $e->getMessage());
             // Last resort: add a page with error text instead of crashing
@@ -4603,10 +4670,6 @@ class ReimbursementController extends Controller
             $fixedFund = in_array($type, ['fondo_fijo', 'comida', 'viaje'], true)
                 ? \App\Models\FixedFund::whereKey($request->input('fixed_fund_id'))->where('cost_center_id', $requestCostCenterId)->where('is_active', true)->first()
                 : null;
-
-            if (in_array($type, ['fondo_fijo', 'comida', 'viaje'], true) && !$fixedFund) {
-                return response()->json(['success' => false, 'error' => 'Selecciona un fondo fijo activo.'], 422);
-            }
 
             if ($requestCostCenterId) {
                 $cc = \App\Models\CostCenter::find($requestCostCenterId);
@@ -5020,8 +5083,95 @@ class ReimbursementController extends Controller
             : ($tab === 'payment' ? 'payment_week' : 'week');
     }
 
+    private function applyIndexFilters($query, Request $request, string $tab): void
+    {
+        if ($request->filled('search')) {
+            $search = trim($request->search);
+            $query->where(function ($q) use ($search) {
+                $q->where('folio', 'like', "%{$search}%")
+                    ->orWhere('uuid', 'like', "%{$search}%")
+                    ->orWhere('nombre_emisor', 'like', "%{$search}%")
+                    ->orWhere('title', 'like', "%{$search}%");
+            });
+        }
+
+        foreach (['status', 'cost_center_id', 'type'] as $field) {
+            if ($request->filled($field)) {
+                $query->where($field, $request->input($field));
+            }
+        }
+
+        if ($request->filled('user_id')) {
+            $userId = (int) $request->input('user_id');
+            $query->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)
+                    ->orWhere('payee_id', $userId);
+            });
+        }
+
+        $weekColumn = $this->filterableWeekColumn($tab);
+        if ($weekColumn && ($request->filled('from_week') || $request->filled('to_week'))) {
+            $this->applyWeekRangeFilter($query, $weekColumn, $request->input('from_week'), $request->input('to_week'));
+        }
+
+        $uploadExpression = "CONCAT(DATE_FORMAT(DATE_ADD(created_at, INTERVAL 2 DAY), '%x'), DATE_FORMAT(DATE_ADD(created_at, INTERVAL 2 DAY), '%v'))";
+        if ($request->filled('upload_week')) {
+            $query->whereRaw("{$uploadExpression} = ?", [$this->normalizeWeekForComparison($request->input('upload_week'))]);
+        } elseif ($request->filled('upload_from_week') || $request->filled('upload_to_week')) {
+            if ($request->filled('upload_from_week')) {
+                $query->whereRaw("{$uploadExpression} >= ?", [$this->normalizeWeekForComparison($request->input('upload_from_week'))]);
+            }
+            if ($request->filled('upload_to_week')) {
+                $query->whereRaw("{$uploadExpression} <= ?", [$this->normalizeWeekForComparison($request->input('upload_to_week'))]);
+            }
+        }
+    }
+
+    private function applyWeekRangeFilter($query, string $weekColumn, ?string $fromWeek, ?string $toWeek): void
+    {
+        $expression = "CONCAT(SUBSTRING_INDEX({$weekColumn}, '-', -1), LPAD(SUBSTRING_INDEX({$weekColumn}, '-', 1), 2, '0'))";
+        if ($fromWeek) {
+            $query->whereRaw("{$expression} >= ?", [$this->normalizeWeekForComparison($fromWeek)]);
+        }
+        if ($toWeek) {
+            $query->whereRaw("{$expression} <= ?", [$this->normalizeWeekForComparison($toWeek)]);
+        }
+    }
+
+    private function availableUploadWeeksForQuery($query)
+    {
+        return (clone $query)->reorder()
+            ->selectRaw("DATE_FORMAT(DATE_ADD(created_at, INTERVAL 2 DAY), '%v-%x') as upload_week")
+            ->whereNotNull('created_at')
+            ->distinct()
+            ->orderByRaw("CAST(SUBSTRING_INDEX(upload_week, '-', -1) AS UNSIGNED) DESC")
+            ->orderByRaw("CAST(SUBSTRING_INDEX(upload_week, '-', 1) AS UNSIGNED) DESC")
+            ->pluck('upload_week')
+            ->filter()
+            ->values();
+    }
+
     private function applyExportFilters($query, Request $request, $allowedWeeks, ?string $weekColumn = 'week'): void
     {
+        if ($request->filled('user_id')) {
+            $userId = (int) $request->input('user_id');
+            $query->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)->orWhere('payee_id', $userId);
+            });
+        }
+
+        $uploadExpression = "CONCAT(DATE_FORMAT(DATE_ADD(created_at, INTERVAL 2 DAY), '%x'), DATE_FORMAT(DATE_ADD(created_at, INTERVAL 2 DAY), '%v'))";
+        if ($request->filled('upload_week')) {
+            $query->whereRaw("{$uploadExpression} = ?", [$this->normalizeWeekForComparison($request->input('upload_week'))]);
+        } elseif ($request->filled('upload_from_week') || $request->filled('upload_to_week')) {
+            if ($request->filled('upload_from_week')) {
+                $query->whereRaw("{$uploadExpression} >= ?", [$this->normalizeWeekForComparison($request->input('upload_from_week'))]);
+            }
+            if ($request->filled('upload_to_week')) {
+                $query->whereRaw("{$uploadExpression} <= ?", [$this->normalizeWeekForComparison($request->input('upload_to_week'))]);
+            }
+        }
+
         if ($request->filled('export_week')) {
             abort_unless($allowedWeeks->contains($request->export_week), 403, 'No puedes exportar una semana que no está en tu línea de aprobación.');
             if ($weekColumn) {

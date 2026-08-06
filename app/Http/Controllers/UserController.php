@@ -13,6 +13,9 @@ use App\Mail\UserInvitation;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use App\Models\Profile;
+use App\Models\CostCenter;
+use App\Models\FixedFund;
+use App\Models\Reimbursement;
 
 class UserController extends Controller
 {
@@ -48,6 +51,7 @@ class UserController extends Controller
         $users = $query->paginate(10)->appends($request->all());
         $fixedFundTransferCandidates = User::with('profile')
             ->whereNull('invitation_token')
+            ->whereNull('blocked_at')
             ->where(function ($candidate) {
                 $candidate->where('role', '!=', 'tesoreria')
                     ->whereDoesntHave('profile', fn ($profile) => $profile->where('name', 'tesoreria'));
@@ -55,7 +59,20 @@ class UserController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'profile_id']);
 
-        return view('users.index', compact('users', 'fixedFundTransferCandidates'));
+        $affectedCostCenters = $users->getCollection()->mapWithKeys(function (User $listedUser) {
+            $centers = CostCenter::with(['approvalSteps.user', 'fixedFunds.user.profile'])
+                ->where(function ($query) use ($listedUser) {
+                    $query->whereHas('approvalSteps', fn ($steps) => $steps->where('user_id', $listedUser->id))
+                        ->orWhereHas('fixedFunds', fn ($funds) => $funds->where('user_id', $listedUser->id)->where('is_active', true));
+                })->orderBy('name')->get();
+            return [$listedUser->id => $centers->map(fn ($center) => [
+                'id' => $center->id, 'name' => $center->name,
+                'steps' => $center->approvalSteps->map(fn ($step) => ['id' => $step->id, 'order' => $step->order, 'name' => $step->name ?: 'Aprobador N' . $step->order, 'user_id' => $step->user_id])->values(),
+                'funds' => $center->fixedFunds->where('is_active', true)->map(fn ($fund) => ['id' => $fund->id, 'name' => $fund->name, 'user_id' => $fund->user_id])->values(),
+            ])->values()];
+        });
+
+        return view('users.index', compact('users', 'fixedFundTransferCandidates', 'affectedCostCenters'));
     }
 
     /**
@@ -124,6 +141,61 @@ class UserController extends Controller
     {
         $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
         $user->load(['director', 'subordinates', 'costCenters', 'substitutes.user']);
+        // Centros donde el usuario participa, ya sea como solicitante, aprobador,
+        // responsable de fondo fijo o dentro de alguno de los puestos del flujo.
+        $costCenterAssignments = \App\Models\CostCenter::query()
+            ->where(function ($query) use ($user) {
+                $query->where('director_id', $user->id)
+                    ->orWhere('control_obra_id', $user->id)
+                    ->orWhere('director_ejecutivo_id', $user->id)
+                    ->orWhere('accountant_id', $user->id)
+                    ->orWhere('direccion_id', $user->id)
+                    ->orWhere('tesoreria_id', $user->id)
+                    ->orWhere('beneficiary_id', $user->id)
+                    ->orWhereHas('approvalSteps', fn ($steps) => $steps->where('user_id', $user->id))
+                    ->orWhereHas('authorizedUsers', fn ($users) => $users->where('users.id', $user->id))
+                    ->orWhereHas('fixedFunds', fn ($funds) => $funds
+                        ->where('user_id', $user->id)
+                        ->where('is_active', true));
+            })
+            ->with([
+                'approvalSteps' => fn ($steps) => $steps->where('user_id', $user->id),
+                'authorizedUsers' => fn ($users) => $users->where('users.id', $user->id),
+                'fixedFunds' => fn ($funds) => $funds
+                    ->where('user_id', $user->id)
+                    ->where('is_active', true),
+            ])
+            ->orderBy('name')
+            ->get()
+            ->map(function ($costCenter) use ($user) {
+                $positions = collect([
+                    $costCenter->director_id === $user->id ? 'Director N1' : null,
+                    $costCenter->control_obra_id === $user->id ? 'Control de Obra N2' : null,
+                    $costCenter->director_ejecutivo_id === $user->id ? 'Director Ejecutivo N3' : null,
+                    $costCenter->accountant_id === $user->id ? 'Cuentas por Pagar Revisador' : null,
+                    $costCenter->direccion_id === $user->id ? 'Subdirección N5' : null,
+                    $costCenter->tesoreria_id === $user->id ? 'Cuentas por Pagar Pagador' : null,
+                    $costCenter->beneficiary_id === $user->id ? 'Beneficiario' : null,
+                    $costCenter->authorizedUsers->isNotEmpty()
+                        ? ($costCenter->authorizedUsers->first()->pivot->can_do_special
+                            ? 'Usuario autorizado (con permisos especiales)'
+                            : 'Usuario autorizado')
+                        : null,
+                ])->filter();
+
+                $costCenter->approvalSteps->each(function ($step) use ($positions) {
+                    $positions->push($step->name ?: 'Aprobador N' . $step->order);
+                });
+
+                $costCenter->fixedFunds->each(function ($fund) use ($positions) {
+                    $positions->push('Responsable de fondo fijo' . ($fund->name ? ': ' . $fund->name : ''));
+                });
+
+                return [
+                    'costCenter' => $costCenter,
+                    'positions' => $positions->unique()->values(),
+                ];
+            });
 
         // 1. Personal Spending Stats
         $pendingQuery = $user->reimbursements()->applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
@@ -182,7 +254,7 @@ class UserController extends Controller
         // 7. Substitutes
         $allUsers = User::where('id', '!=', $user->id)->orderBy('name')->get();
 
-        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount', 'periods', 'allUsers'));
+        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount', 'periods', 'allUsers', 'costCenterAssignments'));
     }
 
     /**
@@ -306,58 +378,68 @@ class UserController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(User $user)
+    public function destroy(Request $request, User $user)
     {
         if ($user->getKey() === Auth::id()) {
-            return back()->with('error', 'No puedes eliminar tu propia cuenta.');
+            return back()->with('error', 'No puedes deshabilitar tu propia cuenta.');
         }
 
-        $activeFunds = \App\Models\FixedFund::where('user_id', $user->id)
-            ->where('is_active', true)
-            ->get();
+        $request->validate([
+            'approval_actions.*' => ['nullable', 'in:replace,previous,next,remove'],
+            'approval_replacements.*' => ['nullable', 'integer', 'different:' . $user->id, 'exists:users,id'],
+            'reimbursement_routes.*' => ['nullable', 'in:keep,fixed_fund,user'],
+            'reimbursement_route_users.*' => ['nullable', 'integer', 'different:' . $user->id, 'exists:users,id'],
+            'fund_replacements.*' => ['nullable', 'integer', 'different:' . $user->id, 'exists:users,id'],
+        ]);
 
-        $replacement = null;
-        if ($activeFunds->isNotEmpty()) {
-            $request = request();
-            $request->validate([
-                'transfer_to_user_id' => ['required', 'integer', 'different:' . $user->id, 'exists:users,id'],
-            ], [
-                'transfer_to_user_id.required' => 'Selecciona quién recibirá los fondos fijos antes de eliminar al usuario.',
-            ]);
+        $centers = CostCenter::with(['approvalSteps', 'fixedFunds'])
+            ->where(function ($query) use ($user) {
+                $query->whereHas('approvalSteps', fn ($steps) => $steps->where('user_id', $user->id))
+                    ->orWhereHas('fixedFunds', fn ($funds) => $funds->where('user_id', $user->id)->where('is_active', true));
+            })->get();
 
-            $replacement = User::with('profile')->findOrFail($request->integer('transfer_to_user_id'));
-            if ($replacement->hasRole('tesoreria')) {
-                return back()->with('error', 'Cuentas por Pagar Pagadores no puede recibir la asignación de un fondo fijo.');
+        DB::transaction(function () use ($user, $request, $centers) {
+            foreach ($centers as $center) {
+                $key = (string) $center->id;
+                $step = $center->approvalSteps->firstWhere('user_id', $user->id);
+                $action = $request->input("approval_actions.$key", 'remove');
+                $replacementId = $request->input("approval_replacements.$key");
+
+                if ($step && $action === 'replace') {
+                    abort_unless($replacementId, 422, 'Selecciona un reemplazo para cada ciclo de aprobación.');
+                    User::whereKey($replacementId)->whereNull('blocked_at')->firstOrFail();
+                    $step->update(['user_id' => $replacementId]);
+                } elseif ($step) {
+                    $target = $action === 'previous'
+                        ? $center->approvalSteps->where('order', '<', $step->order)->sortByDesc('order')->first()
+                        : $center->approvalSteps->where('order', '>', $step->order)->sortBy('order')->first();
+                    Reimbursement::where('current_step_id', $step->id)->whereNotIn('status', ['borrador', 'aprobado', 'rechazado'])->update(['current_step_id' => $target?->id]);
+                    $step->delete();
+                    $center->approvalSteps()->orderBy('order')->get()->each(function ($remaining, $index) {
+                        $remaining->update(['order' => $index + 1]);
+                    });
+                }
+
+                $fundReplacement = $request->input("fund_replacements.$key");
+                $funds = FixedFund::where('cost_center_id', $center->id)->where('user_id', $user->id)->where('is_active', true);
+                $fundReplacement ? $funds->update(['user_id' => $fundReplacement]) : $funds->update(['is_active' => false]);
+
+                $route = $request->input("reimbursement_routes.$key", 'keep');
+                if ($route !== 'keep' && $step) {
+                    $recipientId = $route === 'fixed_fund' ? $center->fixedFunds()->where('is_active', true)->where('user_id', '!=', $user->id)->value('user_id') : $request->input("reimbursement_route_users.$key");
+                    $targetStep = $recipientId ? $center->approvalSteps()->where('user_id', $recipientId)->orderBy('order')->first() : null;
+                    Reimbursement::where('cost_center_id', $center->id)->where('current_step_id', $step->id)->whereNotIn('status', ['borrador', 'aprobado', 'rechazado'])->update(['current_step_id' => $targetStep?->id]);
+                }
+
+                $center->update(['beneficiary_id' => $center->fixedFunds()->where('is_active', true)->orderBy('id')->value('user_id'), 'budget' => $center->fixedFunds()->where('is_active', true)->sum('budget')]);
             }
-        }
 
-        DB::transaction(function () use ($user, $replacement) {
-            $funds = \App\Models\FixedFund::where('user_id', $user->id)
-                ->where('is_active', true)
-                ->lockForUpdate()
-                ->get();
-            $affectedCostCenterIds = $funds->pluck('cost_center_id')->unique();
-
-            if ($funds->isNotEmpty()) {
-                $funds->each(fn ($fund) => $fund->update(['user_id' => $replacement->id]));
-
-                \App\Models\CostCenter::whereIn('id', $affectedCostCenterIds)->get()->each(function ($costCenter) {
-                    $firstActiveFund = $costCenter->fixedFunds()->where('is_active', true)->orderBy('id')->first();
-                    $costCenter->update([
-                        'beneficiary_id' => $firstActiveFund?->user_id,
-                        'budget' => $costCenter->fixedFunds()->where('is_active', true)->sum('budget'),
-                    ]);
-                });
-            }
-
-            $user->delete();
+            $user->forceFill(['blocked_at' => now(), 'blocked_reason_code' => 'administrative_deactivation', 'blocked_reason_message' => 'Usuario deshabilitado mediante reasignación de responsabilidades.', 'blocked_by' => Auth::id(), 'remember_token' => null])->save();
+            DB::table('sessions')->where('user_id', $user->id)->delete();
         });
 
-        return redirect()->route('users.index')->with('success', $replacement
-            ? "Usuario eliminado y fondos fijos transferidos a {$replacement->name}."
-            : 'Usuario eliminado.');
+        return redirect()->route('users.index')->with('success', 'Usuario deshabilitado. Se conservaron sus registros y se actualizaron sus responsabilidades.');
     }
-
     /**
      * Resend invitation to a user.
      */

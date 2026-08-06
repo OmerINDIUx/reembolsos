@@ -20,6 +20,11 @@ class LoginSecurityChallengeService
 
     public function shouldChallenge(?DeviceLogin $deviceLogin): bool
     {
+        // Los correos de desarrollo pueden no existir; el reto solo se exige fuera de local.
+        if (app()->environment('local')) {
+            return false;
+        }
+
         return $deviceLogin && (int) $deviceLogin->risk_score >= self::HIGH_RISK_THRESHOLD;
     }
 
