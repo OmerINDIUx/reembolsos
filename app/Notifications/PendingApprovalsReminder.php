@@ -2,9 +2,10 @@
 
 namespace App\Notifications;
 
+use App\Models\Reimbursement;
 use App\Support\NotificationRouteHelper;
+use App\Support\ReimbursementNotificationContext;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -16,61 +17,71 @@ class PendingApprovalsReminder extends Notification
     protected $totalAmount;
     protected $breakdown;
     protected $reimbursementIds;
+    protected $items;
 
-    /**
-     * Create a new notification instance.
-     */
     public function __construct($pendingCount, $totalAmount = 0, $breakdown = [], $reimbursementIds = [])
     {
         $this->pendingCount = $pendingCount;
         $this->totalAmount = $totalAmount;
         $this->breakdown = $breakdown;
         $this->reimbursementIds = collect($reimbursementIds)->filter()->unique()->values()->all();
+        $this->items = null;
     }
 
-    /**
-     * Get the notification's delivery channels.
-     *
-     * @return array<int, string>
-     */
     public function via(object $notifiable): array
     {
         return ['mail', 'database'];
     }
 
-    /**
-     * Get the mail representation of the notification.
-     */
-    public function toMail(object $notifiable): array|MailMessage
+    protected function notificationItems(): array
     {
+        if ($this->items === null) {
+            $this->items = Reimbursement::with(['costCenter', 'currentStep', 'user', 'payee', 'createdBy'])
+                ->whereIn('id', $this->reimbursementIds)
+                ->get()
+                ->map(fn($reimbursement) => ReimbursementNotificationContext::from($reimbursement))
+                ->values()
+                ->all();
+        }
+
+        return $this->items;
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        $items = $this->notificationItems();
+        $folios = collect($items)->pluck('folio')->implode(', ');
         $actionUrl = NotificationRouteHelper::reimbursementsByIds($this->reimbursementIds, 'management');
 
         return (new MailMessage)
-            ->subject('Recordatorio: Tienes Reembolsos Pendientes de Aprobar')
+            ->subject('Recordatorio de aprobación: ' . $folios)
             ->view('emails.notification', [
                 'greeting' => 'Hola ' . $notifiable->name . ',',
-                'bodyText' => 'Este es un recordatorio semanal de que tienes <span class="highlight">' . $this->pendingCount . '</span> solicitud(es) de reembolso pendientes de tu revisión y aprobación.',
+                'bodyText' => 'Tienes <span class="highlight">' . $this->pendingCount . '</span> reembolsos pendientes de tu revisión. El detalle inferior indica el folio, la etapa actual, el importe y la acción que debes realizar.',
                 'actionUrl' => $actionUrl,
-                'actionText' => $this->pendingCount === 1 ? 'Ver Solicitud' : 'Ver Solicitudes',
+                'actionText' => $this->pendingCount === 1 ? 'Abrir reembolso' : 'Abrir reembolsos',
                 'details' => [
-                    'Total acumulado' => '$' . number_format($this->totalAmount, 2),
-                    'Estado' => 'Pendientes / Asignados',
+                    'Cantidad' => $this->pendingCount . ' reembolso(s)',
+                    'Total acumulado' => '$' . number_format($this->totalAmount, 2) . ' MXN',
+                    'Folios' => $folios ?: 'No disponibles',
+                    'Acción' => 'Revisar cada solicitud y aprobarla o devolverla con un motivo claro.',
                 ],
-                'breakdown' => $this->breakdown
+                'items' => $items,
+                'breakdown' => $this->breakdown,
             ]);
     }
 
-    /**
-     * Get the array representation of the notification.
-     *
-     * @return array<string, mixed>
-     */
     public function toArray(object $notifiable): array
     {
+        $items = $this->notificationItems();
+        $folios = collect($items)->pluck('folio')->values()->all();
+
         return [
-            'message' => "Tienes {$this->pendingCount} reembolsos pendientes de aprobar.",
+            'message' => 'Recordatorio: tienes ' . $this->pendingCount . ' reembolsos pendientes de aprobación: ' . implode(', ', $folios) . '.',
             'pending_count' => $this->pendingCount,
             'reimbursement_ids' => $this->reimbursementIds,
+            'reimbursement_folios' => $folios,
+            'items' => $items,
             'url' => NotificationRouteHelper::reimbursementsByIds($this->reimbursementIds, 'management'),
             'type' => 'warning',
         ];

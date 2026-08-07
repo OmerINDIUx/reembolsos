@@ -24,6 +24,7 @@
                         $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->isAdminView() || $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
                         $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isAdminView() || $identity->isTreasury() || $identity->isCxp());
                         $canDownloadPaymentFile = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury() || $identity->isCxp());
+                        $canReturnPayment = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury() || $identity->isCxp());
                         $defaultTab = $canManage ? 'management' : 'active';
                         $tab = request('tab', $defaultTab);
                     @endphp
@@ -397,7 +398,13 @@
                                         @endif
 
                                         @if($tab === 'payment' && $canDownloadPaymentFile)
-                                        <button type="button" @click="downloadPaymentFile()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
+                                        @if($tab === 'payment' && $canReturnPayment)
+                                        <button type="button" @click="returnPaymentToPreviousStep()" class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-amber-200 flex items-center space-x-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                                            <span>Regresar al paso anterior</span>
+                                        </button>
+                                        @endif
+<button type="button" @click="downloadPaymentFile()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-200 flex items-center space-x-2">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                                             <span>Archivo de Pago</span>
                                         </button>
@@ -1256,7 +1263,38 @@
                     window.location.href = `{{ route('reimbursements.payment_policy') }}?${params.toString()}`;
                 },
 
-                downloadPaymentFile() {
+                returnPaymentToPreviousStep() {
+                    if (!this.selectedIds.length) {
+                        window.alert('Selecciona uno o varios reembolsos para regresarlos al paso anterior.');
+                        return;
+                    }
+
+                    const reason = window.prompt('Indica el motivo para regresar el o los reembolsos a Cuentas por Pagar Pagadores:');
+                    if (reason === null) return;
+                    if (reason.trim().length < 5) {
+                        window.alert('El motivo debe tener al menos 5 caracteres.');
+                        return;
+                    }
+
+                    if (!window.confirm('Se quitará la autorización de pago y el reembolso volverá a la cola de Cuentas por Pagar Pagadores. ¿Deseas continuar?')) {
+                        return;
+                    }
+
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '{{ route('reimbursements.payment_return') }}';
+                    form.innerHTML = `<input type="hidden" name="_token" value="{{ csrf_token() }}"><input type="hidden" name="comment" value="${reason.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">`;
+                    this.selectedIds.forEach((id) => {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'ids[]';
+                        input.value = id;
+                        form.appendChild(input);
+                    });
+                    document.body.appendChild(form);
+                    form.submit();
+                },
+downloadPaymentFile() {
                     const ids = this.selectedIds.join(',');
                     const params = new URLSearchParams(window.location.search);
                     params.set('ids', ids);

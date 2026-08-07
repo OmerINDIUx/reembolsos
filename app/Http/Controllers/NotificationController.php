@@ -20,6 +20,56 @@ class NotificationController extends Controller
         return view('notifications.index', compact('notifications'));
     }
 
+    private function hydrateLegacyNotificationDetails($notifications): void
+    {
+        $ids = $notifications->getCollection()
+            ->flatMap(fn($notification) => array_merge(
+                (array) ($notification->data['reimbursement_ids'] ?? []),
+                !empty($notification->data['reimbursement_id']) ? [$notification->data['reimbursement_id']] : []
+            ))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return;
+        }
+
+        $reimbursements = Reimbursement::with(['costCenter', 'currentStep', 'user', 'payee', 'createdBy'])
+            ->whereIn('id', $ids)
+            ->get()
+            ->keyBy('id');
+
+        $notifications->getCollection()->transform(function ($notification) use ($reimbursements) {
+            $data = $notification->data;
+            $notificationIds = collect(array_merge(
+                (array) ($data['reimbursement_ids'] ?? []),
+                !empty($data['reimbursement_id']) ? [$data['reimbursement_id']] : []
+            ))->filter()->unique()->values();
+            $items = $notificationIds
+                ->map(fn($id) => $reimbursements->get($id))
+                ->filter()
+                ->map(fn($reimbursement) => ReimbursementNotificationContext::from($reimbursement))
+                ->values()
+                ->all();
+
+            if ($items !== []) {
+                $folios = collect($items)->pluck('folio')->values()->all();
+                $data['reimbursement_folio'] = count($folios) === 1 ? $folios[0] : 'VARIOS (' . count($folios) . ')';
+                $data['reimbursement_folios'] = $folios;
+                $data['items'] = $items;
+
+                if (str_contains((string) ($data['message'] ?? ''), 'nuevas notificaciones de reembolso')) {
+                    $data['message'] = count($folios) === 1
+                        ? 'El reembolso ' . $folios[0] . ' requiere atención: ' . $items[0]['status'] . '.'
+                        : 'Tienes ' . count($folios) . ' reembolsos que requieren atención: ' . implode(', ', $folios) . '.';
+                }
+            }
+
+            $notification->data = $data;
+            return $notification;
+        });
+    }
     /**
      * Mark a specific notification as read.
      */
