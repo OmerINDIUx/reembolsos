@@ -8,7 +8,6 @@ use App\Models\DeviceLogin;
 use App\Models\Profile;
 use App\Models\User;
 use App\Services\DeviceLoginService;
-use App\Services\LoginSecurityChallengeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -56,7 +55,6 @@ class AuthenticatedSessionController extends Controller
     public function handleMicrosoftCallback(
         Request $request,
         DeviceLoginService $deviceLoginService,
-        LoginSecurityChallengeService $challengeService
     ): RedirectResponse {
         $expectedState = $request->session()->pull('microsoft_oauth_state');
         if (blank($expectedState) || ! hash_equals($expectedState, (string) $request->query('state'))) {
@@ -140,17 +138,6 @@ class AuthenticatedSessionController extends Controller
             $request->session()->put('device_login_id', $deviceLogin->id);
         }
 
-        if ($challengeService->shouldChallenge($deviceLogin)) {
-            $challenge = $challengeService->create($user, $deviceLogin, $request);
-            Auth::guard('web')->logout();
-            $request->session()->forget('device_login_id');
-            $request->session()->put(LoginSecurityChallengeService::SESSION_KEY, $challenge->id);
-            $request->session()->put('login_security_remember', true);
-
-            return redirect()->route('login.security_code.show')
-                ->with('status', 'Por seguridad, enviamos un código a tu correo para completar el acceso.');
-        }
-
         return redirect()->intended(route('panel', absolute: false));
     }
 
@@ -160,7 +147,6 @@ class AuthenticatedSessionController extends Controller
     public function store(
         LoginRequest $request,
         DeviceLoginService $deviceLoginService,
-        LoginSecurityChallengeService $challengeService
     ): RedirectResponse {
         $request->authenticate();
 
@@ -170,20 +156,6 @@ class AuthenticatedSessionController extends Controller
         $deviceLogin = $deviceLoginService->record($user, $request);
         if ($deviceLogin) {
             $request->session()->put('device_login_id', $deviceLogin->id);
-        }
-
-        if ($challengeService->shouldChallenge($deviceLogin)) {
-            $challenge = $challengeService->create($user, $deviceLogin, $request);
-
-            Auth::guard('web')->logout();
-
-            $request->session()->forget('device_login_id');
-            $request->session()->put(LoginSecurityChallengeService::SESSION_KEY, $challenge->id);
-            $request->session()->put('login_security_remember', $request->boolean('remember'));
-
-            return redirect()
-                ->route('login.security_code.show')
-                ->with('status', 'Por seguridad, enviamos un código a tu correo para completar el acceso.');
         }
 
         return redirect()->intended(route('panel', absolute: false));

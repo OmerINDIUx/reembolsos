@@ -13,9 +13,7 @@ use App\Mail\UserInvitation;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use App\Models\Profile;
-use App\Models\CostCenter;
-use App\Models\FixedFund;
-use App\Models\Reimbursement;
+use App\Services\AccountBlockService;
 
 class UserController extends Controller
 {
@@ -25,7 +23,11 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $query = User::with(['director', 'profile'])
-            ->withCount(['fixedFunds as active_fixed_funds_count' => fn ($funds) => $funds->where('is_active', true)])
+            ->withCount([
+                'fixedFunds as active_fixed_funds_count' => fn ($funds) => $funds->where('is_active', true),
+                'approvalSteps',
+                'reimbursements as active_reimbursements_count' => fn ($reimbursements) => $reimbursements->whereIn('status', ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo']),
+            ])
             ->orderBy('name');
 
         if ($request->filled('search')) {
@@ -42,9 +44,11 @@ class UserController extends Controller
 
         if ($request->filled('status')) {
             if ($request->status === 'active') {
-                $query->whereNull('invitation_token');
+                $query->whereNull('invitation_token')->whereNull('blocked_at');
             } elseif ($request->status === 'inactive') {
                 $query->whereNotNull('invitation_token');
+            } elseif ($request->status === 'blocked') {
+                $query->whereNotNull('blocked_at');
             }
         }
 
@@ -59,20 +63,14 @@ class UserController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'profile_id']);
 
-        $affectedCostCenters = $users->getCollection()->mapWithKeys(function (User $listedUser) {
-            $centers = CostCenter::with(['approvalSteps.user', 'fixedFunds.user.profile'])
-                ->where(function ($query) use ($listedUser) {
-                    $query->whereHas('approvalSteps', fn ($steps) => $steps->where('user_id', $listedUser->id))
-                        ->orWhereHas('fixedFunds', fn ($funds) => $funds->where('user_id', $listedUser->id)->where('is_active', true));
-                })->orderBy('name')->get();
-            return [$listedUser->id => $centers->map(fn ($center) => [
-                'id' => $center->id, 'name' => $center->name,
-                'steps' => $center->approvalSteps->map(fn ($step) => ['id' => $step->id, 'order' => $step->order, 'name' => $step->name ?: 'Aprobador N' . $step->order, 'user_id' => $step->user_id])->values(),
-                'funds' => $center->fixedFunds->where('is_active', true)->map(fn ($fund) => ['id' => $fund->id, 'name' => $fund->name, 'user_id' => $fund->user_id])->values(),
-            ])->values()];
-        });
+        $activeUserCandidates = User::with('profile')
+            ->where('id', '!=', $request->user()->id)
+            ->whereNull('invitation_token')
+            ->whereNull('blocked_at')
+            ->orderBy('name')
+            ->get(['id', 'name', 'profile_id']);
 
-        return view('users.index', compact('users', 'fixedFundTransferCandidates', 'affectedCostCenters'));
+        return view('users.index', compact('users', 'fixedFundTransferCandidates', 'activeUserCandidates'));
     }
 
     /**
@@ -141,61 +139,6 @@ class UserController extends Controller
     {
         $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
         $user->load(['director', 'subordinates', 'costCenters', 'substitutes.user']);
-        // Centros donde el usuario participa, ya sea como solicitante, aprobador,
-        // responsable de fondo fijo o dentro de alguno de los puestos del flujo.
-        $costCenterAssignments = \App\Models\CostCenter::query()
-            ->where(function ($query) use ($user) {
-                $query->where('director_id', $user->id)
-                    ->orWhere('control_obra_id', $user->id)
-                    ->orWhere('director_ejecutivo_id', $user->id)
-                    ->orWhere('accountant_id', $user->id)
-                    ->orWhere('direccion_id', $user->id)
-                    ->orWhere('tesoreria_id', $user->id)
-                    ->orWhere('beneficiary_id', $user->id)
-                    ->orWhereHas('approvalSteps', fn ($steps) => $steps->where('user_id', $user->id))
-                    ->orWhereHas('authorizedUsers', fn ($users) => $users->where('users.id', $user->id))
-                    ->orWhereHas('fixedFunds', fn ($funds) => $funds
-                        ->where('user_id', $user->id)
-                        ->where('is_active', true));
-            })
-            ->with([
-                'approvalSteps' => fn ($steps) => $steps->where('user_id', $user->id),
-                'authorizedUsers' => fn ($users) => $users->where('users.id', $user->id),
-                'fixedFunds' => fn ($funds) => $funds
-                    ->where('user_id', $user->id)
-                    ->where('is_active', true),
-            ])
-            ->orderBy('name')
-            ->get()
-            ->map(function ($costCenter) use ($user) {
-                $positions = collect([
-                    $costCenter->director_id === $user->id ? 'Director N1' : null,
-                    $costCenter->control_obra_id === $user->id ? 'Control de Obra N2' : null,
-                    $costCenter->director_ejecutivo_id === $user->id ? 'Director Ejecutivo N3' : null,
-                    $costCenter->accountant_id === $user->id ? 'Cuentas por Pagar Revisador' : null,
-                    $costCenter->direccion_id === $user->id ? 'Subdirección N5' : null,
-                    $costCenter->tesoreria_id === $user->id ? 'Cuentas por Pagar Pagador' : null,
-                    $costCenter->beneficiary_id === $user->id ? 'Beneficiario' : null,
-                    $costCenter->authorizedUsers->isNotEmpty()
-                        ? ($costCenter->authorizedUsers->first()->pivot->can_do_special
-                            ? 'Usuario autorizado (con permisos especiales)'
-                            : 'Usuario autorizado')
-                        : null,
-                ])->filter();
-
-                $costCenter->approvalSteps->each(function ($step) use ($positions) {
-                    $positions->push($step->name ?: 'Aprobador N' . $step->order);
-                });
-
-                $costCenter->fixedFunds->each(function ($fund) use ($positions) {
-                    $positions->push('Responsable de fondo fijo' . ($fund->name ? ': ' . $fund->name : ''));
-                });
-
-                return [
-                    'costCenter' => $costCenter,
-                    'positions' => $positions->unique()->values(),
-                ];
-            });
 
         // 1. Personal Spending Stats
         $pendingQuery = $user->reimbursements()->applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'rechazado', 'borrador']);
@@ -254,7 +197,7 @@ class UserController extends Controller
         // 7. Substitutes
         $allUsers = User::where('id', '!=', $user->id)->orderBy('name')->get();
 
-        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount', 'periods', 'allUsers', 'costCenterAssignments'));
+        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount', 'periods', 'allUsers'));
     }
 
     /**
@@ -363,13 +306,6 @@ class UserController extends Controller
             'rfc' => $request->filled('rfc') ? strtoupper(trim($request->rfc)) : null,
         ];
 
-        if ($request->filled('password')) {
-            $request->validate([
-                'password' => ['required', 'string', 'min:8', 'confirmed'],
-            ]);
-            $data['password'] = Hash::make($request->password);
-        }
-
         $user->update($data);
 
         return redirect()->route('users.index')->with('success', 'Usuario actualizado exitosamente.');
@@ -378,67 +314,152 @@ class UserController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Request $request, User $user)
+    /**
+     * Show the two-step deactivation screen with individual operation decisions.
+     */
+    public function deactivation(User $user)
     {
-        if ($user->getKey() === Auth::id()) {
-            return back()->with('error', 'No puedes deshabilitar tu propia cuenta.');
-        }
+        if ($user->getKey() === Auth::id()) return redirect()->route('users.index')->with('error', 'No puedes inhabilitar tu propia cuenta.');
+        if ($user->isBlocked()) return redirect()->route('users.index')->with('error', 'Esta cuenta ya se encuentra inhabilitada.');
+        $pendingStatuses = ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo'];
+        $pendingReimbursements = $user->reimbursements()->whereIn('status', $pendingStatuses)->with(['costCenter', 'user', 'payee'])->orderBy('cost_center_id')->orderBy('id')->get();
+        $approvalSteps = $user->approvalSteps()->with('costCenter')->orderBy('cost_center_id')->orderBy('order')->get();
+        $activeFunds = $user->fixedFunds()->where('is_active', true)->with('costCenter')->orderBy('cost_center_id')->orderBy('id')->get();
+        $activeUserCandidates = User::with('profile')->where('id', '!=', $user->id)->whereNull('invitation_token')->whereNull('blocked_at')->orderBy('name')->get(['id', 'name', 'profile_id']);
+        $activeReimbursementsCount = $pendingReimbursements->count();
+        $approvalStepsCount = $approvalSteps->count();
+        $activeFixedFundsCount = $activeFunds->count();
+        return view('users.deactivation', compact('user', 'pendingReimbursements', 'approvalSteps', 'activeFunds', 'activeReimbursementsCount', 'approvalStepsCount', 'activeFixedFundsCount', 'activeUserCandidates'));
+    }    public function destroy(Request $request, User $user, AccountBlockService $blockService)
+    {
+        if ($user->getKey() === Auth::id()) return back()->with('error', 'No puedes inhabilitar tu propia cuenta.');
+        if ($user->isBlocked()) return back()->with('error', 'Esta cuenta ya se encuentra inhabilitada.');
 
         $request->validate([
-            'approval_actions.*' => ['nullable', 'in:replace,previous,next,remove'],
-            'approval_replacements.*' => ['nullable', 'integer', 'different:' . $user->id, 'exists:users,id'],
-            'reimbursement_routes.*' => ['nullable', 'in:keep,fixed_fund,user'],
-            'reimbursement_route_users.*' => ['nullable', 'integer', 'different:' . $user->id, 'exists:users,id'],
-            'fund_replacements.*' => ['nullable', 'integer', 'different:' . $user->id, 'exists:users,id'],
+            'reimbursement_action' => ['required', Rule::in(['keep', 'transfer'])],
+            'reimbursement_transfer_to_user_id' => ['nullable', 'integer', 'different:' . $user->id, 'exists:users,id'],
+            'approval_action' => ['required', Rule::in(['reassign', 'remove'])],
+            'approval_reassign_to_user_id' => ['nullable', 'integer', 'different:' . $user->id, 'exists:users,id'],
+            'pending_approval_action' => ['required', Rule::in(['keep', 'previous', 'next'])],
+            'transfer_to_user_id' => ['nullable', 'integer', 'different:' . $user->id, 'exists:users,id'],
+            'reimbursement_decisions' => ['nullable', 'array'],
+            'reimbursement_decisions.*' => [Rule::in(['keep', 'transfer'])],
+            'reimbursement_transfer_to_user_ids' => ['nullable', 'array'],
+            'reimbursement_transfer_to_user_ids.*' => ['nullable', 'integer', 'different:' . $user->id, 'exists:users,id'],
+            'fixed_fund_decisions' => ['nullable', 'array'],
+            'fixed_fund_decisions.*' => [Rule::in(['delete', 'transfer'])],
+            'fixed_fund_transfer_to_user_ids' => ['nullable', 'array'],
+            'fixed_fund_transfer_to_user_ids.*' => ['nullable', 'integer', 'different:' . $user->id, 'exists:users,id'],
         ]);
 
-        $centers = CostCenter::with(['approvalSteps', 'fixedFunds'])
-            ->where(function ($query) use ($user) {
-                $query->whereHas('approvalSteps', fn ($steps) => $steps->where('user_id', $user->id))
-                    ->orWhereHas('fixedFunds', fn ($funds) => $funds->where('user_id', $user->id)->where('is_active', true));
-            })->get();
+        $replacementIds = collect([
+            $request->integer('reimbursement_transfer_to_user_id'),
+            $request->integer('approval_reassign_to_user_id'),
+            $request->integer('transfer_to_user_id'),
+        ])->merge($request->input('reimbursement_transfer_to_user_ids', []))->merge($request->input('fixed_fund_transfer_to_user_ids', []))->filter()->unique();
 
-        DB::transaction(function () use ($user, $request, $centers) {
-            foreach ($centers as $center) {
-                $key = (string) $center->id;
-                $step = $center->approvalSteps->firstWhere('user_id', $user->id);
-                $action = $request->input("approval_actions.$key", 'remove');
-                $replacementId = $request->input("approval_replacements.$key");
+        if (User::whereIn('id', $replacementIds)->where(function ($query) {
+            $query->whereNotNull('blocked_at')->orWhereNotNull('invitation_token');
+        })->exists()) {
+            return back()->with('error', 'Los responsables seleccionados deben ser usuarios activos y registrados.');
+        }
 
-                if ($step && $action === 'replace') {
-                    abort_unless($replacementId, 422, 'Selecciona un reemplazo para cada ciclo de aprobación.');
-                    User::whereKey($replacementId)->whereNull('blocked_at')->firstOrFail();
-                    $step->update(['user_id' => $replacementId]);
-                } elseif ($step) {
-                    $target = $action === 'previous'
-                        ? $center->approvalSteps->where('order', '<', $step->order)->sortByDesc('order')->first()
-                        : $center->approvalSteps->where('order', '>', $step->order)->sortBy('order')->first();
-                    Reimbursement::where('current_step_id', $step->id)->whereNotIn('status', ['borrador', 'aprobado', 'rechazado'])->update(['current_step_id' => $target?->id]);
-                    $step->delete();
-                    $center->approvalSteps()->orderBy('order')->get()->each(function ($remaining, $index) {
-                        $remaining->update(['order' => $index + 1]);
-                    });
-                }
+        $activeFunds = \App\Models\FixedFund::where('user_id', $user->id)->where('is_active', true)->get();
+        if ($activeFunds->isNotEmpty() && !$request->filled('transfer_to_user_id') && !$request->filled('fixed_fund_decisions')) {
+            return back()->with('error', 'Selecciona quién recibirá los fondos fijos antes de inhabilitar al usuario.');
+        }
+        $fundReplacement = $activeFunds->isNotEmpty() && $request->filled('transfer_to_user_id') ? User::with('profile')->findOrFail($request->integer('transfer_to_user_id')) : null;
+        if ($fundReplacement?->hasRole('tesoreria')) {
+            return back()->with('error', 'Cuentas por Pagar Pagadores no puede recibir la asignación de un fondo fijo.');
+        }
 
-                $fundReplacement = $request->input("fund_replacements.$key");
-                $funds = FixedFund::where('cost_center_id', $center->id)->where('user_id', $user->id)->where('is_active', true);
-                $fundReplacement ? $funds->update(['user_id' => $fundReplacement]) : $funds->update(['is_active' => false]);
+        $pendingStatuses = ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo'];
+        $ownedReimbursements = \App\Models\Reimbursement::where('user_id', $user->id)->whereIn('status', $pendingStatuses)->get();
+        $approvalSteps = \App\Models\ApprovalStep::where('user_id', $user->id)->get();
+        $linkedCostCenterIds = \App\Models\CostCenter::where(function ($query) use ($user) {
+            foreach (['director_id', 'control_obra_id', 'director_ejecutivo_id', 'accountant_id', 'direccion_id', 'tesoreria_id', 'beneficiary_id'] as $field) {
+                $query->orWhere($field, $user->id);
+            }
+        })->orWhereHas('authorizedUsers', fn ($query) => $query->where('users.id', $user->id))
+            ->pluck('id')
+            ->concat($approvalSteps->pluck('cost_center_id'))
+            ->unique()
+            ->values();
 
-                $route = $request->input("reimbursement_routes.$key", 'keep');
-                if ($route !== 'keep' && $step) {
-                    $recipientId = $route === 'fixed_fund' ? $center->fixedFunds()->where('is_active', true)->where('user_id', '!=', $user->id)->value('user_id') : $request->input("reimbursement_route_users.$key");
-                    $targetStep = $recipientId ? $center->approvalSteps()->where('user_id', $recipientId)->orderBy('order')->first() : null;
-                    Reimbursement::where('cost_center_id', $center->id)->where('current_step_id', $step->id)->whereNotIn('status', ['borrador', 'aprobado', 'rechazado'])->update(['current_step_id' => $targetStep?->id]);
-                }
+        if ($ownedReimbursements->isNotEmpty() && $request->input('reimbursement_action') === 'transfer' && !$request->filled('reimbursement_transfer_to_user_id')) {
+            return back()->with('error', 'Selecciona quién recibirá los reembolsos propios en proceso.');
+        }
+        if ($approvalSteps->isNotEmpty() && $request->input('approval_action') === 'reassign' && !$request->filled('approval_reassign_to_user_id')) {
+            return back()->with('error', 'Selecciona quién sustituirá al aprobador en los centros de costos.');
+        }
 
-                $center->update(['beneficiary_id' => $center->fixedFunds()->where('is_active', true)->orderBy('id')->value('user_id'), 'budget' => $center->fixedFunds()->where('is_active', true)->sum('budget')]);
+        DB::transaction(function () use ($request, $user, $blockService, $fundReplacement, $ownedReimbursements, $approvalSteps, $linkedCostCenterIds, $pendingStatuses) {
+            foreach (\App\Models\FixedFund::where('user_id', $user->id)->where('is_active', true)->lockForUpdate()->get() as $fund) {
+                $decision = $request->input('fixed_fund_decisions.' . $fund->id, $request->filled('transfer_to_user_id') ? 'transfer' : 'delete');
+                if ($decision === 'delete') { $fund->update(['is_active' => false]); continue; }
+                $targetId = $request->input('fixed_fund_transfer_to_user_ids.' . $fund->id, $request->integer('transfer_to_user_id'));
+                if ($targetId) $fund->update(['user_id' => $targetId]);
             }
 
-            $user->forceFill(['blocked_at' => now(), 'blocked_reason_code' => 'administrative_deactivation', 'blocked_reason_message' => 'Usuario deshabilitado mediante reasignación de responsabilidades.', 'blocked_by' => Auth::id(), 'remember_token' => null])->save();
-            DB::table('sessions')->where('user_id', $user->id)->delete();
+            foreach ($ownedReimbursements as $reimbursement) {
+                $decision = $request->input('reimbursement_decisions.' . $reimbursement->id, $request->input('reimbursement_action', 'keep'));
+                if ($decision !== 'transfer') continue;
+                $targetId = $request->input('reimbursement_transfer_to_user_ids.' . $reimbursement->id, $request->integer('reimbursement_transfer_to_user_id'));
+                if (!$targetId) continue;
+                $data = ['user_id' => $targetId];
+                if ((int) $reimbursement->payee_id === (int) $user->id) $data['payee_id'] = $data['user_id'];
+                $reimbursement->update($data);
+            }
+
+            foreach ($linkedCostCenterIds as $costCenterId) {
+                $userSteps = $approvalSteps->where('cost_center_id', $costCenterId);
+                $costCenter = \App\Models\CostCenter::lockForUpdate()->find($costCenterId);
+                if (!$costCenter) continue;
+                $oldSteps = $costCenter->approvalSteps()->orderBy('order')->get();
+                $current = $costCenter->reimbursements()->whereIn('status', $pendingStatuses)->whereIn('current_step_id', $userSteps->pluck('id'))->get();
+
+                if ($request->input('approval_action') === 'reassign') {
+                    $costCenter->approvalSteps()->where('user_id', $user->id)->update(['user_id' => $request->integer('approval_reassign_to_user_id')]);
+
+                    if ($request->input('pending_approval_action') !== 'keep') {
+                        foreach ($current as $reimbursement) {
+                            $oldOrder = $oldSteps->firstWhere('id', $reimbursement->current_step_id)?->order;
+                            $candidate = $request->input('pending_approval_action') === 'previous'
+                                ? $oldSteps->where('order', '<', $oldOrder)->sortByDesc('order')->first()
+                                : $oldSteps->where('order', '>', $oldOrder)->sortBy('order')->first();
+
+                            $reimbursement->update([
+                                'current_step_id' => $candidate?->id,
+                                'status' => $candidate ? 'pendiente' : 'pendiente_revision_cxp',
+                            ]);
+                        }
+                    }
+                } else {
+                    $costCenter->approvalSteps()->where('user_id', $user->id)->delete();
+                    $remaining = $costCenter->approvalSteps()->orderBy('order')->get();
+                    foreach ($remaining as $index => $step) $step->update(['order' => $index + 1]);
+                    if ($remaining->isEmpty()) $costCenter->update(['is_active' => false]);
+
+                    foreach ($current as $reimbursement) {
+                        $oldOrder = $oldSteps->firstWhere('id', $reimbursement->current_step_id)?->order;
+                        $candidate = $request->input('pending_approval_action') === 'previous'
+                            ? $remaining->where('order', '<', $oldOrder)->sortByDesc('order')->first()
+                            : $remaining->where('order', '>', $oldOrder)->sortBy('order')->first();
+                        $reimbursement->update(['current_step_id' => $candidate?->id, 'status' => $candidate ? 'pendiente' : 'pendiente_revision_cxp']);
+                    }
+                }
+
+                $legacyFields = ['director_id', 'control_obra_id', 'director_ejecutivo_id', 'accountant_id', 'direccion_id', 'tesoreria_id', 'beneficiary_id'];
+                $updates = [];
+                foreach ($legacyFields as $field) if ((int) $costCenter->{$field} === (int) $user->id) $updates[$field] = null;
+                if ($updates) $costCenter->update($updates);
+                $costCenter->authorizedUsers()->detach($user->id);
+            }
+
+            $blockService->block($user, Auth::user(), 'administrative_review', $request);
         });
 
-        return redirect()->route('users.index')->with('success', 'Usuario deshabilitado. Se conservaron sus registros y se actualizaron sus responsabilidades.');
+        return redirect()->route('users.index')->with('success', 'Usuario inhabilitado correctamente. Se conservaron sus históricos y se aplicaron las decisiones seleccionadas.');
     }
     /**
      * Resend invitation to a user.

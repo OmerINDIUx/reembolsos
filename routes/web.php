@@ -58,6 +58,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('reimbursements/auto-save', [ReimbursementController::class, 'autoStore'])->name('reimbursements.auto_save');
 
     Route::middleware('permission:users.view')->group(function() {
+        Route::get('users/{user}/deactivation', [UserController::class, 'deactivation'])->name('users.deactivation');
         Route::resource('users', UserController::class);
         Route::post('users/{user}/resend-invitation', [UserController::class, 'resendInvitation'])->name('users.resend_invitation');
         

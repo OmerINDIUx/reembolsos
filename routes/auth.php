@@ -4,7 +4,6 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
-use App\Http\Controllers\Auth\LoginSecurityChallengeController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
@@ -17,22 +16,8 @@ Route::middleware('guest')->group(function () {
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
 
-    Route::get('auth/microsoft', [AuthenticatedSessionController::class, 'redirectToMicrosoft'])
-        ->name('auth.microsoft');
 
-    Route::get('auth/microsoft/callback', [AuthenticatedSessionController::class, 'handleMicrosoftCallback'])
-        ->name('auth.microsoft.callback');
 
-    Route::get('login/security-code', [LoginSecurityChallengeController::class, 'show'])
-        ->name('login.security_code.show');
-
-    Route::post('login/security-code', [LoginSecurityChallengeController::class, 'verify'])
-        ->name('login.security_code.verify')
-        ->middleware('throttle:8,1');
-
-    Route::post('login/security-code/resend', [LoginSecurityChallengeController::class, 'resend'])
-        ->name('login.security_code.resend')
-        ->middleware('throttle:3,1');
 
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');
@@ -46,6 +31,15 @@ Route::middleware('guest')->group(function () {
     Route::post('reset-password', [NewPasswordController::class, 'store'])
         ->name('password.store');
 });
+
+Route::get('auth/microsoft', [AuthenticatedSessionController::class, 'redirectToMicrosoft'])
+    ->name('auth.microsoft');
+
+Route::get('auth/microsoft/callback', [AuthenticatedSessionController::class, 'handleMicrosoftCallback'])
+    ->name('auth.microsoft.callback');
+
+
+
 
 Route::middleware('auth')->group(function () {
     Route::get('verify-email', EmailVerificationPromptController::class)

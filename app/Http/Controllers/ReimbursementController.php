@@ -3389,7 +3389,6 @@ class ReimbursementController extends Controller
             'ids' => 'required|array',
             'ids.*' => 'exists:reimbursements,id',
             'action' => 'required|in:aprobado,rechazado,requiere_correccion,editar',
-            'password' => 'required|string',
             'rejection_reason' => 'nullable|string|required_if:action,rechazado|required_if:action,requiere_correccion',
             'status' => ['nullable', Rule::in(['pendiente', 'requiere_correccion', 'rechazado'])],
             'type' => ['nullable', Rule::in(['reembolso', 'fondo_fijo'])],
@@ -3398,11 +3397,6 @@ class ReimbursementController extends Controller
         ]);
 
         $user = Auth::user();
-
-        // Check password
-        if (!\Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
-            return back()->with('error', 'ContraseÃƒÂ±a incorrecta.');
-        }
 
         if ($request->action === 'editar') {
             if ($user->isAdminView()) {

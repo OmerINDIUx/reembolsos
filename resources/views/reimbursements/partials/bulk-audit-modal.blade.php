@@ -23,7 +23,7 @@
         <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
         
         <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-3xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-gray-100 dark:border-gray-700">
-            <form action="{{ route('reimbursements.bulk_audit_action') }}" method="POST">
+            <form action="{{ route('reimbursements.bulk_audit_action') }}" method="POST" data-confirm="¿Deseas realizar esta acción masiva?" data-confirm-type="warning" data-confirm-title="Confirmar acción masiva" data-confirm-btn="ACEPTAR" data-cancel-btn="NEGAR">
                 @csrf
                 
                 <template x-for="id in selectedIds" :key="id">
@@ -239,16 +239,7 @@
                                             <span class="font-bold text-gray-700 dark:text-gray-300">Confirmo que revisé y validé los reembolsos seleccionados</span>
                                         </div>
                                     </label>
-                                    
-                                    <div x-show="confirmed" x-transition.opacity>
-                                        <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Para proceseder ingrese tu contraseña</label>
-                                        <div class="relative">
-                                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                                            </div>
-                                            <input type="password" name="password" required class="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-xl h-11" placeholder="Ingresa tu contraseña para autorizar">
-                                        </div>
-                                    </div>
+                                    <p x-show="confirmed" x-transition.opacity class="text-xs text-gray-500 dark:text-gray-400">La autorización se valida con tu sesión Microsoft y el MFA de tu organización.</p>
                                 </div>
 
                             </div>
@@ -267,3 +258,4 @@
         </div>
     </div>
 </div>
+

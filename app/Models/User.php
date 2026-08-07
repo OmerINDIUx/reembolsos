@@ -187,6 +187,10 @@ class User extends Authenticatable
     {
         return $this->hasMany(ReimbursementApproval::class);
     }
+    public function approvalSteps()
+    {
+        return $this->hasMany(ApprovalStep::class);
+    }
 
     /**
      * Check if the user has any reimbursement currently assigned to them for approval.
