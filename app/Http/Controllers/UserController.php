@@ -13,6 +13,8 @@ use App\Mail\UserInvitation;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use App\Models\Profile;
+use App\Models\Permission;
+use App\Models\CostCenter;
 use App\Services\AccountBlockService;
 
 class UserController extends Controller
@@ -43,13 +45,8 @@ class UserController extends Controller
         }
 
         if ($request->filled('status')) {
-            if ($request->status === 'active') {
-                $query->whereNull('invitation_token')->whereNull('blocked_at');
-            } elseif ($request->status === 'inactive') {
-                $query->whereNotNull('invitation_token');
-            } elseif ($request->status === 'blocked') {
-                $query->whereNotNull('blocked_at');
-            }
+            $status = $request->status === 'inactive' ? 'pending' : ($request->status === 'blocked' ? 'disabled' : $request->status);
+            $query->where('status', $status);
         }
 
         $users = $query->paginate(10)->appends($request->all());
@@ -88,48 +85,45 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
+        $email = User::normalizeEmail($request->input('email'));
+        $request->merge(['email' => $email]);
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => [
-                'required', 'string', 'email', 'max:255', 'unique:users',
-                function ($attribute, $value, $fail) {
-                    $blockedDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'live.com', 'icloud.com', 'yahoo.com', 'msn.com'];
-                    $domain = substr(strrchr($value, "@"), 1);
-                    if (in_array(strtolower($domain), $blockedDomains)) {
-                        $fail('No se permiten correos personales (Gmail, Outlook, etc.). Por favor usa un correo empresarial.');
-                    }
-                },
-            ],
-            'role' => ['nullable', 'string'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email_normalized'],
             'profile_id' => ['required', 'exists:profiles,id'],
+            'cost_centers' => ['nullable', 'array'],
+            'cost_centers.*' => ['integer', 'exists:cost_centers,id'],
+            'permissions' => ['nullable', 'array'],
+            'permissions.*' => ['integer', 'exists:permissions,id'],
+            'send_invitation' => ['nullable', 'boolean'],
         ]);
 
         $profile = Profile::findOrFail($request->profile_id);
         if ($this->isAdminProfile($profile) && !Auth::user()->isAdmin()) {
-            return back()
-                ->withInput()
-                ->with('error', 'Solo un administrador puede crear otro usuario administrador.');
+            return back()->withInput()->with('error', 'Solo un administrador puede crear otro usuario administrador.');
         }
 
-        $token = Str::random(64);
+        $user = DB::transaction(function () use ($request, $profile, $email) {
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $email,
+                'email_normalized' => $email,
+                'password' => null,
+                'role' => in_array($profile->name, ['admin', 'admin_view', 'director', 'control_obra', 'director_ejecutivo', 'accountant', 'direccion', 'tesoreria', 'user']) ? $profile->name : 'user',
+                'profile_id' => $profile->id,
+                'invitation_token' => $request->boolean('send_invitation') ? Str::random(64) : null,
+                'status' => 'pending',
+            ]);
+            $user->authorizedCostCenters()->sync($request->input('cost_centers', []));
+            $user->permissions()->sync($request->input('permissions', []));
+            return $user;
+        });
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => null, // Password will be set via invitation
-            'role' => in_array($profile->name, ['admin', 'admin_view', 'director', 'control_obra', 'director_ejecutivo', 'accountant', 'direccion', 'tesoreria', 'user']) ? $profile->name : 'user',
-            'profile_id' => $request->profile_id,
-            'invitation_token' => $token,
-            'invitation_sent_at' => null,
-        ]);
-
-        if (!$this->sendInvitationEmail($user)) {
-            return redirect()
-                ->route('users.index')
-                ->with('error', 'El usuario fue creado, pero no se pudo enviar la invitación. Revisa la configuración de correo en el servidor.');
+        if ($request->boolean('send_invitation') && !$this->sendInvitationEmail($user)) {
+            return redirect()->route('users.index')->with('error', 'El usuario fue creado, pero no se pudo enviar la invitación.');
         }
 
-        return redirect()->route('users.index')->with('success', 'Usuario creado exitosamente. Se ha enviado una invitación por correo.');
+        return redirect()->route('users.index')->with('success', 'Usuario creado como pendiente. Debe iniciar sesión con Microsoft.');
     }
 
     /**
@@ -266,47 +260,41 @@ class UserController extends Controller
      */
     public function update(Request $request, User $user)
     {
-        if ($this->isAdminUser($user) && !Auth::user()->isAdmin()) {
-            abort(403, 'Solo un administrador puede editar usuarios administradores.');
-        }
-
+        $email = User::normalizeEmail($request->input('email'));
+        $request->merge(['email' => $email]);
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => [
-                'required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id),
-                function ($attribute, $value, $fail) {
-                    $blockedDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'live.com', 'icloud.com', 'yahoo.com', 'msn.com'];
-                    $domain = substr(strrchr($value, "@"), 1);
-                    if (in_array(strtolower($domain), $blockedDomains)) {
-                        $fail('No se permiten correos personales (Gmail, Outlook, etc.). Por favor usa un correo empresarial.');
-                    }
-                },
-            ],
-            'role' => ['nullable', 'string'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email_normalized')->ignore($user->id)],
             'profile_id' => ['required', 'exists:profiles,id'],
+            'status' => ['required', Rule::in(['pending', 'active', 'disabled'])],
+            'cost_centers' => ['nullable', 'array'],
+            'cost_centers.*' => ['integer', 'exists:cost_centers,id'],
+            'permissions' => ['nullable', 'array'],
+            'permissions.*' => ['integer', 'exists:permissions,id'],
             'bank_name' => ['nullable', 'string', 'max:255'],
             'clabe' => ['nullable', 'string', 'size:18', 'regex:/^[0-9]+$/'],
-            'rfc' => ['nullable', 'string', 'min:12', 'max:13', 'regex:/^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/i'],
+            'rfc' => ['nullable', 'string', 'min:12', 'max:13'],
         ]);
 
         $profile = Profile::findOrFail($request->profile_id);
-        if ($this->isAdminProfile($profile) && !Auth::user()->isAdmin()) {
-            return back()
-                ->withInput()
-                ->with('error', 'Solo un administrador puede asignar un perfil administrador.');
-        }
+        if ($this->isAdminProfile($profile) && !Auth::user()->isAdmin()) abort(403, 'Solo un administrador puede asignar un perfil administrador.');
 
-        $data = [
-            'name' => $request->name,
-            'email' => $request->email,
-            'role' => in_array($profile->name, ['admin', 'admin_view', 'director', 'control_obra', 'director_ejecutivo', 'accountant', 'direccion', 'tesoreria', 'user']) ? $profile->name : 'user',
-            'profile_id' => $request->profile_id,
-            'bank_name' => $request->filled('bank_name') ? strtoupper(trim($request->bank_name)) : null,
-            'clabe' => $request->clabe,
-            'rfc' => $request->filled('rfc') ? strtoupper(trim($request->rfc)) : null,
-        ];
-
-        $user->update($data);
+        DB::transaction(function () use ($request, $user, $profile, $email) {
+            $user->update([
+                'name' => $request->name,
+                'email' => $email,
+                'email_normalized' => $email,
+                'status' => $request->status,
+                'role' => in_array($profile->name, ['admin', 'admin_view', 'director', 'control_obra', 'director_ejecutivo', 'accountant', 'direccion', 'tesoreria', 'user']) ? $profile->name : 'user',
+                'profile_id' => $profile->id,
+                'bank_name' => $request->filled('bank_name') ? strtoupper(trim($request->bank_name)) : null,
+                'clabe' => $request->clabe,
+                'rfc' => $request->filled('rfc') ? strtoupper(trim($request->rfc)) : null,
+                'blocked_at' => $request->status === 'disabled' ? ($user->blocked_at ?: now()) : null,
+            ]);
+            $user->authorizedCostCenters()->sync($request->input('cost_centers', []));
+            $user->permissions()->sync($request->input('permissions', []));
+        });
 
         return redirect()->route('users.index')->with('success', 'Usuario actualizado exitosamente.');
     }

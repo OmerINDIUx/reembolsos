@@ -50,8 +50,8 @@
                                 <select name="status" id="status" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                     <option value="">Todos</option>
                                     <option value="active" {{ request('status') == 'active' ? 'selected' : '' }}>Activos (Registro Completo)</option>
-                                    <option value="inactive" {{ request('status') == 'inactive' ? 'selected' : '' }}>Pendientes (Sin Registro)</option>
-                                    <option value="blocked" {{ request('status') == 'blocked' ? 'selected' : '' }}>Inhabilitados</option>
+                                    <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Pendientes de primer acceso</option>
+                                    <option value="disabled" {{ request('status') == 'disabled' ? 'selected' : '' }}>Deshabilitados</option>
                                 </select>
                             </div>
 
@@ -116,7 +116,7 @@
                                     </td>
                                     @if(Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'direccion'))
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                        @if($user->isBlocked())<span class="text-red-600 font-bold">Inhabilitado</span>@elseif($user->invitation_token)<span class="text-amber-600 font-bold">Invitación Pendiente</span>@else<span class="text-emerald-600 font-bold">Activo</span>@endif
+                                        @if($user->status === 'disabled')<span class="text-red-600 font-bold">Deshabilitado</span>@elseif($user->status === 'pending')<span class="text-amber-600 font-bold">Pendiente de primer acceso</span>@else<span class="text-emerald-600 font-bold">Activo</span>@endif
                                     </td>
                                     @endif
 

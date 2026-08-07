@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 
 class User extends Authenticatable
 {
@@ -32,6 +33,8 @@ class User extends Authenticatable
         'personal_info_confirmed_at',
         'profile_id',
         'microsoft_id',
+        'email_normalized',
+        'status',
     ];
 
     public function isRegistered()
@@ -218,6 +221,11 @@ class User extends Authenticatable
         return $this->belongsTo(Profile::class);
     }
 
+    public function permissions()
+    {
+        return $this->belongsToMany(Permission::class, 'permission_user');
+    }
+
     public function isApproverOrLinked()
     {
         // Check if the user is in any Cost Center's approval steps
@@ -259,6 +267,11 @@ class User extends Authenticatable
         }
 
         return $this->profile->hasPermission($permission);
+    }
+
+    public function isDisabled(): bool
+    {
+        return $this->status === 'disabled';
     }
 
     public function isBlocked(): bool

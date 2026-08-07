@@ -59,9 +59,16 @@ Route::middleware(['auth'])->group(function () {
     Route::post('reimbursements/auto-save', [ReimbursementController::class, 'autoStore'])->name('reimbursements.auto_save');
 
     Route::middleware('permission:users.view')->group(function() {
+        Route::get('users', [UserController::class, 'index'])->name('users.index');
+        Route::get('users/create', [UserController::class, 'create'])->middleware('admin')->name('users.create');
+        Route::post('users', [UserController::class, 'store'])->middleware('admin')->name('users.store');
+        Route::get('users/{user}', [UserController::class, 'show'])->name('users.show');
+        Route::get('users/{user}/edit', [UserController::class, 'edit'])->middleware('admin')->name('users.edit');
+        Route::put('users/{user}', [UserController::class, 'update'])->middleware('admin')->name('users.update');
+        Route::patch('users/{user}', [UserController::class, 'update'])->middleware('admin');
+        Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('admin')->name('users.destroy');
         Route::get('users/{user}/deactivation', [UserController::class, 'deactivation'])->name('users.deactivation');
-        Route::resource('users', UserController::class);
-        Route::post('users/{user}/resend-invitation', [UserController::class, 'resendInvitation'])->name('users.resend_invitation');
+        Route::post('users/{user}/resend-invitation', [UserController::class, 'resendInvitation'])->middleware('admin')->name('users.resend_invitation');
         
         // Profiles & Permissions Management
         Route::resource('profiles', \App\Http\Controllers\ProfileManagementController::class);

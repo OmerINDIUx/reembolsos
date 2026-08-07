@@ -1,6 +1,6 @@
 <x-guest-layout>
-    <!-- Session Status -->
     <x-auth-session-status class="mb-4" :status="session('status')" />
+    <x-input-error :messages="$errors->all()" class="mb-4" />
 
     <div class="mt-6">
         <a href="{{ route('auth.microsoft') }}" class="flex w-full items-center justify-center gap-3 rounded-md bg-[#2f2f2f] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1f1f1f] focus:outline-none focus:ring-2 focus:ring-indigo-500">
