@@ -13,7 +13,7 @@ class EnsureAccountIsActive
     {
         $user = $request->user();
 
-        if ($user?->isDisabled()) {
+        if ($user?->isBlocked()) {
             $message = $user->blocked_reason_message ?: 'Tu cuenta está suspendida por revisión administrativa.';
 
             Auth::guard('web')->logout();
@@ -21,7 +21,7 @@ class EnsureAccountIsActive
             $request->session()->regenerateToken();
 
             return redirect()->route('login')->withErrors([
-                'email' => "Tu cuenta está deshabilitada. Motivo: {$message} Contacta a un administrador.",
+                'email' => "Tu cuenta está bloqueada. Motivo: {$message} Contacta a un administrador.",
             ]);
         }
 

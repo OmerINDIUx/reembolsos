@@ -71,23 +71,13 @@
                                                 <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-black uppercase tracking-widest text-gray-500">
                                                     <span class="flex items-center">
                                                         <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
-                                                        Folio: <span class="text-indigo-600 dark:text-indigo-400 ml-1">{{ $notification->data['reimbursement_folio'] ?? ((isset($notification->data['reimbursement_folios']) && count($notification->data['reimbursement_folios']) > 0) ? implode(', ', $notification->data['reimbursement_folios']) : 'VARIOS') }}</span>
+                                                        Folio: <span class="text-indigo-600 dark:text-indigo-400 ml-1">{{ $notification->data['reimbursement_folio'] ?? 'N/A' }}</span>
                                                     </span>
                                                     <span class="flex items-center">
                                                         <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                                         {{ $notification->created_at->diffForHumans() }} ({{ $notification->created_at->format('H:i') }})
                                                     </span>
-                                                </div>                                                    @if(isset($notification->data['items']) && count($notification->data['items']) > 0)
-                                                        <div class="mt-3 space-y-2 text-xs text-gray-600 dark:text-gray-300">
-                                                            @foreach($notification->data['items'] as $item)
-                                                                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-900/40 p-3">
-                                                                    <div class="font-black text-indigo-700 dark:text-indigo-300">{{ $item['folio'] }} · {{ $item['status'] }}</div>
-                                                                    <div class="mt-1">{{ $item['cost_center'] }} · ${{ number_format($item['amount'], 2) }} {{ $item['currency'] }}</div>
-                                                                    <div class="mt-1"><span class="font-semibold">Acción:</span> {{ $item['action'] }}</div>
-                                                                </div>
-                                                            @endforeach
-                                                        </div>
-                                                    @endif
+                                                </div>
                                             </div>
                                         </div>
 

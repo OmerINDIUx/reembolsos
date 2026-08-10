@@ -2941,7 +2941,7 @@ class ReimbursementController extends Controller
 
                 return [
                     'deposit_account' => $company?->account ?? '',
-                    'charge_account' => $this->paymentFileChargeAccount($payee?->clabe, $payee?->bank_name),
+                    'charge_account' => $payee?->clabe ?? '',
                     'currency' => 'MXP',
                     'amount' => $amount,
                     'tips' => $tip,
@@ -3042,74 +3042,6 @@ class ReimbursementController extends Controller
         }, $fileName, $headers);
     }
 
-    public function returnPaymentToPreviousStep(Request $request)
-    {
-        $request->validate([
-            'ids' => ['required', 'array', 'min:1'],
-            'ids.*' => ['integer', 'distinct', 'exists:reimbursements,id'],
-            'comment' => ['required', 'string', 'min:5', 'max:1000'],
-        ]);
-
-        /** @var \App\Models\User $user */
-        $user = Auth::user();
-        $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-        $canReturnPayment = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury() || $identity->isCxp());
-
-        abort_unless($canReturnPayment, 403, 'No tienes permiso para regresar pagos al paso anterior.');
-
-        $reimbursements = Reimbursement::with('user')
-            ->whereIn('id', $request->input('ids'))
-            ->where('status', 'pendiente_pago')
-            ->whereNotNull('approved_by_treasury_at')
-            ->get();
-
-        if ($reimbursements->isEmpty()) {
-            return back()->with('error', 'Ninguno de los reembolsos seleccionados está disponible en el módulo de pago.');
-        }
-
-        $returned = 0;
-        DB::transaction(function () use ($reimbursements, $user, $request, &$returned) {
-            foreach ($reimbursements as $reimbursement) {
-                $folio = $reimbursement->true_folio;
-                $reimbursement->update([
-                    'status' => 'pendiente_pago',
-                    'approved_by_treasury_id' => null,
-                    'approved_by_treasury_at' => null,
-                    'payment_week' => null,
-                ]);
-
-                $reimbursement->approvals()->create([
-                    'user_id' => $user->id,
-                    'step_name' => 'Cuentas por Pagar Pagadores',
-                    'action' => 'regresado',
-                    'comment' => 'Regresado al paso anterior desde el módulo de pago por ' . $user->name . ': ' . $request->input('comment'),
-                    'is_bulk' => $reimbursements->count() > 1,
-                ]);
-
-                $payers = User::where('role', 'tesoreria')
-                    ->orWhereHas('profile', fn($query) => $query->where('name', 'tesoreria'))
-                    ->get();
-                foreach ($payers as $payer) {
-                    NotificationBatchService::add($payer, $reimbursement);
-                }
-
-                if ($reimbursement->user) {
-                    NotificationBatchService::add($reimbursement->user, $reimbursement);
-                }
-
-                $returned++;
-                Log::info("Payment return: {$folio} returned to payment approval by user {$user->id}.");
-            }
-        });
-
-        NotificationBatchService::process();
-
-        $message = $returned === 1
-            ? 'El reembolso fue regresado a Cuentas por Pagar Pagadores para una nueva revisión.'
-            : "Se regresaron {$returned} reembolsos a Cuentas por Pagar Pagadores para una nueva revisión.";
-
-        return back()->with('success', $message);
-    }
     public function exportPaymentPolicy(Request $request)
     {
         set_time_limit(300);
@@ -3258,36 +3190,13 @@ class ReimbursementController extends Controller
 
     private function paymentFileAccountType(?string $bankName): string
     {
-        if ($this->isBbvaBank($bankName)) {
+        $normalizedBank = preg_replace('/[^a-z0-9]/', '', Str::lower(Str::ascii((string) $bankName)));
+
+        if (Str::contains($normalizedBank, ['bbva', 'bancomer', 'bamcomer'])) {
             return '';
         }
 
         return '40';
-    }
-
-    private function paymentFileChargeAccount(?string $clabe, ?string $bankName): string
-    {
-        if (!$this->isBbvaBank($bankName)) {
-            return (string) ($clabe ?? '');
-        }
-
-        $digits = preg_replace('/\D+/', '', (string) ($clabe ?? ''));
-
-        if ($digits === '') {
-            return '';
-        }
-
-        // BBVA requiere quitar el dígito verificador y conservar los 10 dígitos anteriores.
-        $account = substr(substr($digits, 0, -1), -10);
-
-        return str_pad($account, 18, '0', STR_PAD_LEFT);
-    }
-
-    private function isBbvaBank(?string $bankName): bool
-    {
-        $normalizedBank = preg_replace('/[^a-z0-9]/', '', Str::lower(Str::ascii((string) $bankName)));
-
-        return Str::contains($normalizedBank, ['bbva', 'bancomer', 'bamcomer']);
     }
 
     private function excelText(?string $value): string
@@ -3480,6 +3389,7 @@ class ReimbursementController extends Controller
             'ids' => 'required|array',
             'ids.*' => 'exists:reimbursements,id',
             'action' => 'required|in:aprobado,rechazado,requiere_correccion,editar',
+            'password' => 'required|string',
             'rejection_reason' => 'nullable|string|required_if:action,rechazado|required_if:action,requiere_correccion',
             'status' => ['nullable', Rule::in(['pendiente', 'requiere_correccion', 'rechazado'])],
             'type' => ['nullable', Rule::in(['reembolso', 'fondo_fijo'])],
@@ -3488,6 +3398,11 @@ class ReimbursementController extends Controller
         ]);
 
         $user = Auth::user();
+
+        // Check password
+        if (!\Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
+            return back()->with('error', 'ContraseÃƒÂ±a incorrecta.');
+        }
 
         if ($request->action === 'editar') {
             if ($user->isAdminView()) {

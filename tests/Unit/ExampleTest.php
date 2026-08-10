@@ -127,18 +127,4 @@ XML;
             '0.50',
         ], $columns);
     }
-    public function test_bbva_charge_account_removes_check_digit_and_pads_to_18_positions(): void
-    {
-        $controller = new ReimbursementController();
-        $method = new \ReflectionMethod($controller, 'paymentFileChargeAccount');
-
-        $this->assertSame(
-            '000000001512650452',
-            $method->invoke($controller, '012560015126504521', 'BBVA')
-        );
-        $this->assertSame(
-            '012560015126504521',
-            $method->invoke($controller, '012560015126504521', 'Santander')
-        );
-    }
 }

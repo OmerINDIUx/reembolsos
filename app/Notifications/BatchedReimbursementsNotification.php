@@ -3,8 +3,8 @@
 namespace App\Notifications;
 
 use App\Support\NotificationRouteHelper;
-use App\Support\ReimbursementNotificationContext;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -17,76 +17,73 @@ class BatchedReimbursementsNotification extends Notification
     protected $totalAmount;
     protected $breakdown;
     protected $reimbursementIds;
-    protected $items;
 
+    /**
+     * Create a new notification instance.
+     */
     public function __construct($reimbursements)
     {
-        $this->reimbursements = $reimbursements->values();
-        $this->reimbursementIds = $this->reimbursements->pluck('id')->filter()->unique()->values()->all();
-        $this->count = $this->reimbursements->count();
-        $this->totalAmount = $this->reimbursements->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0));
-        $this->items = $this->reimbursements
-            ->map(fn($reimbursement) => ReimbursementNotificationContext::from($reimbursement))
-            ->values()
-            ->all();
-
+        $this->reimbursements = $reimbursements;
+        $this->reimbursementIds = $reimbursements->pluck('id')->filter()->unique()->values()->all();
+        $this->count = $reimbursements->count();
+        $this->totalAmount = $reimbursements->sum(fn($r) => (float) $r->total + (float) ($r->propina ?? 0));
+        
         $this->breakdown = [];
-        foreach ($this->items as $item) {
-            $ccName = $item['cost_center'];
+        foreach ($reimbursements as $r) {
+            $ccName = $r->costCenter->name ?? 'Sin Centro de Costos';
             if (!isset($this->breakdown[$ccName])) {
                 $this->breakdown[$ccName] = ['count' => 0, 'total' => 0];
             }
             $this->breakdown[$ccName]['count']++;
-            $this->breakdown[$ccName]['total'] += $item['amount'];
+            $this->breakdown[$ccName]['total'] += (float)$r->total + (float)($r->propina ?? 0);
         }
     }
 
+    /**
+     * Get the notification's delivery channels.
+     *
+     * @return array<int, string>
+     */
     public function via(object $notifiable): array
     {
         return ['mail', 'database'];
     }
 
+    /**
+     * Get the mail representation of the notification.
+     */
     public function toMail(object $notifiable): MailMessage
     {
         $actionUrl = NotificationRouteHelper::reimbursementsByIds($this->reimbursementIds, 'management');
-        $folios = collect($this->items)->pluck('folio')->implode(', ');
-        $bodyText = $this->count === 1
-            ? 'El reembolso <span class="highlight">' . e($folios) . '</span> requiere tu atención. Revisa abajo exactamente qué está pasando y cuál es la acción siguiente.'
-            : 'Has recibido <span class="highlight">' . $this->count . '</span> reembolsos que requieren seguimiento. Los folios y la acción requerida de cada uno aparecen abajo.';
 
         return (new MailMessage)
-            ->subject(($this->count === 1 ? 'Reembolso requiere atención: ' : 'Reembolsos requieren atención: ') . $folios)
+            ->subject('Nuevas Notificaciones de Reembolso (Resumen)')
             ->view('emails.notification', [
                 'greeting' => 'Hola ' . $notifiable->name . ',',
-                'bodyText' => $bodyText,
+                'bodyText' => 'Has recibido <span class="highlight">' . $this->count . '</span> nuevas notificaciones de reembolso. Aquí tienes el resumen de las solicitudes que requieren tu atención.',
                 'actionUrl' => $actionUrl,
-                'actionText' => $this->count === 1 ? 'Abrir reembolso' : 'Abrir reembolsos',
+                'actionText' => $this->count === 1 ? 'Ver Solicitud' : 'Ver Solicitudes',
                 'details' => [
-                    'Cantidad' => $this->count . ' reembolso(s)',
-                    'Monto total' => '$' . number_format($this->totalAmount, 2) . ' MXN',
-                    'Folios' => $folios,
-                    'Qué debes hacer' => 'Consulta la acción requerida en el detalle de cada folio.',
+                    'Cantidad Total' => $this->count . ' reembolsos',
+                    'Monto Total' => '$' . number_format($this->totalAmount, 2),
+                    'Estado' => 'Pendientes / Asignados',
                 ],
-                'items' => $this->items,
-                'breakdown' => $this->breakdown,
+                'breakdown' => $this->breakdown
             ]);
     }
 
+    /**
+     * Get the array representation of the notification.
+     *
+     * @return array<string, mixed>
+     */
     public function toArray(object $notifiable): array
     {
-        $folios = collect($this->items)->pluck('folio')->values()->all();
-        $message = $this->count === 1
-            ? 'El reembolso ' . $folios[0] . ' requiere atención: ' . $this->items[0]['status'] . '.'
-            : 'Tienes ' . $this->count . ' reembolsos que requieren atención: ' . implode(', ', $folios) . '.';
-
         return [
             'count' => $this->count,
             'total' => $this->totalAmount,
-            'reimbursement_id' => $this->count === 1 ? $this->reimbursementIds[0] : null,
-            'reimbursement_folio' => $this->count === 1 ? $folios[0] : 'VARIOS (' . $this->count . ')',
-            'reimbursement_folios' => $folios,
-            'items' => $this->items,
-            'message' => $message,
+            'reimbursement_ids' => $this->reimbursementIds,
+            'message' => 'Has recibido ' . $this->count . ' nuevas notificaciones de reembolso.',
             'type' => 'info',
             'url' => NotificationRouteHelper::reimbursementsByIds($this->reimbursementIds, 'management'),
         ];

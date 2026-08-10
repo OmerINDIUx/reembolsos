@@ -25,7 +25,7 @@ class UserInvitation extends Mailable
     public function __construct($user)
     {
         $this->user = $user;
-        $this->url = route('auth.microsoft');
+        $this->url = route('invitation.accept', ['token' => $user->invitation_token]);
     }
 
     /**

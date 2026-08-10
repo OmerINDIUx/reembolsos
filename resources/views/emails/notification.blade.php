@@ -21,28 +21,6 @@
         </div>
     @endif
 
-    @if(isset($items) && count($items) > 0)
-        <div style="margin-top: 30px;">
-            <h2 style="font-size: 18px; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">Detalle de cada reembolso</h2>
-            @foreach($items as $item)
-                <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 12px; background: #ffffff;">
-                    <div style="font-size: 16px; font-weight: 700; color: #1d4ed8; margin-bottom: 8px;">{{ $item['folio'] }}</div>
-                    <div style="font-size: 14px; color: #334155; line-height: 1.7;">
-                        <strong>Qué está pasando:</strong> {{ $item['status'] }}<br>
-                        <strong>Etapa:</strong> {{ $item['stage'] }}<br>
-                        <strong>Solicitante:</strong> {{ $item['requester'] }}<br>
-                        <strong>Centro de costos:</strong> {{ $item['cost_center'] }}<br>
-                        <strong>Importe:</strong> ${{ number_format($item['amount'], 2) }} {{ $item['currency'] }}<br>
-                        <strong>Acción requerida:</strong> {{ $item['action'] }}
-                        @if(!empty($item['reason']))<br><strong>Observaciones:</strong> {{ $item['reason'] }}@endif
-                    </div>
-                    @if(!empty($item['url']))
-                        <div style="margin-top: 10px;"><a href="{{ $item['url'] }}" style="color: #2563eb; font-weight: 600;">Abrir {{ $item['folio'] }}</a></div>
-                    @endif
-                </div>
-            @endforeach
-        </div>
-    @endif
     @if(isset($breakdown) && count($breakdown) > 0)
         <div style="margin-top: 30px;">
             <h2 style="font-size: 18px; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">Desglose por Centro de Costos</h2>
