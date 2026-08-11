@@ -30,7 +30,12 @@ class PendingApprovalsReminder extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['mail', 'database'];
+        $channels = ['database'];
+        if ($notifiable->wantsEmailNotification('workflow')) {
+            $channels[] = 'mail';
+        }
+
+        return $channels;
     }
 
     protected function notificationItems(): array

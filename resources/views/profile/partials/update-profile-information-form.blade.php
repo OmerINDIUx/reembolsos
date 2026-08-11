@@ -42,10 +42,13 @@
         </div>
 
         <label class="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-            <input type="checkbox" name="personal_info_confirmed" value="1" class="mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" required>
+            <input type="checkbox" name="personal_info_confirmed" value="1" class="mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" @checked(old('personal_info_confirmed', $user->personal_info_confirmed_at !== null)) required>
             <span>Confirmo que mi nombre completo, RFC y datos bancarios son correctos. Entiendo que esta información personal es requerida para recibir mis reembolsos.</span>
         </label>
         <x-input-error class="mt-2" :messages="$errors->get('personal_info_confirmed')" />
+        @if($user->personal_info_confirmed_at)
+            <p class="-mt-4 text-xs text-gray-500">Confirmado por última vez el {{ $user->personal_info_confirmed_at->format('d/m/Y H:i') }}. Si modificas estos datos, vuelve a revisar la confirmación antes de guardar.</p>
+        @endif
 
         <div>
             <x-input-label for="email" :value="__('Correo Electrónico')" />

@@ -52,6 +52,23 @@ class ProfileController extends Controller
         return back()->with('warning', 'Te recordaremos completar tus datos personales más tarde.');
     }
 
+    public function updateNotificationPreferences(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'email_notifications_enabled' => ['required', 'boolean'],
+            'email_workflow_notifications' => ['required', 'boolean'],
+            'email_payment_notifications' => ['required', 'boolean'],
+        ]);
+
+        $request->user()->update([
+            'email_notifications_enabled' => $request->boolean('email_notifications_enabled'),
+            'email_workflow_notifications' => $request->boolean('email_workflow_notifications'),
+            'email_payment_notifications' => $request->boolean('email_payment_notifications'),
+        ]);
+
+        return Redirect::route('profile.edit')->with('status', 'notification-preferences-updated');
+    }
+
     /**
      * Delete the user's account.
      */

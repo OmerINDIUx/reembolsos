@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\Reimbursement;
-use App\Models\User;
 use App\Notifications\PendingApprovalsReminder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -58,55 +57,7 @@ class SendPendingApprovalsReminders extends Command
             }
         }
 
-        // 2. Special case: CXP reviewer pool
-        $pendingCxpReviewItems = Reimbursement::where('status', 'pendiente_revision_cxp')->with('costCenter')->get();
-        if ($pendingCxpReviewItems->count() > 0) {
-            $cxpUsers = User::where('role', 'accountant')
-                ->orWhereHas('profile', fn($q) => $q->where('name', 'accountant'))
-                ->get();
-            foreach ($cxpUsers as $cxp) {
-                $uid = $cxp->id;
-                $usersToNotify[$uid]['user'] = $cxp;
-                foreach ($pendingCxpReviewItems as $r) {
-                    $usersToNotify[$uid]['count'] = ($usersToNotify[$uid]['count'] ?? 0) + 1;
-                    $usersToNotify[$uid]['total'] = ($usersToNotify[$uid]['total'] ?? 0) + (float)$r->total;
-                    $usersToNotify[$uid]['reimbursement_ids'][] = $r->id;
-                    
-                    $ccName = $r->costCenter->name ?? 'Sin Centro de Costos';
-                    if (!isset($usersToNotify[$uid]['breakdown'][$ccName])) {
-                        $usersToNotify[$uid]['breakdown'][$ccName] = ['count' => 0, 'total' => 0];
-                    }
-                    $usersToNotify[$uid]['breakdown'][$ccName]['count']++;
-                    $usersToNotify[$uid]['breakdown'][$ccName]['total'] += (float)$r->total;
-                }
-            }
-        }
-
-        // 3. Special case: CXP payer pool
-        $pendingPaymentItems = Reimbursement::where('status', 'pendiente_pago')->with('costCenter')->get();
-        if ($pendingPaymentItems->count() > 0) {
-            $cxpUsers = User::where('role', 'tesoreria')
-                ->orWhereHas('profile', fn($q) => $q->where('name', 'tesoreria'))
-                ->get();
-            foreach ($cxpUsers as $cxp) {
-                $uid = $cxp->id;
-                $usersToNotify[$uid]['user'] = $cxp;
-                foreach ($pendingPaymentItems as $r) {
-                    $usersToNotify[$uid]['count'] = ($usersToNotify[$uid]['count'] ?? 0) + 1;
-                    $usersToNotify[$uid]['total'] = ($usersToNotify[$uid]['total'] ?? 0) + (float)$r->total;
-                    $usersToNotify[$uid]['reimbursement_ids'][] = $r->id;
-                    
-                    $ccName = $r->costCenter->name ?? 'Sin Centro de Costos';
-                    if (!isset($usersToNotify[$uid]['breakdown'][$ccName])) {
-                        $usersToNotify[$uid]['breakdown'][$ccName] = ['count' => 0, 'total' => 0];
-                    }
-                    $usersToNotify[$uid]['breakdown'][$ccName]['count']++;
-                    $usersToNotify[$uid]['breakdown'][$ccName]['total'] += (float)$r->total;
-                }
-            }
-        }
-
-        // 3. Send notifications
+        // 2. Send notifications
         foreach ($usersToNotify as $data) {
             $user = $data['user'];
             $count = $data['count'];

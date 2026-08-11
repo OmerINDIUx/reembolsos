@@ -31,6 +31,9 @@ class User extends Authenticatable
         'clabe',
         'rfc',
         'personal_info_confirmed_at',
+        'email_notifications_enabled',
+        'email_workflow_notifications',
+        'email_payment_notifications',
         'profile_id',
         'microsoft_id',
         'email_normalized',
@@ -133,6 +136,9 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'invitation_sent_at' => 'datetime',
             'personal_info_confirmed_at' => 'datetime',
+            'email_notifications_enabled' => 'boolean',
+            'email_workflow_notifications' => 'boolean',
+            'email_payment_notifications' => 'boolean',
             'password' => 'hashed',
             'blocked_at' => 'datetime',
         ];
@@ -148,6 +154,18 @@ class User extends Authenticatable
             || blank($this->clabe)
             || blank($this->rfc)
             || $this->personal_info_confirmed_at === null;
+    }
+
+    public function wantsEmailNotification(string $category = 'workflow'): bool
+    {
+        if ($this->email_notifications_enabled === false) {
+            return false;
+        }
+
+        return match ($category) {
+            'payment' => $this->email_payment_notifications !== false,
+            default => $this->email_workflow_notifications !== false,
+        };
     }
 
     public function getRoleNameAttribute()
