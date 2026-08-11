@@ -395,6 +395,7 @@ class ReimbursementController extends Controller
         
         $type = $request->input('type');
         $hasInvoice = $request->input('has_invoice', '1') !== '0';
+        $fixedFundRequired = $this->requiresFixedFund($type, $hasInvoice);
         $allowedTypes = ['reembolso', 'fondo_fijo', 'comida', 'viaje'];
 
         $drafts = Reimbursement::where('status', 'borrador')
@@ -608,7 +609,7 @@ class ReimbursementController extends Controller
             $parentReimbursement = Reimbursement::find($request->trip_id);
         }
 
-        return view('reimbursements.create', compact('type', 'costCenters', 'travelEvents', 'currentWeek', 'availableWeeks', 'categories', 'parentReimbursement', 'hasInvoice', 'ccUserMapping', 'fixedFundMapping'));
+        return view('reimbursements.create', compact('type', 'costCenters', 'travelEvents', 'currentWeek', 'availableWeeks', 'categories', 'parentReimbursement', 'hasInvoice', 'fixedFundRequired', 'ccUserMapping', 'fixedFundMapping'));
     }
 
     /**
@@ -677,14 +678,31 @@ class ReimbursementController extends Controller
         
         $costCenter = $costCenterId ? CostCenter::find($costCenterId) : null;
         $fixedFund = null;
-        if (in_array($type, ['fondo_fijo', 'comida', 'viaje'], true)) {
+        $fixedFundRequired = $this->requiresFixedFund($type, $hasInvoice);
+        $fixedFundRequested = $request->filled('fixed_fund_id');
+        if ($fixedFundRequired || ($type === 'comida' && $fixedFundRequested)) {
             $fixedFund = \App\Models\FixedFund::whereKey($request->input('fixed_fund_id'))
                 ->where('cost_center_id', $costCenterId)
                 ->where('is_active', true)
                 ->first();
             if (!$fixedFund) {
-                return back()->withInput()->with('error', 'Selecciona un fondo fijo activo del Centro de Costos elegido.');
+                return back()->withInput()->with('error', $fixedFundRequired
+                    ? 'Selecciona un fondo fijo activo del Centro de Costos elegido.'
+                    : 'El fondo fijo seleccionado no está activo o no pertenece al Centro de Costos elegido.');
             }
+        }
+
+        if (
+            $type === 'comida'
+            && $fixedFund
+            && $request->filled('user_id')
+            && (int) $request->input('user_id') !== (int) $user->id
+        ) {
+            return back()->withInput()->with('error', 'Una comida cargada a fondo fijo no puede registrarse para otro usuario.');
+        }
+
+        if ($type === 'comida' && $fixedFund && !$costCenter?->beneficiary_id) {
+            return back()->withInput()->with('error', 'El Centro de Costos debe tener un beneficiario para cargar una comida a fondo fijo.');
         }
         
         // Target User Logic (On Behalf)
@@ -702,6 +720,8 @@ class ReimbursementController extends Controller
         $payeeId = $targetUserId;
         if ($type === 'fondo_fijo') {
             $payeeId = $fixedFund?->user_id ?? $targetUserId;
+        } elseif ($type === 'comida' && $fixedFund) {
+            $payeeId = $costCenter->beneficiary_id;
         } else {
             $requestedPayeeId = $request->input('payee_id', $targetUserId);
             // If requesting a different payee, verify create_on_behalf permission
@@ -811,6 +831,7 @@ class ReimbursementController extends Controller
                     $validationData = $this->getValidationData($xmlData, $pdfToValidate);
                 } else {
                     // Manual data
+                    $manualIva = $this->calculateManualIva($item['subtotal'], $item['total']);
                     $xmlData = [
                         'rfc_emisor' => $item['rfc_emisor'] ?? 'N/A',
                         'nombre_emisor' => $item['nombre_emisor'],
@@ -820,11 +841,11 @@ class ReimbursementController extends Controller
                         'fecha' => $item['fecha'],
                         'total' => $item['total'],
                         'subtotal' => $item['subtotal'],
-                        'impuestos' => $item['impuestos'] ?? 0,
+                        'impuestos' => $manualIva,
                         'moneda' => 'MXN',
                         'tipo_comprobante' => 'I',
                         'retencion_iva' => $item['retencion_iva'] ?? 0,
-                        'monto_iva' => $item['monto_iva'] ?? 0,
+                        'monto_iva' => $manualIva,
                         'monto_isr' => $item['monto_isr'] ?? 0,
                         'cfdi_conceptos' => [],
                         'impuestos_locales' => [],
@@ -1637,14 +1658,32 @@ class ReimbursementController extends Controller
         $effectiveCostCenterId = $travelEvent ? $travelEvent->cost_center_id : $request->cost_center_id;
         $costCenter = $effectiveCostCenterId ? CostCenter::findOrFail($effectiveCostCenterId) : null;
         $fixedFund = null;
-        if (in_array($request->type, ['fondo_fijo', 'comida', 'viaje'], true)) {
+        $hasInvoice = $request->input('has_invoice', '1') === '1';
+        $fixedFundRequired = $this->requiresFixedFund($request->type, $hasInvoice);
+        $fixedFundRequested = $request->filled('fixed_fund_id');
+        if ($fixedFundRequired || ($request->type === 'comida' && $fixedFundRequested)) {
             $fixedFund = \App\Models\FixedFund::whereKey($request->input('fixed_fund_id'))
                 ->where('cost_center_id', $effectiveCostCenterId)
                 ->where('is_active', true)
                 ->first();
             if (!$fixedFund) {
-                return back()->withInput()->with('error', 'Selecciona un fondo fijo activo del Centro de Costos elegido.');
+                return back()->withInput()->with('error', $fixedFundRequired
+                    ? 'Selecciona un fondo fijo activo del Centro de Costos elegido.'
+                    : 'El fondo fijo seleccionado no está activo o no pertenece al Centro de Costos elegido.');
             }
+        }
+
+        if (
+            $request->type === 'comida'
+            && $fixedFund
+            && $request->filled('user_id')
+            && (int) $request->input('user_id') !== (int) $user->id
+        ) {
+            return back()->withInput()->with('error', 'Una comida cargada a fondo fijo no puede registrarse para otro usuario.');
+        }
+
+        if ($request->type === 'comida' && $fixedFund && !$costCenter?->beneficiary_id) {
+            return back()->withInput()->with('error', 'El Centro de Costos debe tener un beneficiario para cargar una comida a fondo fijo.');
         }
 
         // Permissions and Limits Check
@@ -1696,6 +1735,8 @@ class ReimbursementController extends Controller
         $payeeId = $targetUserId;
         if ($request->type === 'fondo_fijo') {
             $payeeId = $fixedFund?->user_id ?? $targetUserId;
+        } elseif ($request->type === 'comida' && $fixedFund) {
+            $payeeId = $costCenter->beneficiary_id;
         } else {
             $requestedPayeeId = $request->input('payee_id', $targetUserId);
             // If requesting a different payee, verify create_on_behalf permission
@@ -1713,6 +1754,10 @@ class ReimbursementController extends Controller
             $onBehalfNote = "\n[REGISTRO POR TERCEROS: Capturado por {$user->name} a nombre de {$ownerName}]";
         }
 
+        $storedIva = $hasInvoice
+            ? (float) $request->input('monto_iva', $existingDraft ? $existingDraft->monto_iva : 0)
+            : $this->calculateManualIva($request->subtotal, $request->total);
+
         $reimbursementData = array_merge([
             'type' => $request->type,
             'cost_center_id' => $effectiveCostCenterId,
@@ -1729,7 +1774,7 @@ class ReimbursementController extends Controller
             'fecha' => !empty($request->fecha) ? $request->fecha : ($existingDraft ? $existingDraft->fecha : null),
             'total' => !empty($request->total) ? $request->total : ($existingDraft ? $existingDraft->total : 0),
             'subtotal' => !empty($request->subtotal) ? $request->subtotal : ($existingDraft ? $existingDraft->subtotal : 0),
-            'impuestos' => $request->input('impuestos', $existingDraft ? $existingDraft->impuestos : 0),
+            'impuestos' => $storedIva,
             'moneda' => !empty($request->moneda) ? $request->moneda : ($existingDraft ? $existingDraft->moneda : 'MXN'),
             'tipo_comprobante' => $request->tipo_comprobante,
             'metodo_pago' => $request->metodo_pago,
@@ -1738,7 +1783,7 @@ class ReimbursementController extends Controller
             'lugar_expedicion' => $request->lugar_expedicion,
             'regimen_fiscal_emisor' => $request->regimen_fiscal_emisor,
             'retencion_iva' => $request->input('retencion_iva', 0),
-            'monto_iva' => $request->input('monto_iva', $existingDraft ? $existingDraft->monto_iva : 0),
+            'monto_iva' => $storedIva,
             'monto_isr' => $request->input('monto_isr', 0),
             'cfdi_conceptos' => $this->decodeXmlDetailList($request->input('cfdi_conceptos')),
             'impuestos_locales' => $this->decodeXmlDetailList($request->input('impuestos_locales')),
@@ -1845,6 +1890,7 @@ class ReimbursementController extends Controller
 
         $type = $reimbursement->type;
         $hasInvoice = !empty($reimbursement->uuid);
+        $fixedFundRequired = $this->requiresFixedFund($type, $hasInvoice);
         
         // Standard list of cost centers (reuse logic from create if possible)
         $costCenters = CostCenter::with(['beneficiary', 'fixedFunds' => fn ($query) => $query->where('is_active', true)->with('user')])->orderBy('name')->get();
@@ -1887,7 +1933,7 @@ class ReimbursementController extends Controller
             }
         }
 
-        return view('reimbursements.create', compact('reimbursement', 'type', 'hasInvoice', 'costCenters', 'currentWeek', 'availableWeeks', 'categories', 'travelEvents', 'ccUserMapping', 'fixedFundMapping'));
+        return view('reimbursements.create', compact('reimbursement', 'type', 'hasInvoice', 'fixedFundRequired', 'costCenters', 'currentWeek', 'availableWeeks', 'categories', 'travelEvents', 'ccUserMapping', 'fixedFundMapping'));
     }
 
     /**
@@ -4752,15 +4798,48 @@ class ReimbursementController extends Controller
             $travelEvent = $travelEventId ? \App\Models\TravelEvent::find($travelEventId) : null;
             $requestCostCenterId = $travelEvent ? $travelEvent->cost_center_id : $request->input('cost_center_id');
             $type = $request->input('type');
-            $fixedFund = in_array($type, ['fondo_fijo', 'comida', 'viaje'], true)
+            $hasInvoice = $request->input('has_invoice', '1') === '1';
+            $fixedFundRequired = $this->requiresFixedFund($type, $hasInvoice);
+            $fixedFundRequested = $request->filled('fixed_fund_id');
+            $shouldResolveFixedFund = $fixedFundRequired || ($type === 'comida' && $fixedFundRequested);
+            $fixedFund = $shouldResolveFixedFund
                 ? \App\Models\FixedFund::whereKey($request->input('fixed_fund_id'))->where('cost_center_id', $requestCostCenterId)->where('is_active', true)->first()
                 : null;
 
+            if ($shouldResolveFixedFund && !$fixedFund) {
+                return response()->json([
+                    'success' => false,
+                    'error' => $fixedFundRequired
+                        ? 'El Centro de Costos seleccionado no cuenta con un fondo fijo activo.'
+                        : 'El fondo fijo seleccionado no está activo o no pertenece al Centro de Costos elegido.',
+                ], 422);
+            }
+
+            if (
+                $type === 'comida'
+                && $fixedFund
+                && $request->filled('user_id')
+                && (int) $request->input('user_id') !== (int) $user->id
+            ) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Una comida cargada a fondo fijo no puede registrarse para otro usuario.',
+                ], 422);
+            }
+
+            $cc = null;
             if ($requestCostCenterId) {
                 $cc = \App\Models\CostCenter::find($requestCostCenterId);
                 if ($cc && !$cc->is_active) {
                     return response()->json(['success' => false, 'error' => 'El Centro de Costos seleccionado está inactivo.'], 403);
                 }
+            }
+
+            if ($type === 'comida' && $fixedFund && !$cc?->beneficiary_id) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'El Centro de Costos debe tener un beneficiario para cargar una comida a fondo fijo.',
+                ], 422);
             }
 
             $targetUserId = $user->id;
@@ -4788,6 +4867,8 @@ class ReimbursementController extends Controller
                     $payeeId = $targetUserId;
                     if ($type === 'fondo_fijo') {
                         $payeeId = $fixedFund?->user_id ?? $targetUserId;
+                    } elseif ($type === 'comida' && $fixedFund) {
+                        $payeeId = $cc->beneficiary_id;
                     } else {
                         $requestedPayeeId = $request->input('payee_id', $targetUserId);
                         if ($requestedPayeeId != $targetUserId && !$user->canPerform('reimbursements.create_on_behalf')) {
@@ -4866,6 +4947,12 @@ class ReimbursementController extends Controller
                                 ? $this->decodeXmlDetailList($itemData[$field])
                                 : $itemData[$field];
                         }
+                    }
+
+                    if (!$hasInvoice && isset($itemData['subtotal'], $itemData['total'])) {
+                        $manualIva = $this->calculateManualIva($itemData['subtotal'], $itemData['total']);
+                        $data['impuestos'] = $manualIva;
+                        $data['monto_iva'] = $manualIva;
                     }
 
                     if ($request->input('type') === 'comida') {
@@ -5124,6 +5211,19 @@ class ReimbursementController extends Controller
 
         // Standard reimbursement: unmarked users can create as many as needed
         return true;
+    }
+
+    protected function requiresFixedFund(?string $type, bool $hasInvoice): bool
+    {
+        return in_array($type, ['fondo_fijo', 'viaje'], true);
+    }
+
+    protected function calculateManualIva(mixed $subtotal, mixed $total): float
+    {
+        $subtotalAmount = max(0, (float) $subtotal);
+        $totalAmount = max(0, (float) $total);
+
+        return round(max(0, $totalAmount - $subtotalAmount), 2);
     }
 
     private function availableWeeksForQuery($query)

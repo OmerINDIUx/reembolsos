@@ -9,6 +9,17 @@ class ReimbursementApproval extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::updating(function (): never {
+            throw new \LogicException('El historial de aprobaciones es inmutable y no puede editarse.');
+        });
+
+        static::deleting(function (): never {
+            throw new \LogicException('El historial de aprobaciones es inmutable y no puede eliminarse.');
+        });
+    }
+
     protected $fillable = [
         'reimbursement_id',
         'user_id',

@@ -28,9 +28,9 @@
                             </div>
                         </div>
 
-                        <div x-data="{ funds: @js(old('fixed_funds', [['user_id' => '', 'name' => 'Fondo fijo', 'budget' => '']])) }" class="mb-8 p-6 rounded-[2rem] bg-emerald-50/40 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800">
+                        <div x-data="{ funds: @js(old('fixed_funds', [])) }" class="mb-8 p-6 rounded-[2rem] bg-emerald-50/40 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800">
                             <div class="flex justify-between items-center mb-5">
-                                <div><h3 class="font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Fondos fijos asignados</h3><p class="text-[10px] font-bold text-gray-500 uppercase mt-1">Cada responsable conserva su propio presupuesto.</p></div>
+                                <div><h3 class="font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Fondos fijos asignados (opcional)</h3><p class="text-[10px] font-bold text-gray-500 uppercase mt-1">Puedes crear el centro sin fondo fijo y añadirlo posteriormente.</p></div>
                                 <button type="button" @click="funds.push({user_id:'', name:'Fondo fijo', budget:''})" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase">Añadir fondo</button>
                             </div>
                             <div class="space-y-3">
@@ -39,9 +39,12 @@
                                         <select :name="`fixed_funds[${index}][user_id]`" x-model="fund.user_id" class="rounded-xl dark:bg-gray-800" required><option value="">Responsable...</option>@foreach($users as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach</select>
                                         <input :name="`fixed_funds[${index}][name]`" x-model="fund.name" class="rounded-xl dark:bg-gray-800" placeholder="Nombre del fondo" required>
                                         <input type="number" step="0.01" min="0" :name="`fixed_funds[${index}][budget]`" x-model="fund.budget" class="rounded-xl dark:bg-gray-800" placeholder="Presupuesto" required>
-                                        <button type="button" @click="if(funds.length > 1) funds.splice(index,1)" class="px-3 text-red-500 font-black">×</button>
+                                        <button type="button" @click="funds.splice(index,1)" class="px-3 text-red-500 font-black">×</button>
                                     </div>
                                 </template>
+                                <div x-show="funds.length === 0" class="text-center py-8 border-2 border-dashed border-emerald-100 dark:border-emerald-900 rounded-3xl">
+                                    <p class="text-[10px] font-black uppercase text-emerald-500 tracking-[0.2em]">Sin fondo fijo configurado</p>
+                                </div>
                             </div>
                         </div>
 
