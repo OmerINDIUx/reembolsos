@@ -62,8 +62,10 @@ class MicrosoftUserProvisioner
 
             if ($user->isDisabled()) return $user;
 
+            $isFirstMicrosoftLogin = blank($user->microsoft_id);
+
             $user->forceFill([
-                'name' => $name ?: $user->name,
+                'name' => $isFirstMicrosoftLogin ? $name : $user->name,
                 'email' => $email,
                 'email_normalized' => $email,
                 'microsoft_id' => $microsoftId,

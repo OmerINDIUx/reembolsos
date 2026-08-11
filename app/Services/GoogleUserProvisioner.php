@@ -67,8 +67,10 @@ class GoogleUserProvisioner
                 return $user;
             }
 
+            $isFirstGoogleLogin = blank($user->google_id);
+
             $user->forceFill([
-                'name' => $name ?: $user->name,
+                'name' => $isFirstGoogleLogin ? $name : $user->name,
                 'email' => $email,
                 'email_normalized' => $email,
                 'google_id' => $googleId,

@@ -52,6 +52,29 @@ class GoogleUserProvisionerTest extends TestCase
         $this->assertSame($profile->id, $linked->profile_id);
         $this->assertSame('active', $linked->status);
         $this->assertSame('google-pending', $linked->google_id);
+        $this->assertSame('Nombre Google', $linked->name);
+    }
+
+    public function test_returning_google_login_preserves_the_confirmed_name(): void
+    {
+        $user = User::factory()->create([
+            'name' => 'Nombre confirmado en reembolsos',
+            'email' => 'confirmado@archandel.com',
+            'email_normalized' => 'confirmado@archandel.com',
+            'google_id' => 'google-confirmed',
+            'personal_info_confirmed_at' => now(),
+            'status' => 'active',
+        ]);
+
+        $result = app(GoogleUserProvisioner::class)->provision([
+            'sub' => 'google-confirmed',
+            'name' => 'Nombre distinto de Google',
+            'email' => 'confirmado@archandel.com',
+            'email_verified' => true,
+        ]);
+
+        $this->assertSame($user->id, $result->id);
+        $this->assertSame('Nombre confirmado en reembolsos', $result->name);
     }
 
     public function test_unverified_google_email_is_rejected(): void

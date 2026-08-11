@@ -56,8 +56,30 @@ class MicrosoftUserProvisionerTest extends TestCase
         $this->assertSame($user->id, $linked->id);
         $this->assertSame('active', $linked->status);
         $this->assertSame('entra-pending', $linked->microsoft_id);
+        $this->assertSame('Nombre Microsoft', $linked->name);
         $this->assertTrue($linked->authorizedCostCenters()->whereKey($costCenter->id)->exists());
         $this->assertTrue($linked->permissions()->whereKey($permission->id)->exists());
+    }
+
+    public function test_returning_microsoft_login_preserves_the_confirmed_name(): void
+    {
+        $user = User::factory()->create([
+            'name' => 'Nombre confirmado en reembolsos',
+            'email' => 'confirmado@empresa.com',
+            'email_normalized' => 'confirmado@empresa.com',
+            'microsoft_id' => 'entra-confirmed',
+            'personal_info_confirmed_at' => now(),
+            'status' => 'active',
+        ]);
+
+        $result = app(MicrosoftUserProvisioner::class)->provision([
+            'id' => 'entra-confirmed',
+            'displayName' => 'Nombre distinto de Microsoft',
+            'mail' => 'confirmado@empresa.com',
+        ]);
+
+        $this->assertSame($user->id, $result->id);
+        $this->assertSame('Nombre confirmado en reembolsos', $result->name);
     }
 
     public function test_disabled_user_is_not_activated(): void
