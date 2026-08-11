@@ -223,6 +223,25 @@ class Reimbursement extends Model
     }
 
     /**
+     * Return the immutable audit entry that completed a configured approval step.
+     */
+    public function approvedLogForStep(?string $stepName): ?ReimbursementApproval
+    {
+        if (!$stepName) {
+            return null;
+        }
+
+        $approvals = $this->relationLoaded('approvals')
+            ? $this->approvals
+            : $this->approvals()->with(['user', 'substitutedUser'])->get();
+
+        return $approvals
+            ->where('step_name', $stepName)
+            ->where('action', 'aprobado')
+            ->last();
+    }
+
+    /**
      * Check if a specific user is authorized to approve the current step.
      */
     public function canBeApprovedBy(User $user)

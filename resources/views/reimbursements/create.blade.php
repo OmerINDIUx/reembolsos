@@ -89,10 +89,11 @@
                                         @foreach($costCenters as $center)
                                             <option value="{{ $center->id }}" 
                                                 @selected(isset($reimbursement) && $reimbursement->cost_center_id == $center->id)
+                                                @disabled($fixedFundRequired && $center->fixedFunds->isEmpty())
                                                 data-beneficiary="{{ $center->beneficiary->name ?? 'Sin Beneficiario' }}" 
                                                 data-beneficiary-id="{{ $center->beneficiary_id }}"
                                                 data-beneficiary-clabe="{{ $center->beneficiary->masked_clabe ?? '' }}">
-                                                {{ $center->name }}
+                                                {{ $center->name }}{{ $fixedFundRequired && $center->fixedFunds->isEmpty() ? ' — Sin fondo fijo activo' : '' }}
                                             </option>
                                         @endforeach
                                     </select>
@@ -109,12 +110,18 @@
                                 </select>
                             </div>
 
-                            <div x-show="['fondo_fijo','comida','viaje'].includes(type) && selectedCostCenterId" class="animate-slideDown">
-                                <label class="block text-xs font-black text-emerald-600 uppercase tracking-[0.2em] mb-3">Fondo fijo al que se cargará *</label>
-                                <select name="fixed_fund_id" x-model="selectedFixedFundId" @change="updateFixedFund" class="w-full border-emerald-200 dark:border-emerald-800 dark:bg-gray-900 rounded-2xl py-4 px-5 font-bold" :required="['fondo_fijo','comida','viaje'].includes(type)">
-                                    <option value="">Selecciona el fondo fijo...</option>
+                            <div x-show="(requiresFixedFund() || type === 'comida') && selectedCostCenterId" class="animate-slideDown">
+                                <label class="block text-xs font-black text-emerald-600 uppercase tracking-[0.2em] mb-3" x-text="type === 'comida' ? 'Fondo fijo al que se cargará (opcional)' : 'Fondo fijo al que se cargará *'"></label>
+                                <select name="fixed_fund_id" x-model="selectedFixedFundId" @change="updateFixedFund" class="w-full border-emerald-200 dark:border-emerald-800 dark:bg-gray-900 rounded-2xl py-4 px-5 font-bold" :required="requiresFixedFund()" :disabled="availableFixedFunds.length === 0">
+                                    <option value="" x-text="type === 'comida' ? 'Sin fondo fijo' : 'Selecciona el fondo fijo...'"></option>
                                     <template x-for="fund in availableFixedFunds" :key="fund.id"><option :value="fund.id" x-text="`${fund.name} — ${fund.user_name} ($${Number(fund.budget).toLocaleString('es-MX')})`"></option></template>
                                 </select>
+                                <p x-show="requiresFixedFund() && availableFixedFunds.length === 0" class="mt-3 text-xs font-bold text-red-600 dark:text-red-400">
+                                    Este centro de costos no cuenta con un fondo fijo activo. No se puede solicitar un reembolso de fondo fijo.
+                                </p>
+                                <p x-show="type === 'comida' && availableFixedFunds.length === 0" class="mt-3 text-xs font-bold text-gray-500 dark:text-gray-400">
+                                    Este centro no tiene fondo fijo; la comida se registrará sin fondo.
+                                </p>
                             </div>
 
                             <div>
@@ -136,7 +143,7 @@
 
                         <!-- On Behalf Selection -->
                         @if(!empty($ccUserMapping))
-                        <div class="mt-8 pt-8 border-t border-gray-100 dark:border-gray-700 animate-fadeIn" x-show="(type === 'reembolso' || type === 'comida') && selectedCostCenterId">
+                        <div class="mt-8 pt-8 border-t border-gray-100 dark:border-gray-700 animate-fadeIn" x-show="(type === 'reembolso' || (type === 'comida' && !selectedFixedFundId)) && selectedCostCenterId">
                             <h4 class="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4">¿Registrar para otro usuario?</h4>
                             <div class="bg-amber-50 dark:bg-amber-900/20 p-6 rounded-2xl border border-amber-100 dark:border-amber-800/50">
                                 <div class="flex items-start space-x-4">
@@ -201,7 +208,23 @@
                                 </div>
                             </template>
 
-                            <template x-if="type === 'reembolso' || type === 'comida'">
+                            <template x-if="type === 'comida' && selectedFixedFundId">
+                                <div class="bg-emerald-50 dark:bg-emerald-900/20 p-5 rounded-2xl border border-emerald-100 dark:border-emerald-800/50 flex items-center space-x-4">
+                                    <div class="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] font-black text-emerald-600 uppercase tracking-widest leading-none mb-1">Pago al beneficiario del centro de costos</p>
+                                        <div class="flex items-center space-x-2">
+                                            <p class="text-lg font-bold text-gray-900 dark:text-white" x-text="selectedCcBeneficiary"></p>
+                                            <span x-show="selectedCcBeneficiaryClabe" class="text-sm font-medium text-gray-400 italic" x-text="' - ' + selectedCcBeneficiaryClabe"></span>
+                                        </div>
+                                    </div>
+                                    <input type="hidden" name="payee_id" :value="selectedCcBeneficiaryId">
+                                </div>
+                            </template>
+
+                            <template x-if="type === 'reembolso' || (type === 'comida' && !selectedFixedFundId)">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <label class="relative flex p-4 bg-white dark:bg-gray-900 border-2 rounded-2xl cursor-pointer transition-all hover:border-indigo-200" :class="payeeOption === 'creator' ? 'border-indigo-600 ring-4 ring-indigo-500/10' : 'border-gray-100 dark:border-gray-700'">
                                         <input type="radio" name="payee_option" value="creator" x-model="payeeOption" class="sr-only">
@@ -565,7 +588,7 @@
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2 text-indigo-600">Subtotal *</label>
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">$</span>
-                                                    <input type="number" step="0.01" :name="'items['+index+'][subtotal]'" x-model="item.data.subtotal" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-indigo-600 pl-8" :readonly="hasInvoice" :required="!hasInvoice">
+                                                    <input type="number" step="0.01" :name="'items['+index+'][subtotal]'" x-model="item.data.subtotal" @input="updateManualTaxes(item)" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-indigo-600 pl-8" :readonly="hasInvoice" :required="!hasInvoice">
                                                 </div>
                                             </div>
 
@@ -595,7 +618,7 @@
                                                 <label class="block text-[10px] font-black text-white bg-indigo-600 rounded-t-lg px-2 py-1 uppercase mb-0 tracking-widest inline-block">Total del Gasto *</label>
                                                 <div class="relative">
                                                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-indigo-300">$</span>
-                                                    <input type="number" step="0.01" :name="'items['+index+'][total]'" x-model="item.data.total" class="w-full bg-indigo-50 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-800 rounded-xl rounded-tl-none text-xl font-black text-indigo-700 dark:text-indigo-300 py-3 pl-10" :readonly="hasInvoice" :required="!hasInvoice">
+                                                    <input type="number" step="0.01" :name="'items['+index+'][total]'" x-model="item.data.total" @input="updateManualTaxes(item)" class="w-full bg-indigo-50 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-800 rounded-xl rounded-tl-none text-xl font-black text-indigo-700 dark:text-indigo-300 py-3 pl-10" :readonly="hasInvoice" :required="!hasInvoice">
                                                 </div>
                                                 
                                                 <template x-if="!hasInvoice && parseFloat(item.data.subtotal) > parseFloat(item.data.total)">
@@ -892,6 +915,7 @@
                 maxTotalSize: 64 * 1024 * 1024,
                 currentTotalSize: 0,
                 hasInvoice: {{ $hasInvoice ? 'true' : 'false' }},
+                fixedFundRequired: @json($fixedFundRequired),
                 lockedCategory: @json($type === 'comida' ? 'comida' : null),
                 draftId: {{ isset($reimbursement) ? $reimbursement->id : 'null' }},
                 lastAutoSave: null,
@@ -1037,6 +1061,10 @@
                         this.addItem(); 
                     @endif
 
+                    if (!this.hasInvoice) {
+                        this.items.forEach(item => this.updateManualTaxes(item));
+                    }
+
                     @if(isset($reimbursement))
                         this.$nextTick(() => this.restoreDraftStep1());
                     @endif
@@ -1097,10 +1125,16 @@
                     @endif
                 },
                 requiresFixedFund() {
-                    return ['fondo_fijo', 'comida', 'viaje'].includes(this.type);
+                    return this.fixedFundRequired;
                 },
                 syncDefaultFixedFund() {
                     if (!this.requiresFixedFund()) {
+                        if (this.type === 'comida' && this.isExistingReimbursement) {
+                            const selectedFundStillAvailable = this.availableFixedFunds.some(f => String(f.id) === String(this.selectedFixedFundId));
+                            if (!selectedFundStillAvailable) this.selectedFixedFundId = '';
+                            return;
+                        }
+
                         this.selectedFixedFundId = '';
                         return;
                     }
@@ -1162,12 +1196,29 @@
                     this.syncDefaultFixedFund();
                 },
                 updateFixedFund() {
+                    if (this.type === 'comida') {
+                        if (this.selectedFixedFundId) {
+                            this.resetOwnerToCurrentUser();
+                        }
+                        return;
+                    }
+
                     if (this.type !== 'fondo_fijo') return;
                     const fund = this.availableFixedFunds.find(f => String(f.id) === String(this.selectedFixedFundId));
                     if (fund) {
                         this.selectedCcBeneficiary = fund.user_name;
                         this.selectedCcBeneficiaryId = fund.user_id;
                         this.selectedCcBeneficiaryClabe = fund.clabe || '';
+                    }
+                },
+                resetOwnerToCurrentUser() {
+                    this.selectedOwnerId = '{{ Auth::id() }}';
+                    this.selectedOwnerName = '{{ Auth::user()->name }}';
+                    this.selectedOwnerClabe = '{{ Auth::user()->clabe ? "**** " . substr(Auth::user()->clabe, -4) : "" }}';
+
+                    const ownerSelect = document.querySelector('select[name="user_id"]');
+                    if (ownerSelect) {
+                        ownerSelect.value = '{{ Auth::id() }}';
                     }
                 },
                 updateOwner(e) {
@@ -1729,6 +1780,16 @@
                         const propina = this.type === 'comida' ? (parseFloat(i.data.propina) || 0) : 0;
                         return acc + val + propina;
                     }, 0);
+                },
+                updateManualTaxes(item) {
+                    if (this.hasInvoice || !item?.data) return;
+
+                    const subtotal = Math.max(0, parseFloat(item.data.subtotal) || 0);
+                    const total = Math.max(0, parseFloat(item.data.total) || 0);
+                    const iva = Math.round(Math.max(0, total - subtotal) * 100) / 100;
+
+                    item.data.monto_iva = iva.toFixed(2);
+                    item.data.impuestos = iva.toFixed(2);
                 },
                 countTotalFiles() {
                     return this.items.reduce((acc, item) => {

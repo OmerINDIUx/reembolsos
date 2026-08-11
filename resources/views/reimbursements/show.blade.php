@@ -786,13 +786,13 @@
                             @if($reimbursement->costCenter)
                                 @foreach($reimbursement->costCenter->approvalSteps as $step)
                                 @php
-                                    $isCompleted = $reimbursement->approvals->where('step_name', $step->name)->count() > 0 || 
+                                    $approvalLog = $reimbursement->approvedLogForStep($step->name);
+                                    $isCompleted = $approvalLog !== null ||
                                                    ($reimbursement->currentStep && $reimbursement->currentStep->order > $step->order) ||
                                                    in_array($reimbursement->status, ['aprobado', 'pendiente_revision_cxp', 'pendiente_pago']);
                                     
                                     $isCurrent = ($reimbursement->current_step_id === $step->id) && !in_array($reimbursement->status, ['aprobado', 'rechazado', 'pendiente_revision_cxp', 'pendiente_pago']);
-                                    
-                                    $approvalLog = $reimbursement->approvals->where('step_name', $step->name)->last();
+                                    $displayedApprover = $approvalLog?->user?->name ?? $step->user?->name ?? 'No asignado';
                                 @endphp
                                 <div class="relative flex gap-4 pb-6 last:pb-0">
                                     <div class="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white ring-2 ring-white dark:bg-gray-800 dark:ring-gray-800">
@@ -806,7 +806,7 @@
                                     </div>
                                     <div class="pt-1 w-full">
                                         <p class="text-sm font-semibold {{ $isCompleted ? 'text-gray-900 dark:text-white' : ($isCurrent ? 'text-indigo-700 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500') }}">{{ $step->name }}</p>
-                                        <p class="text-[10px] text-gray-500 dark:text-gray-400">{{ $step->user->name ?? 'No asignado' }}</p>
+                                        <p class="text-[10px] text-gray-500 dark:text-gray-400">{{ $displayedApprover }}</p>
                                         
                                         @if($approvalLog)
                                             <p class="text-[9px] text-gray-400 mt-0.5">{{ $approvalLog->created_at->timezone('America/Mexico_City')->format('d/m/Y H:i') }}</p>

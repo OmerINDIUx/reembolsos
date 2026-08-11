@@ -351,7 +351,7 @@ class CostCenterController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:cost_centers,name'],
             'company_id' => ['required', 'exists:companies,id'],
-            'fixed_funds' => ['required', 'array', 'min:1'],
+            'fixed_funds' => ['nullable', 'array'],
             'fixed_funds.*.user_id' => ['required', 'exists:users,id'],
             'fixed_funds.*.name' => ['required', 'string', 'max:255'],
             'fixed_funds.*.budget' => ['required', 'numeric', 'min:0'],
@@ -365,7 +365,8 @@ class CostCenterController extends Controller
             'allowed_users.*.can_do_special' => ['nullable'],
         ]);
 
-        $this->ensureFixedFundUsersCanReceive($request->fixed_funds);
+        $fixedFunds = $request->input('fixed_funds', []);
+        $this->ensureFixedFundUsersCanReceive($fixedFunds);
 
         $cc = CostCenter::create([
             'name' => $request->name,
@@ -373,19 +374,21 @@ class CostCenterController extends Controller
             'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
             'description' => $request->description,
             'menfis_email' => $request->menfis_email,
-            'budget' => collect($request->fixed_funds)->sum('budget'),
-            'beneficiary_id' => $request->fixed_funds[0]['user_id'],
+            'budget' => collect($fixedFunds)->sum('budget'),
+            'beneficiary_id' => $fixedFunds[0]['user_id'] ?? null,
         ]);
 
-        $this->syncFixedFunds($cc, $request->fixed_funds);
+        $this->syncFixedFunds($cc, $fixedFunds);
 
-        // Create initial renewal record
-        $cc->budgetRenewals()->create([
-            'amount' => collect($request->fixed_funds)->sum('budget'),
-            'description' => 'Presupuesto inicial',
-            'renewal_date' => now(),
-            'user_id' => Auth::id(),
-        ]);
+        if ($fixedFunds !== []) {
+            // Create the initial budget record only when a fund was configured.
+            $cc->budgetRenewals()->create([
+                'amount' => collect($fixedFunds)->sum('budget'),
+                'description' => 'Presupuesto inicial',
+                'renewal_date' => now(),
+                'user_id' => Auth::id(),
+            ]);
+        }
 
         foreach ($request->steps as $index => $step) {
             $cc->approvalSteps()->create([
