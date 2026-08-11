@@ -39,6 +39,14 @@ class LoginRequest extends FormRequest
      */
     public function authenticate(): void
     {
+        $email = Str::lower(trim($this->string('email')));
+        $domain = strtolower(substr(strrchr($email, '@') ?: '', 1));
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL) || ! in_array($domain, config('services.microsoft.allowed_domains', []), true)) {
+            throw ValidationException::withMessages([
+                'email' => 'Solo pueden iniciar sesión las cuentas @grupoindi.com, @construlerma.com o @archandel.com.',
+            ]);
+        }
+
         $this->ensureIsNotRateLimited();
 
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {

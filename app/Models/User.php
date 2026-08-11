@@ -4,9 +4,10 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class User extends Authenticatable
 {
@@ -31,6 +32,9 @@ class User extends Authenticatable
         'rfc',
         'personal_info_confirmed_at',
         'profile_id',
+        'microsoft_id',
+        'email_normalized',
+        'status',
     ];
 
     public function isRegistered()
@@ -152,7 +156,7 @@ class User extends Authenticatable
             return $this->profile->display_name;
         }
 
-        return match($this->role) {
+        return match ($this->role) {
             'admin' => 'Administrador (Full)',
             'admin_view' => 'Administrador (Lectura)',
             'director' => 'Director N1',
@@ -173,8 +177,8 @@ class User extends Authenticatable
     public function authorizedCostCenters()
     {
         return $this->belongsToMany(CostCenter::class, 'cost_center_user')
-                    ->withPivot('can_do_special')
-                    ->withTimestamps();
+            ->withPivot('can_do_special')
+            ->withTimestamps();
     }
 
     public function fixedFunds()
@@ -186,15 +190,19 @@ class User extends Authenticatable
     {
         return $this->hasMany(ReimbursementApproval::class);
     }
+    public function approvalSteps()
+    {
+        return $this->hasMany(ApprovalStep::class);
+    }
 
     /**
      * Check if the user has any reimbursement currently assigned to them for approval.
      */
     public function hasPendingApprovals()
     {
-        return Reimbursement::whereHas('currentStep', function($q) {
+        return Reimbursement::whereHas('currentStep', function ($q) {
             $q->where('user_id', $this->id)
-              ->orWhereIn('user_id', $this->substitutingFor()->pluck('original_user_id'));
+                ->orWhereIn('user_id', $this->substitutingFor()->pluck('original_user_id'));
         })->exists();
     }
 
@@ -211,6 +219,11 @@ class User extends Authenticatable
     public function profile()
     {
         return $this->belongsTo(Profile::class);
+    }
+
+    public function permissions()
+    {
+        return $this->belongsToMany(Permission::class, 'permission_user');
     }
 
     public function isApproverOrLinked()
@@ -245,7 +258,7 @@ class User extends Authenticatable
             return true;
         }
 
-        if (!$this->profile) {
+        if (! $this->profile) {
             return false;
         }
 
@@ -254,6 +267,11 @@ class User extends Authenticatable
         }
 
         return $this->profile->hasPermission($permission);
+    }
+
+    public function isDisabled(): bool
+    {
+        return $this->status === 'disabled';
     }
 
     public function isBlocked(): bool

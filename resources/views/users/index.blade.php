@@ -50,7 +50,8 @@
                                 <select name="status" id="status" class="w-full border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                     <option value="">Todos</option>
                                     <option value="active" {{ request('status') == 'active' ? 'selected' : '' }}>Activos (Registro Completo)</option>
-                                    <option value="inactive" {{ request('status') == 'inactive' ? 'selected' : '' }}>Pendientes (Sin Registro)</option>
+                                    <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Pendientes de primer acceso</option>
+                                    <option value="disabled" {{ request('status') == 'disabled' ? 'selected' : '' }}>Deshabilitados</option>
                                 </select>
                             </div>
 
@@ -115,49 +116,37 @@
                                     </td>
                                     @if(Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'direccion'))
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                        @if($user->invitation_token)
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                                                <span class="w-2 h-2 mr-1.5 rounded-full bg-amber-500"></span>
-                                                Invitación Pendiente
-                                            </span>
-                                        @else
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
-                                                <span class="w-2 h-2 mr-1.5 rounded-full bg-emerald-500"></span>
-                                                Activo
-                                            </span>
-                                        @endif
+                                        @if($user->status === 'disabled')<span class="text-red-600 font-bold">Deshabilitado</span>@elseif($user->status === 'pending')<span class="text-amber-600 font-bold">Pendiente de primer acceso</span>@else<span class="text-emerald-600 font-bold">Activo</span>@endif
                                     </td>
                                     @endif
 
                                      <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                         @if(!Auth::user()->isAdminView())
-                                            @if($user->invitation_token)
+                                            @if($user->invitation_token && !$user->isBlocked())
                                                 <form action="{{ route('users.resend_invitation', $user->id) }}" method="POST" class="inline">
                                                     @csrf
-                                                    <button type="submit" class="text-amber-600 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-600" title="Reenviar Invitación">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                                        </svg>
-                                                    </button>
+                                                    <button type="submit" class="text-amber-600 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-600" title="Reenviar Invitación">✉</button>
                                                 </form>
-                                                <button type="button" 
-                                                        onclick="copyInvitationLink('{{ route('invitation.accept', $user->invitation_token) }}')" 
-                                                        class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-600" 
-                                                        title="Copiar Enlace de Invitación">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                                                    </svg>
-                                                </button>
+                                                <button type="button" onclick="copyInvitationLink('{{ route('invitation.accept', $user->invitation_token) }}')" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-600" title="Copiar Enlace de Invitación">↗</button>
                                             @endif
                                         <a href="{{ route('users.edit', $user->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Editar</a>
                                         
                                         @if($user->id !== auth()->id())
-                                        <form id="delete-user-{{ $user->id }}" action="{{ route('users.destroy', $user->id) }}" method="POST" class="inline">
-                                            @csrf
-                                            @method('DELETE')
-                                            <input type="hidden" name="transfer_to_user_id" value="">
-                                            <button type="button" onclick="confirmUserDeletion({{ $user->id }}, @js($user->name), {{ $user->active_fixed_funds_count }})" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Deshabilitar</button>
-                                        </form>
+                                        <form id="block-user-{{ $user->id }}" action="{{ route('users.destroy', $user->id) }}" method="POST" class="inline">
+    @csrf
+    @method('DELETE')
+    <input type="hidden" name="reimbursement_action" value="keep">
+    <input type="hidden" name="reimbursement_transfer_to_user_id" value="">
+    <input type="hidden" name="approval_action" value="remove">
+    <input type="hidden" name="approval_reassign_to_user_id" value="">
+    <input type="hidden" name="pending_approval_action" value="next">
+    <input type="hidden" name="transfer_to_user_id" value="">
+    @if(!$user->isBlocked())
+    <a href="{{ route('users.deactivation', $user) }}" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-600 ml-2">Inhabilitar</a>
+    @else
+    <span class="text-gray-400 italic ml-2">Ya inhabilitado</span>
+    @endif
+</form>
                                         @endif
                                         @else
                                         <span class="text-gray-400 italic">Solo lectura</span>
@@ -287,23 +276,91 @@
             })->values();
         @endphp
         const fixedFundTransferCandidates = @js($fixedFundTransferCandidateOptions);
-        const affectedCostCenters = @js($affectedCostCenters);
+        const activeUserCandidates = @js($activeUserCandidates->map(fn ($candidate) => [
+            'id' => $candidate->id,
+            'name' => $candidate->name,
+            'profile' => $candidate->profile?->display_name ?: $candidate->role_name,
+        ])->values());
 
-        async function confirmUserDeletion(userId, userName) {
-            const form = document.getElementById(`delete-user-${userId}`);
+        async function confirmUserDeactivation(userId, userName, activeFundCount, activeReimbursementCount, approvalStepCount) {
+            const form = document.getElementById('block-user-' + userId);
             if (!form) return;
-            const centers = (affectedCostCenters[userId] || []);
-            const candidates = fixedFundTransferCandidates.filter(candidate => Number(candidate.id) !== Number(userId));
-            const options = candidates.map(candidate => `<option value="${candidate.id}">${candidate.name} — ${candidate.profile}</option>`).join('');
-            const centerHtml = centers.length ? centers.map((center, index) => `
-                <div class="text-left border rounded-lg p-3 mb-3"><p class="font-bold text-sm mb-2">${center.name}</p>
-                ${center.steps.some(step => Number(step.user_id) === Number(userId)) ? `<select id="approval-action-${index}" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="replace">Reemplazar aprobador en todo el ciclo</option><option value="previous">Enviar pendientes al aprobador anterior</option><option value="next">Enviar pendientes al aprobador siguiente</option><option value="remove">Eliminar este paso del ciclo</option></select><select id="approval-replacement-${index}" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="">Nuevo aprobador...</option>${options}</select>` : ''}
-                ${center.funds.some(fund => Number(fund.user_id) === Number(userId)) ? `<select id="fund-replacement-${index}" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="">Desactivar fondo fijo</option>${options}</select>` : ''}
-                <select id="reimbursement-route-${index}" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="keep">Pendientes: usar el flujo configurado</option><option value="fixed_fund">Pendientes: enviarlos al responsable de fondo fijo</option><option value="user">Pendientes: enviarlos a una persona específica</option></select><select id="reimbursement-user-${index}" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="">Persona destinataria...</option>${options}</select></div>`).join('') : '<p class="text-sm text-gray-600">No tiene ciclos ni fondos fijos asignados. Solo se deshabilitará la cuenta.</p>';
-            const result = await Swal.fire({ icon: 'warning', title: 'Deshabilitar usuario', html: `<p class="text-sm mb-4">${userName} conservará su historial, pero ya no podrá iniciar sesión. Define qué ocurre con sus responsabilidades.</p>${centerHtml}`, width: 700, showCancelButton: true, confirmButtonText: 'DESHABILITAR Y APLICAR', cancelButtonText: 'CANCELAR', confirmButtonColor: '#dc2626', preConfirm: () => {
-                form.querySelectorAll('.generated-reassignment').forEach(el => el.remove());
-                centers.forEach((center, index) => { const add = (name, value) => { const input = document.createElement('input'); input.type='hidden'; input.name=name; input.value=value || ''; input.className='generated-reassignment'; form.appendChild(input); }; const action = document.getElementById(`approval-action-${index}`); const replacement = document.getElementById(`approval-replacement-${index}`); if (action) { add(`approval_actions[${center.id}]`, action.value); if (action.value === 'replace' && !replacement.value) { Swal.showValidationMessage(`Selecciona el reemplazo de ${center.name}.`); return false; } add(`approval_replacements[${center.id}]`, replacement.value); } const fund = document.getElementById(`fund-replacement-${index}`); if (fund) add(`fund_replacements[${center.id}]`, fund.value); const route = document.getElementById(`reimbursement-route-${index}`); const routeUser = document.getElementById(`reimbursement-user-${index}`); if (route) { add(`reimbursement_routes[${center.id}]`, route.value); if (route.value === 'user' && !routeUser.value) { Swal.showValidationMessage(`Selecciona el destinatario de ${center.name}.`); return false; } add(`reimbursement_route_users[${center.id}]`, routeUser.value); } }); return true;
-            }});
-            if (result.isConfirmed) form.submit();
-        }    </script>
+
+            const candidates = activeUserCandidates.filter(candidate => Number(candidate.id) !== Number(userId));
+            const options = candidates.map(candidate => '<option value="' + candidate.id + '">' + candidate.name + ' — ' + candidate.profile + '</option>').join('');
+            let html = '<p class="text-sm text-left mb-3">La cuenta quedará inhabilitada y conservará su histórico.</p>';
+
+            if (activeReimbursementCount) {
+                html += '<label class="block text-left text-xs font-bold mt-3">Reembolsos propios en proceso (' + activeReimbursementCount + ')</label>';
+                html += '<select id="reimbursement-action" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="keep">Conservarlos con este usuario</option><option value="transfer">Transferirlos a otra persona</option></select>';
+                html += '<select id="reimbursement-target" class="swal2-select" style="display:block;width:100%;margin:.4rem 0" disabled><option value="">Selecciona responsable...</option>' + options + '</select>';
+            }
+
+            if (approvalStepCount) {
+                html += '<div class="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 text-left"><p class="text-xs font-black uppercase tracking-wide text-indigo-700">Flujo de aprobación</p>';
+                html += '<label class="block text-xs font-bold mt-2 text-gray-700">Qué hacer con el paso</label>';
+                html += '<select id="approval-action" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="reassign">Sustituir al aprobador por otra persona</option><option value="remove">Eliminar este paso de los centros de costos</option></select>';
+                html += '<select id="approval-target" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="">Selecciona sustituto...</option>' + options + '</select>';
+                html += '<label class="block text-xs font-bold mt-3 text-gray-700">Reembolsos detenidos en este paso</label>';
+                html += '<select id="pending-action" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="keep">Conservarlos aquí para que los revise el sustituto</option><option value="next">Pasarlos al siguiente paso</option><option value="previous">Regresarlos al paso anterior</option></select>';
+                html += '<p class="text-[11px] leading-4 text-indigo-700">Conservarlos mantiene el paso y cambia únicamente a la persona responsable.</p></div>';
+            }
+
+            if (activeFundCount) {
+                html += '<label class="block text-left text-xs font-bold mt-3">Fondos fijos (' + activeFundCount + ')</label><select id="fund-target" class="swal2-select" style="display:block;width:100%;margin:.4rem 0"><option value="">Selecciona responsable...</option>' + options + '</select>';
+            }
+
+            const result = await Swal.fire({
+                icon: 'warning',
+                title: 'Inhabilitar a ' + userName,
+                html: html,
+                width: 620,
+                showCancelButton: true,
+                confirmButtonText: 'INHABILITAR CUENTA',
+                cancelButtonText: 'CANCELAR',
+                confirmButtonColor: '#dc2626',
+                didOpen: () => {
+                    const toggle = (source, target, value) => {
+                        if (!source || !target) return;
+                        source.addEventListener('change', () => target.disabled = source.value !== value);
+                    };
+                    toggle(document.getElementById('reimbursement-action'), document.getElementById('reimbursement-target'), 'transfer');
+                    const approvalAction = document.getElementById('approval-action');
+                    const approvalTarget = document.getElementById('approval-target');
+                    const pendingAction = document.getElementById('pending-action');
+                    if (approvalAction && approvalTarget && pendingAction) {
+                        const syncApprovalOptions = () => {
+                            approvalTarget.disabled = approvalAction.value !== 'reassign';
+                            const keepOption = pendingAction.querySelector('option[value="keep"]');
+                            if (keepOption) keepOption.hidden = approvalAction.value !== 'reassign';
+                            if (approvalAction.value === 'remove' && pendingAction.value === 'keep') pendingAction.value = 'next';
+                        };
+                        approvalAction.addEventListener('change', syncApprovalOptions);
+                        syncApprovalOptions();
+                    }
+                },
+                preConfirm: () => {
+                    const reimbursementAction = document.getElementById('reimbursement-action')?.value || 'keep';
+                    const reimbursementTarget = document.getElementById('reimbursement-target')?.value || '';
+                    const approvalAction = document.getElementById('approval-action')?.value || 'remove';
+                    const approvalTarget = document.getElementById('approval-target')?.value || '';
+                    const fundTarget = document.getElementById('fund-target')?.value || '';
+                    if (reimbursementAction === 'transfer' && !reimbursementTarget) return Swal.showValidationMessage('Selecciona quién recibirá los reembolsos.');
+                    if (approvalAction === 'reassign' && !approvalTarget) return Swal.showValidationMessage('Selecciona quién sustituirá el paso de aprobación.');
+                    if (approvalAction === 'remove' && document.getElementById('pending-action')?.value === 'keep') return Swal.showValidationMessage('Al eliminar el paso debes elegir el paso anterior o el siguiente.');
+                    if (activeFundCount && !fundTarget) return Swal.showValidationMessage('Selecciona quién recibirá los fondos fijos.');
+                    return { reimbursementAction, reimbursementTarget, approvalAction, approvalTarget, pendingAction: document.getElementById('pending-action')?.value || 'next', fundTarget };
+                }
+            });
+
+            if (!result.isConfirmed) return;
+            form.querySelector('[name="reimbursement_action"]').value = result.value.reimbursementAction;
+            form.querySelector('[name="reimbursement_transfer_to_user_id"]').value = result.value.reimbursementTarget;
+            form.querySelector('[name="approval_action"]').value = result.value.approvalAction;
+            form.querySelector('[name="approval_reassign_to_user_id"]').value = result.value.approvalTarget;
+            form.querySelector('[name="pending_approval_action"]').value = result.value.pendingAction;
+            form.querySelector('[name="transfer_to_user_id"]').value = result.value.fundTarget;
+            form.submit();
+        }
+    </script>
 </x-app-layout>

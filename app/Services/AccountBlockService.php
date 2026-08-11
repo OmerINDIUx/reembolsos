@@ -70,6 +70,7 @@ class AccountBlockService
                 'blocked_reason_code' => null,
                 'blocked_reason_message' => null,
                 'blocked_by' => null,
+                'status' => 'active',
             ])->save();
 
             AccountBlockEvent::create([
