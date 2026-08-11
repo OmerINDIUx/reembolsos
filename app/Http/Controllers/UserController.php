@@ -123,7 +123,7 @@ class UserController extends Controller
             return redirect()->route('users.index')->with('error', 'El usuario fue creado, pero no se pudo enviar la invitación.');
         }
 
-        return redirect()->route('users.index')->with('success', 'Usuario creado como pendiente. Debe iniciar sesión con Microsoft.');
+        return redirect()->route('users.index')->with('success', 'Usuario creado como pendiente. Debe iniciar sesión con el proveedor correspondiente a su dominio.');
     }
 
     /**

@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Str;
 
 class User extends Authenticatable
 {
@@ -36,6 +35,7 @@ class User extends Authenticatable
         'email_payment_notifications',
         'profile_id',
         'microsoft_id',
+        'google_id',
         'email_normalized',
         'status',
     ];
@@ -208,6 +208,7 @@ class User extends Authenticatable
     {
         return $this->hasMany(ReimbursementApproval::class);
     }
+
     public function approvalSteps()
     {
         return $this->hasMany(ApprovalStep::class);

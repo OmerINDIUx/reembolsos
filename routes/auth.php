@@ -16,9 +16,6 @@ Route::middleware('guest')->group(function () {
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
 
-
-
-
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');
 
@@ -38,8 +35,11 @@ Route::get('auth/microsoft', [AuthenticatedSessionController::class, 'redirectTo
 Route::get('auth/microsoft/callback', [AuthenticatedSessionController::class, 'handleMicrosoftCallback'])
     ->name('auth.microsoft.callback');
 
+Route::get('auth/google', [AuthenticatedSessionController::class, 'redirectToGoogle'])
+    ->name('auth.google');
 
-
+Route::get('auth/google/callback', [AuthenticatedSessionController::class, 'handleGoogleCallback'])
+    ->name('auth.google.callback');
 
 Route::middleware('auth')->group(function () {
     Route::get('verify-email', EmailVerificationPromptController::class)

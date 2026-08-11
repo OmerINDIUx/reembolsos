@@ -310,6 +310,37 @@
                         </form>
                     </div>
 
+                    @if($exactSearchResult)
+                        @php
+                            $exactStage = match($exactSearchResult->status) {
+                                'pendiente' => $exactSearchResult->currentStep?->name ?? 'En proceso',
+                                'pendiente_revision_cxp' => 'CXP Revisadores',
+                                'pendiente_pago' => $exactSearchResult->approved_by_treasury_at ? 'Listo para pago' : 'CXP Pagadores',
+                                'requiere_correccion' => 'Corrección requerida',
+                                'aprobado' => 'Pago aprobado',
+                                'rechazado' => 'Rechazado',
+                                default => ucfirst(str_replace('_', ' ', $exactSearchResult->status)),
+                            };
+                        @endphp
+                        <a href="{{ route('reimbursements.show', $exactSearchResult->id) }}" class="mb-6 flex flex-col gap-4 rounded-2xl border-2 border-indigo-200 bg-indigo-50 p-5 shadow-sm transition hover:border-indigo-400 hover:bg-white hover:shadow-lg dark:border-indigo-800 dark:bg-indigo-900/20 dark:hover:bg-gray-800 md:flex-row md:items-center md:justify-between">
+                            <div class="min-w-0">
+                                <div class="mb-2 flex flex-wrap items-center gap-2">
+                                    <span class="rounded-full bg-indigo-600 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white">Coincidencia exacta</span>
+                                    <span class="text-xs font-bold text-indigo-700 dark:text-indigo-300">{{ $exactStage }}</span>
+                                </div>
+                                <p class="truncate text-xl font-black text-gray-900 dark:text-white">{{ $exactSearchResult->true_folio }}</p>
+                                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                                    {{ $exactSearchResult->costCenter?->name ?? 'Sin centro de costos' }}
+                                    · {{ $exactSearchResult->user?->name ?? 'Sin solicitante' }}
+                                    · ${{ number_format((float) $exactSearchResult->total + (float) ($exactSearchResult->propina ?? 0), 2) }}
+                                </p>
+                            </div>
+                            <span class="inline-flex shrink-0 items-center justify-center rounded-xl bg-indigo-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white">
+                                Abrir reembolso →
+                            </span>
+                        </a>
+                    @endif
+
                     @php
                         $tab = request('tab', $defaultTab);
                         $isGroupedView = ($tab === 'management' || $tab === 'rejections' || $tab === 'payment' || $tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history' || $tab === 'audit');

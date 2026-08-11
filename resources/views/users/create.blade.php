@@ -9,7 +9,7 @@
 </div>
 <div class="mt-6"><label class="font-semibold">Centros de costos</label><div class="grid md:grid-cols-2 gap-2 mt-2">@foreach($costCenters as $center)<label class="text-sm"><input type="checkbox" name="cost_centers[]" value="{{ $center->id }}" @checked(in_array($center->id, old('cost_centers', [])))> {{ $center->code }} — {{ $center->name }}</label>@endforeach</div></div>
 <div class="mt-6"><label class="font-semibold">Permisos directos</label><div class="grid md:grid-cols-2 gap-2 mt-2">@foreach($permissions as $permission)<label class="text-sm"><input type="checkbox" name="permissions[]" value="{{ $permission->id }}" @checked(in_array($permission->id, old('permissions', [])))> {{ $permission->display_name }}</label>@endforeach</div></div>
-<label class="flex items-center gap-2 mt-6"><input type="checkbox" name="send_invitation" value="1" @checked(old('send_invitation', true))> Enviar invitación por correo (debe iniciar sesión con Microsoft)</label>
+<label class="flex items-center gap-2 mt-6"><input type="checkbox" name="send_invitation" value="1" @checked(old('send_invitation', true))> Enviar invitación por correo (usará Google o Microsoft según su dominio)</label>
 <div class="mt-6 flex justify-end gap-3"><a href="{{ route('users.index') }}">Cancelar</a><button class="px-4 py-2 bg-gray-800 text-white rounded">Crear usuario</button></div>
 @foreach(['name','email','profile_id'] as $field) @error($field)<p class="text-red-600 text-sm mt-1">{{ $message }}</p>@enderror @endforeach
 </form></div></div></div>

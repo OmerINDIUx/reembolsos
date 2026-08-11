@@ -51,6 +51,22 @@ class OperationalWeekTest extends TestCase
         $this->assertSame('26-2026', $reimbursement->operational_week);
     }
 
+    public function test_audit_uses_the_notification_items_week_instead_of_defaulting_regular_visits(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-24 10:00:00'));
+
+        $controller = new ReimbursementController();
+        $method = new ReflectionMethod($controller, 'notificationAuditWeek');
+        $reimbursement = new Reimbursement(['week' => '12-2026']);
+        $reimbursement->setAttribute('operational_week', '26-2026');
+        $items = new Collection([$reimbursement]);
+
+        $this->assertNull($method->invoke($controller, null, 'management', $items, false));
+        $this->assertSame('26-2026', $method->invoke($controller, null, 'management', $items, true));
+        $this->assertSame('12-2026', $method->invoke($controller, '12-2026', 'management', $items, true));
+        $this->assertSame('12-2026', $method->invoke($controller, null, 'history', $items, true));
+    }
+
     public function test_historical_tabs_keep_the_original_fiscal_week_only(): void
     {
         $controller = new ReimbursementController();

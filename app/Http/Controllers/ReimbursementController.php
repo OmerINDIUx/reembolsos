@@ -7,6 +7,7 @@ use App\Models\Reimbursement;
 use App\Models\CostCenter;
 use App\Models\User;
 use App\Notifications\ReimbursementNotification;
+use App\Notifications\ReimbursementClarificationRequested;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Storage;
@@ -25,6 +26,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use setasign\Fpdi\Fpdi;
 use setasign\Fpdi\PdfParser\CrossReference\CrossReferenceException;
 use App\Mail\MenfisInvoiceMail;
+use App\Mail\ReimbursementClarificationRequestMail;
 use Illuminate\Support\Facades\Mail;
 
 class ReimbursementController extends Controller
@@ -89,7 +91,8 @@ class ReimbursementController extends Controller
             $this->attachOperationalWeek($reimbursements->getCollection(), $tab);
             $editableCostCenters = $this->flowAssignableCostCenters($user);
             $filterUsers = User::orderBy('name')->get(['id', 'name']);
-            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'authorizedCCs', 'availableWeeks', 'availableUploadWeeks', 'filterUsers', 'editableCostCenters'));
+            $exactSearchResult = $this->exactSearchResult($reimbursements, $globalSearch);
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'exactSearchResult', 'authorizedCCs', 'availableWeeks', 'availableUploadWeeks', 'filterUsers', 'editableCostCenters'));
         }
 
         // Apply Tab Scoping
@@ -120,7 +123,8 @@ class ReimbursementController extends Controller
 
             $editableCostCenters = $this->flowAssignableCostCenters($user);
             $filterUsers = User::orderBy('name')->get(['id', 'name']);
-            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'availableUploadWeeks', 'filterUsers', 'authorizedCCs', 'editableCostCenters'));
+            $exactSearchResult = $this->exactSearchResult($reimbursements, $request->input('search'));
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'exactSearchResult', 'availableWeeks', 'availableUploadWeeks', 'filterUsers', 'authorizedCCs', 'editableCostCenters'));
         }
 
         if ($tab === 'weekly_summary' || $tab === 'active' || $tab === 'history' || $tab === 'global_history') {
@@ -145,14 +149,37 @@ class ReimbursementController extends Controller
 
             $editableCostCenters = $this->flowAssignableCostCenters($user);
             $filterUsers = User::orderBy('name')->get(['id', 'name']);
-            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'weeksPaginator', 'availableWeeks', 'availableUploadWeeks', 'filterUsers', 'authorizedCCs', 'editableCostCenters'));
+            $exactSearchResult = $this->exactSearchResult($reimbursements, $request->input('search'));
+            return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'exactSearchResult', 'weeksPaginator', 'availableWeeks', 'availableUploadWeeks', 'filterUsers', 'authorizedCCs', 'editableCostCenters'));
         }
 
         $reimbursements = $query->paginate(10)->appends($request->all());
 
         $editableCostCenters = $this->flowAssignableCostCenters($user);
         $filterUsers = User::orderBy('name')->get(['id', 'name']);
-        return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'availableWeeks', 'availableUploadWeeks', 'filterUsers', 'authorizedCCs', 'editableCostCenters'));
+        $exactSearchResult = $this->exactSearchResult($reimbursements, $request->input('search'));
+        return view('reimbursements.index', compact('reimbursements', 'globalSearch', 'exactSearchResult', 'availableWeeks', 'availableUploadWeeks', 'filterUsers', 'authorizedCCs', 'editableCostCenters'));
+    }
+
+    private function exactSearchResult($reimbursements, ?string $search): ?Reimbursement
+    {
+        $needle = mb_strtolower(trim((string) $search));
+        if ($needle === '') {
+            return null;
+        }
+
+        $items = $reimbursements instanceof \Illuminate\Pagination\AbstractPaginator
+            ? $reimbursements->getCollection()
+            : collect($reimbursements);
+
+        return $items->first(function (Reimbursement $reimbursement) use ($needle) {
+            return collect([
+                $reimbursement->folio,
+                $reimbursement->true_folio,
+                $reimbursement->uuid,
+            ])->filter(fn ($value) => filled($value))
+                ->contains(fn ($value) => mb_strtolower(trim((string) $value)) === $needle);
+        });
     }
 
     /**
@@ -194,6 +221,13 @@ class ReimbursementController extends Controller
         if ($selectedIds->isNotEmpty()) {
             $allReimbursements = $allReimbursements->whereIn('id', $selectedIds);
         }
+
+        $selectedWeek = $this->notificationAuditWeek(
+            $selectedWeek,
+            $tab,
+            $allReimbursements,
+            $selectedIds->isNotEmpty()
+        );
 
         // Global Audit Filters
         if ($request->filled('search_audit') || $request->filled('type_audit') || $request->filled('category_audit') || $request->filled('status_audit') || $request->filled('xml_audit') || $request->filled('validation_audit') || $request->filled('method_audit') || $request->filled('usage_audit')) {
@@ -2056,6 +2090,16 @@ class ReimbursementController extends Controller
         $correctionCostCenters = $this->correctionAssignableCostCenters($reimbursement, Auth::user());
         $correctionPayeeOptions = $this->correctionPayeeOptions($reimbursement, Auth::user());
         $adminFlowCostCenters = $this->flowAssignableCostCenters(Auth::user());
+        $isClarificationRequester = $this->canUserRequestClarification($reimbursement, Auth::user());
+        $clarificationRecipient = $isClarificationRequester
+            ? $this->clarificationRecipient($reimbursement)
+            : null;
+        $nextClarificationAt = $isClarificationRequester
+            ? $this->nextClarificationAt($reimbursement)
+            : null;
+        $clarificationOnCooldown = $nextClarificationAt?->isFuture() ?? false;
+        $canRequestClarification = $clarificationRecipient !== null
+            && !$clarificationOnCooldown;
 
         if ($reimbursement->cost_center_id && !$adminFlowCostCenters->contains('id', $reimbursement->cost_center_id)) {
             $currentCostCenter = CostCenter::active()
@@ -2064,7 +2108,182 @@ class ReimbursementController extends Controller
             $adminFlowCostCenters = $adminFlowCostCenters->concat($currentCostCenter)->unique('id')->values();
         }
 
-        return view('reimbursements.show', compact('reimbursement', 'correctionCostCenters', 'correctionPayeeOptions', 'adminFlowCostCenters'));
+        return view('reimbursements.show', compact(
+            'reimbursement',
+            'correctionCostCenters',
+            'correctionPayeeOptions',
+            'adminFlowCostCenters',
+            'clarificationRecipient',
+            'isClarificationRequester',
+            'clarificationOnCooldown',
+            'nextClarificationAt',
+            'canRequestClarification'
+        ));
+    }
+
+    public function requestClarification(Reimbursement $reimbursement)
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        abort_unless(
+            $this->canUserRequestClarification($reimbursement, $user),
+            403,
+            'Solo el solicitante puede pedir aclaraciones de su propio reembolso.'
+        );
+
+        try {
+            $result = DB::transaction(function () use ($reimbursement, $user) {
+                $lockedReimbursement = Reimbursement::query()
+                    ->whereKey($reimbursement->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                abort_unless(
+                    $this->canUserRequestClarification($lockedReimbursement, $user),
+                    403,
+                    'Solo el solicitante puede pedir aclaraciones de su propio reembolso.'
+                );
+
+                $nextClarificationAt = $this->nextClarificationAt($lockedReimbursement);
+                if ($nextClarificationAt?->isFuture()) {
+                    return ['error' => 'daily_limit', 'next_at' => $nextClarificationAt];
+                }
+
+                $recipient = $this->clarificationRecipient($lockedReimbursement);
+                if (!$recipient) {
+                    return ['error' => 'no_recipient'];
+                }
+
+                $lastApproval = $lockedReimbursement->approvals
+                    ->whereIn('action', ['aprobado', 'rechazado', 'requiere_correccion'])
+                    ->sortByDesc('created_at')
+                    ->first();
+
+                $lockedReimbursement->approvals()->create([
+                    'user_id' => $user->id,
+                    'step_name' => $lockedReimbursement->currentStep?->name ?? $lastApproval?->step_name ?? 'Flujo de autorizaciones',
+                    'action' => 'solicitud_aclaracion',
+                    'comment' => "Solicitud de aclaración enviada a {$recipient->name} ({$recipient->email}).",
+                ]);
+
+                $recipient->notify(new ReimbursementClarificationRequested($lockedReimbursement, $user));
+                Mail::to($recipient->email)->send(
+                    new ReimbursementClarificationRequestMail($lockedReimbursement, $user, $recipient)
+                );
+
+                return ['recipient' => $recipient];
+            });
+        } catch (\Throwable $exception) {
+            Log::error('No se pudo enviar la solicitud de aclaración del reembolso.', [
+                'reimbursement_id' => $reimbursement->id,
+                'requested_by' => $user->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return back()->with('error', 'No fue posible enviar el correo de aclaración. Inténtalo nuevamente.');
+        }
+
+        if (($result['error'] ?? null) === 'daily_limit') {
+            return back()->with(
+                'error',
+                'Ya solicitaste una aclaración de este reembolso. Podrás enviar la siguiente el '
+                    . $result['next_at']->format('d/m/Y')
+                    . ' a las '
+                    . $result['next_at']->format('H:i')
+                    . '.'
+            );
+        }
+
+        if (($result['error'] ?? null) === 'no_recipient') {
+            return back()->with('error', 'No se encontró un autorizador activo con correo para solicitar la aclaración.');
+        }
+
+        return back()->with('success', "Solicitud de aclaración enviada a {$result['recipient']->name}.");
+    }
+
+    private function canUserRequestClarification(Reimbursement $reimbursement, User $user): bool
+    {
+        if ((int) $reimbursement->user_id === (int) $user->id) {
+            return true;
+        }
+
+        if (!$user->canPerform('reimbursements.create_on_behalf')) {
+            return false;
+        }
+
+        if ($reimbursement->created_by_id && (int) $reimbursement->created_by_id === (int) $user->id) {
+            return true;
+        }
+
+        if ($reimbursement->relationLoaded('approvals')) {
+            return $reimbursement->approvals->contains(function ($approval) use ($user) {
+                return (int) $approval->user_id === (int) $user->id
+                    && $approval->step_name === 'Solicitante'
+                    && $approval->action === 'enviado'
+                    && str_starts_with((string) $approval->comment, 'REGISTRO POR TERCEROS');
+            });
+        }
+
+        return $reimbursement->approvals()
+            ->where('user_id', $user->id)
+            ->where('step_name', 'Solicitante')
+            ->where('action', 'enviado')
+            ->where('comment', 'like', 'REGISTRO POR TERCEROS%')
+            ->exists();
+    }
+
+    private function nextClarificationAt(Reimbursement $reimbursement)
+    {
+        if ($reimbursement->relationLoaded('approvals')) {
+            $lastRequest = $reimbursement->approvals
+                ->where('action', 'solicitud_aclaracion')
+                ->sortByDesc('created_at')
+                ->first();
+        } else {
+            $lastRequest = $reimbursement->approvals()
+                ->where('action', 'solicitud_aclaracion')
+                ->latest('created_at')
+                ->first();
+        }
+
+        return $lastRequest?->created_at?->copy()->addDay();
+    }
+
+    private function clarificationRecipient(Reimbursement $reimbursement): ?User
+    {
+        if (!$reimbursement->relationLoaded('currentStep')) {
+            $reimbursement->load('currentStep.user');
+        } elseif ($reimbursement->currentStep && !$reimbursement->currentStep->relationLoaded('user')) {
+            $reimbursement->currentStep->load('user');
+        }
+
+        if (!$reimbursement->relationLoaded('approvals')) {
+            $reimbursement->load('approvals.user');
+        } else {
+            $reimbursement->approvals
+                ->filter(fn ($approval) => !$approval->relationLoaded('user'))
+                ->each->load('user');
+        }
+
+        if (in_array($reimbursement->status, ['rechazado', 'requiere_correccion'], true)) {
+            $recipient = $reimbursement->approvals
+                ->whereIn('action', ['rechazado', 'requiere_correccion'])
+                ->sortByDesc('created_at')
+                ->first()?->user;
+        } elseif ($reimbursement->currentStep?->user) {
+            $recipient = $reimbursement->currentStep->user;
+        } else {
+            $recipient = $reimbursement->approvals
+                ->whereIn('action', ['aprobado', 'rechazado', 'requiere_correccion'])
+                ->sortByDesc('created_at')
+                ->first()?->user;
+        }
+
+        if (!$recipient || $recipient->trashed() || blank($recipient->email)) {
+            return null;
+        }
+
+        return $recipient;
     }
 
     private function correctionAssignableCostCenters(Reimbursement $reimbursement, User $user)
@@ -5425,6 +5644,22 @@ class ReimbursementController extends Controller
     {
         // La semana fiscal de la aplicación corre de sábado a viernes.
         return now()->addDays(2)->format('W-Y');
+    }
+
+    private function notificationAuditWeek(?string $requestedWeek, string $tab, $reimbursements, bool $fromNotification): ?string
+    {
+        if ($requestedWeek || !$fromNotification) {
+            return $requestedWeek;
+        }
+
+        $first = $reimbursements->first();
+        if (!$first) {
+            return null;
+        }
+
+        return $this->usesOperationalWeek($tab)
+            ? $first->operational_week
+            : $first->week;
     }
 
     private function attachOperationalWeek($reimbursements, string $tab): void

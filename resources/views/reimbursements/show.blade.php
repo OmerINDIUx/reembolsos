@@ -778,7 +778,25 @@
 
                     <!-- Stepper Log (Dynamic) -->
                     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 p-6 dark:border-gray-700">
-                        <h3 class="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3 mb-6 dark:text-white dark:border-gray-700">Flujo de Autorizaciones</h3>
+                        <div class="flex flex-col gap-3 border-b border-gray-100 pb-3 mb-6 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Flujo de Autorizaciones</h3>
+                                @if($canRequestClarification)
+                                    <p class="mt-1 text-[10px] text-gray-500 dark:text-gray-400"><strong>Enviar a:</strong> {{ $clarificationRecipient->name }}.</p>
+                                @elseif($clarificationOnCooldown)
+                                    <p class="mt-1 text-[10px] text-gray-500 dark:text-gray-400"><strong>Enviado a:</strong> {{ $clarificationRecipient->name }}.</p>
+                                    <p class="mt-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400">Podrás enviar la siguiente el {{ $nextClarificationAt->format('d/m/Y') }} a las {{ $nextClarificationAt->format('H:i') }}.</p>
+                                @endif
+                            </div>
+                            @if($canRequestClarification)
+                                <button type="button" x-data @click="$dispatch('open-clarification-modal')" class="inline-flex items-center justify-center rounded-lg border border-indigo-600 bg-indigo-600 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 4v-4z"/></svg>
+                                        Solicitar aclaración
+                                </button>
+                            @elseif($clarificationOnCooldown)
+                                <span class="inline-flex items-center rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:border-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300">Aclaración enviada</span>
+                            @endif
+                        </div>
                         
                         <div class="relative">
                             <div class="absolute left-4 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700"></div>
@@ -917,6 +935,7 @@
                                                                         'aprobado' => 'Aprobado',
                                                                         'rechazado' => 'Rechazado',
                                                                         'requiere_correccion' => 'Devuelto para corrección',
+                                                                        'solicitud_aclaracion' => 'Aclaración solicitada',
                                                                     ];
                                                                     $actionLabel = $actionLabels[$approval->action] ?? ucfirst(str_replace('_', ' ', $approval->action));
                                                                 @endphp
@@ -1022,6 +1041,45 @@
     </script>
     @endpush
 </x-app-layout>
+
+@if($canRequestClarification)
+<div x-data="{ open: false, submitting: false }"
+     @open-clarification-modal.window="open = true"
+     x-show="open"
+     x-cloak
+     class="fixed inset-0 z-50 overflow-y-auto">
+    <div class="text-center" style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem;">
+        <div class="fixed inset-0 bg-gray-900/60 transition-opacity" @click="if (!submitting) open = false" aria-hidden="true"></div>
+        <div class="relative inline-block overflow-hidden rounded-2xl bg-white text-left shadow-2xl dark:bg-gray-800" style="width: min(34rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); overflow-y: auto; margin: auto;">
+            <form action="{{ route('reimbursements.request_clarification', $reimbursement) }}" method="POST" @submit="submitting = true">
+                @csrf
+                <div class="p-6 sm:p-8">
+                    <div class="flex items-start gap-4">
+                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/40">
+                            <svg class="h-6 w-6 text-indigo-600 dark:text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 4v-4z"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-black text-gray-900 dark:text-white">Solicitar aclaración</h3>
+                            <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300"><strong>Enviar a:</strong> {{ $clarificationRecipient->name }}</p>
+                            <p class="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">Se le notificará para que revise el reembolso <strong>{{ $reimbursement->true_folio }}</strong>.</p>
+                            <div class="mt-4 rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-xs text-indigo-800 dark:border-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-200">
+                                Después del envío podrás solicitar la siguiente aclaración 24 horas más tarde.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-col-reverse gap-3 bg-gray-50 px-6 py-4 dark:bg-gray-900/50 sm:flex-row sm:justify-end">
+                    <button type="button" @click="open = false" :disabled="submitting" class="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">Cancelar</button>
+                    <button type="submit" :disabled="submitting" class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">
+                        <span x-show="!submitting">Enviar solicitud</span>
+                        <span x-show="submitting" x-cloak>Enviando...</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+@endif
 
 <!-- Administrative Flow Modal -->
 <div x-data="{ open: false }"

@@ -55,6 +55,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('reimbursements/export/xml', [ReimbursementController::class, 'exportXml'])->name('reimbursements.export_xml');
     Route::get('reimbursements/audit', [ReimbursementController::class, 'audit'])->name('reimbursements.audit');
     Route::patch('reimbursements/{reimbursement}/admin-flow', [ReimbursementController::class, 'adminFlowUpdate'])->name('reimbursements.admin_flow_update');
+    Route::post('reimbursements/{reimbursement}/request-clarification', [ReimbursementController::class, 'requestClarification'])
+        ->middleware('throttle:5,1')
+        ->name('reimbursements.request_clarification');
     Route::resource('reimbursements', ReimbursementController::class);
     Route::post('reimbursements/parse-xml', [ReimbursementController::class, 'parseCfdi'])->name('reimbursements.parse');
     Route::post('reimbursements/auto-save', [ReimbursementController::class, 'autoStore'])->name('reimbursements.auto_save');

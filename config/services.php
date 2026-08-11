@@ -41,7 +41,14 @@ return [
         'client_secret' => env('MICROSOFT_CLIENT_SECRET', env('ID_Secret', env('GRAPH_CLIENT_SECRET'))),
         'tenant' => env('MICROSOFT_TENANT_ID', env('GRAPH_TENANT_ID', 'common')),
         'redirect' => env('MICROSOFT_REDIRECT_URI'),
-        'allowed_domains' => ['grupoindi.com', 'construlerma.com', 'archandel.com'],
+        'allowed_domains' => ['grupoindi.com'],
+    ],
+
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI'),
+        'allowed_domains' => ['construlerma.com', 'archandel.com'],
     ],
 
 ];

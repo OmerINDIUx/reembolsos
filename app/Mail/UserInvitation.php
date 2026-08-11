@@ -3,7 +3,6 @@
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -17,7 +16,10 @@ class UserInvitation extends Mailable
      * Create a new message instance.
      */
     public $user;
+
     public $url;
+
+    public $provider;
 
     /**
      * Create a new message instance.
@@ -25,7 +27,9 @@ class UserInvitation extends Mailable
     public function __construct($user)
     {
         $this->user = $user;
-        $this->url = route('auth.microsoft');
+        $domain = strtolower(substr(strrchr((string) $user->email, '@') ?: '', 1));
+        $this->provider = in_array($domain, config('services.google.allowed_domains', []), true) ? 'Google' : 'Microsoft';
+        $this->url = route($this->provider === 'Google' ? 'auth.google' : 'auth.microsoft');
     }
 
     /**
@@ -48,6 +52,7 @@ class UserInvitation extends Mailable
             with: [
                 'name' => $this->user->name,
                 'url' => $this->url,
+                'provider' => $this->provider,
             ],
         );
     }
