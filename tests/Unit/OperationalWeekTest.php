@@ -109,6 +109,26 @@ class OperationalWeekTest extends TestCase
         $this->assertSame(101, $result->id);
     }
 
+    public function test_completed_workflow_always_routes_to_cxp_review(): void
+    {
+        $controller = new ReimbursementController();
+        $method = new ReflectionMethod($controller, 'completedWorkflowStatus');
+
+        $this->assertSame('pendiente_revision_cxp', $method->invoke($controller));
+    }
+
+    public function test_single_item_submission_is_not_labeled_as_bulk(): void
+    {
+        $controller = new ReimbursementController();
+        $method = new ReflectionMethod($controller, 'initialSubmissionComment');
+
+        $this->assertSame('Solicitud enviada para aprobación.', $method->invoke($controller, 1));
+        $this->assertSame(
+            'Solicitud enviada para aprobación (Carga Masiva).',
+            $method->invoke($controller, 2)
+        );
+    }
+
     private function userWithProfile(string $profileName, int $id): User
     {
         $user = new User(['role' => 'user']);

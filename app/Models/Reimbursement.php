@@ -247,6 +247,15 @@ class Reimbursement extends Model
     public function canBeApprovedBy(User $user)
     {
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
+
+        // Pagadores jamás pueden autorizar un trámite que no haya sido revisado por CXP.
+        if (
+            $this->status === 'pendiente_pago'
+            && ($this->approved_by_cxp_id === null || $this->approved_by_cxp_at === null)
+        ) {
+            return false;
+        }
+
         if ($allIdentities->contains(fn($identity) => $identity->isAdmin())) return true;
 
         // Accounts Payable is split into review first, payment second.

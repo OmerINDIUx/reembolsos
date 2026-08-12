@@ -956,8 +956,13 @@
                                                                 </span>
                                                             @endif
                                                         </p>
-                                                        @if($approval->comment)
-                                                            <p class="mt-1 text-xs text-gray-600 dark:text-gray-300 italic">"{{ $approval->comment }}"</p>
+                                                        @php
+                                                            $approvalComment = !$approval->is_bulk && $approval->comment === 'Solicitud enviada para aprobación (Carga Masiva).'
+                                                                ? 'Solicitud enviada para aprobación.'
+                                                                : $approval->comment;
+                                                        @endphp
+                                                        @if($approvalComment)
+                                                            <p class="mt-1 text-xs text-gray-600 dark:text-gray-300 italic">"{{ $approvalComment }}"</p>
                                                         @endif
                                                     </div>
                                                     <div class="whitespace-nowrap text-right text-xs text-gray-400">

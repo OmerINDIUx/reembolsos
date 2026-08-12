@@ -652,6 +652,7 @@ class ReimbursementController extends Controller
     public function bulkStore(Request $request)
     {
         $hasInvoice = $request->input('has_invoice', '1') == '1';
+        $submissionComment = $this->initialSubmissionComment(count($request->input('items', [])));
         Log::info("BULK_STORE_START: User=" . Auth::id() . " Mode=" . ($hasInvoice ? 'Invoice' : 'Manual'));
 
         /** @var \App\Models\User $user */
@@ -984,7 +985,7 @@ class ReimbursementController extends Controller
                     $this->recordInitialApprovalHistory(
                         $reimbursement,
                         $user,
-                        $onBehalfNote ? trim($onBehalfNote, "[]\n") : 'Solicitud enviada para aprobación (Carga Masiva).',
+                        $onBehalfNote ? trim($onBehalfNote, "[]\n") : $submissionComment,
                         $autoApprovedSteps
                     );
                 }
@@ -1014,8 +1015,8 @@ class ReimbursementController extends Controller
             $targetUser = null;
             $notifMsg = "Se cargaron {$createdCount} reembolsos. RevÃƒÂ­salos en tu listado de reembolsos.";
 
-            if ($initialStatus === 'aprobado_ejecutivo') {
-                // To CXP
+            if ($initialStatus === 'pendiente_revision_cxp') {
+                // El flujo configurado terminó: CXP Revisadores siempre debe validar antes de Pago.
                 $cxpUsers = User::where('role', 'accountant')
                     ->orWhereHas('profile', fn($q) => $q->where('name', 'accountant'))
                     ->get();
@@ -1860,10 +1861,19 @@ class ReimbursementController extends Controller
         }
 
         // Notify NEXT person in line (Dynamic)
-        if ($reimbursement->costCenter && $reimbursement->status !== 'aprobado' && $reimbursement->status !== 'borrador') {
-            $nextApprover = $reimbursement->currentStep->user ?? null;
-            if ($nextApprover) {
-                NotificationBatchService::add($nextApprover, $reimbursement);
+        if ($reimbursement->costCenter && $reimbursement->status !== 'borrador') {
+            if ($reimbursement->status === 'pendiente_revision_cxp') {
+                $cxpUsers = User::where('role', 'accountant')
+                    ->orWhereHas('profile', fn($q) => $q->where('name', 'accountant'))
+                    ->get();
+                foreach ($cxpUsers as $cxpUser) {
+                    NotificationBatchService::add($cxpUser, $reimbursement);
+                }
+            } else {
+                $nextApprover = $reimbursement->currentStep->user ?? null;
+                if ($nextApprover) {
+                    NotificationBatchService::add($nextApprover, $reimbursement);
+                }
             }
         }
 
@@ -3566,6 +3576,8 @@ class ReimbursementController extends Controller
     {
         $query = Reimbursement::with(['user', 'payee', 'costCenter.company'])
             ->where('status', 'pendiente_pago')
+            ->whereNotNull('approved_by_cxp_id')
+            ->whereNotNull('approved_by_cxp_at')
             ->whereNotNull('approved_by_treasury_at');
 
         if ($ids->isNotEmpty()) {
@@ -4003,8 +4015,13 @@ class ReimbursementController extends Controller
                 }
 
                 // 3. Check workflow profile
-                $canReviewCxp = $user->isAdmin() || ($user->isCxp() && $reimbursement->status === 'pendiente_revision_cxp');
-                $canPayCxp = $user->isAdmin() || ($user->isTreasury() && $reimbursement->status === 'pendiente_pago' && $reimbursement->approved_by_treasury_at === null);
+                $canReviewCxp = $reimbursement->status === 'pendiente_revision_cxp'
+                    && ($user->isAdmin() || $user->isCxp());
+                $canPayCxp = $reimbursement->status === 'pendiente_pago'
+                    && $reimbursement->approved_by_cxp_id !== null
+                    && $reimbursement->approved_by_cxp_at !== null
+                    && $reimbursement->approved_by_treasury_at === null
+                    && ($user->isAdmin() || $user->isTreasury());
                 if (!$canReviewCxp && !$canPayCxp) {
                     $failed++;
                     $statusLabel = ucwords(str_replace('_', ' ', $reimbursement->status));
@@ -4804,7 +4821,7 @@ class ReimbursementController extends Controller
             ->get();
 
         if ($steps->isEmpty()) {
-            return [null, 'aprobado', $autoNote, $approvalData, collect()];
+            return [null, $this->completedWorkflowStatus(), $autoNote, $approvalData, collect()];
         }
 
         $initialStep = $this->hierarchyOverrideInitialStep($steps, $costCenter, $requester);
@@ -4831,10 +4848,22 @@ class ReimbursementController extends Controller
         $nextStep = $steps->firstWhere('order', '>', $requesterOrder);
 
         if (!$nextStep) {
-            return [null, 'aprobado', $autoNote, $approvalData, $skippedSteps];
+            return [null, $this->completedWorkflowStatus(), $autoNote, $approvalData, $skippedSteps];
         }
 
         return [$nextStep->id, 'pendiente', $autoNote, $approvalData, $skippedSteps];
+    }
+
+    private function completedWorkflowStatus(): string
+    {
+        return 'pendiente_revision_cxp';
+    }
+
+    private function initialSubmissionComment(int $itemCount): string
+    {
+        return $itemCount > 1
+            ? 'Solicitud enviada para aprobación (Carga Masiva).'
+            : 'Solicitud enviada para aprobación.';
     }
 
     private function hierarchyOverrideInitialStep($steps, CostCenter $costCenter, User $requester)
@@ -5733,6 +5762,8 @@ class ReimbursementController extends Controller
             }
 
             $query->where('status', 'pendiente_pago')
+                ->whereNotNull('approved_by_cxp_id')
+                ->whereNotNull('approved_by_cxp_at')
                 ->whereNotNull('approved_by_treasury_at');
 
         } elseif ($tab === 'rejections') {
