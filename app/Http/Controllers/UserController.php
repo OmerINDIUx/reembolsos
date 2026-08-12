@@ -77,7 +77,10 @@ class UserController extends Controller
     {
         $directors = User::whereIn('role', ['admin', 'director'])->get();
         $profiles = $this->availableProfilesFor(Auth::user());
-        return view('users.create', compact('directors', 'profiles'));
+        $costCenters = CostCenter::active()->orderBy('name')->get(['id', 'code', 'name']);
+        $permissions = Permission::orderBy('module')->orderBy('display_name')->get();
+
+        return view('users.create', compact('directors', 'profiles', 'costCenters', 'permissions'));
     }
 
     /**
@@ -308,7 +311,11 @@ class UserController extends Controller
 
         $directors = User::whereIn('role', ['admin', 'director'])->where('id', '!=', $user->id)->get();
         $profiles = $this->availableProfilesFor(Auth::user(), $user->profile_id);
-        return view('users.edit', compact('user', 'directors', 'profiles'));
+        $costCenters = CostCenter::active()->orderBy('name')->get(['id', 'code', 'name']);
+        $permissions = Permission::orderBy('module')->orderBy('display_name')->get();
+        $user->loadMissing(['authorizedCostCenters:id', 'permissions:id']);
+
+        return view('users.edit', compact('user', 'directors', 'profiles', 'costCenters', 'permissions'));
     }
 
     /**
