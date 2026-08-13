@@ -64,23 +64,23 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware('permission:users.view')->group(function() {
         Route::get('users', [UserController::class, 'index'])->name('users.index');
-        Route::get('users/create', [UserController::class, 'create'])->middleware('admin')->name('users.create');
-        Route::post('users', [UserController::class, 'store'])->middleware('admin')->name('users.store');
+        Route::get('users/create', [UserController::class, 'create'])->middleware('permission:users.create')->name('users.create');
+        Route::post('users', [UserController::class, 'store'])->middleware('permission:users.create')->name('users.store');
         Route::get('users/{user}', [UserController::class, 'show'])->name('users.show');
-        Route::get('users/{user}/edit', [UserController::class, 'edit'])->middleware('admin')->name('users.edit');
-        Route::put('users/{user}', [UserController::class, 'update'])->middleware('admin')->name('users.update');
-        Route::patch('users/{user}', [UserController::class, 'update'])->middleware('admin');
-        Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('admin')->name('users.destroy');
-        Route::get('users/{user}/deactivation', [UserController::class, 'deactivation'])->name('users.deactivation');
-        Route::post('users/{user}/resend-invitation', [UserController::class, 'resendInvitation'])->middleware('admin')->name('users.resend_invitation');
+        Route::get('users/{user}/edit', [UserController::class, 'edit'])->middleware('permission:users.edit')->name('users.edit');
+        Route::put('users/{user}', [UserController::class, 'update'])->middleware('permission:users.edit')->name('users.update');
+        Route::patch('users/{user}', [UserController::class, 'update'])->middleware('permission:users.edit');
+        Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete')->name('users.destroy');
+        Route::get('users/{user}/deactivation', [UserController::class, 'deactivation'])->middleware('permission:users.delete')->name('users.deactivation');
+        Route::post('users/{user}/resend-invitation', [UserController::class, 'resendInvitation'])->middleware('permission:users.edit')->name('users.resend_invitation');
         
         // Profiles & Permissions Management
         Route::resource('profiles', \App\Http\Controllers\ProfileManagementController::class);
 
         // Substitutes
-        Route::post('users/{user}/substitutes', [UserController::class, 'addSubstitute'])->name('users.substitutes.add');
-        Route::post('users/{user}/substitutes/{substitute_id}/toggle', [UserController::class, 'toggleSubstitute'])->name('users.substitutes.toggle');
-        Route::delete('users/{user}/substitutes/{substitute_id}', [UserController::class, 'removeSubstitute'])->name('users.substitutes.remove');
+        Route::post('users/{user}/substitutes', [UserController::class, 'addSubstitute'])->middleware('permission:users.edit')->name('users.substitutes.add');
+        Route::post('users/{user}/substitutes/{substitute_id}/toggle', [UserController::class, 'toggleSubstitute'])->middleware('permission:users.edit')->name('users.substitutes.toggle');
+        Route::delete('users/{user}/substitutes/{substitute_id}', [UserController::class, 'removeSubstitute'])->middleware('permission:users.edit')->name('users.substitutes.remove');
     });
 
     Route::middleware('permission:cost_centers.view')->group(function() {

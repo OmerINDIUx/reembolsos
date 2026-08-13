@@ -19,6 +19,13 @@ use App\Services\AccountBlockService;
 
 class UserController extends Controller
 {
+    private const ALLOWED_EMAIL_DOMAINS = [
+        '@grupoindi.com',
+        '@construlerma.com',
+        '@archandel.com',
+    ];
+
+
     /**
      * Display a listing of the resource.
      */
@@ -75,12 +82,9 @@ class UserController extends Controller
      */
     public function create()
     {
-        $directors = User::whereIn('role', ['admin', 'director'])->get();
         $profiles = $this->availableProfilesFor(Auth::user());
-        $costCenters = CostCenter::active()->orderBy('name')->get(['id', 'code', 'name']);
-        $permissions = Permission::orderBy('module')->orderBy('display_name')->get();
 
-        return view('users.create', compact('directors', 'profiles', 'costCenters', 'permissions'));
+        return view('users.create', compact('profiles'));
     }
 
     /**
@@ -92,13 +96,8 @@ class UserController extends Controller
         $request->merge(['email' => $email]);
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email_normalized'],
+            'email' => ['required', 'email', 'max:255', $this->corporateEmailDomainRule(), 'unique:users,email_normalized'],
             'profile_id' => ['required', 'exists:profiles,id'],
-            'cost_centers' => ['nullable', 'array'],
-            'cost_centers.*' => ['integer', 'exists:cost_centers,id'],
-            'permissions' => ['nullable', 'array'],
-            'permissions.*' => ['integer', 'exists:permissions,id'],
-            'send_invitation' => ['nullable', 'boolean'],
         ]);
 
         $profile = Profile::findOrFail($request->profile_id);
@@ -114,15 +113,13 @@ class UserController extends Controller
                 'password' => null,
                 'role' => in_array($profile->name, ['admin', 'admin_view', 'director', 'control_obra', 'director_ejecutivo', 'accountant', 'direccion', 'tesoreria', 'user']) ? $profile->name : 'user',
                 'profile_id' => $profile->id,
-                'invitation_token' => $request->boolean('send_invitation') ? Str::random(64) : null,
+                'invitation_token' => Str::random(64),
                 'status' => 'pending',
             ]);
-            $user->authorizedCostCenters()->sync($request->input('cost_centers', []));
-            $user->permissions()->sync($request->input('permissions', []));
             return $user;
         });
 
-        if ($request->boolean('send_invitation') && !$this->sendInvitationEmail($user)) {
+        if (!$this->sendInvitationEmail($user)) {
             return redirect()->route('users.index')->with('error', 'El usuario fue creado, pero no se pudo enviar la invitación.');
         }
 
@@ -258,6 +255,8 @@ class UserController extends Controller
      */
     public function addSubstitute(Request $request, User $user)
     {
+        $this->ensureCanManageUser($user, 'editar');
+
         $request->validate([
             'substitute_id' => 'required|exists:users,id|different:' . $user->id,
         ]);
@@ -278,6 +277,8 @@ class UserController extends Controller
      */
     public function toggleSubstitute(User $user, $substituteId)
     {
+        $this->ensureCanManageUser($user, 'editar');
+
         $sub = \App\Models\UserSubstitute::where('original_user_id', $user->id)
             ->where('user_id', $substituteId)
             ->firstOrFail();
@@ -293,6 +294,8 @@ class UserController extends Controller
      */
     public function removeSubstitute(User $user, $substituteId)
     {
+        $this->ensureCanManageUser($user, 'editar');
+
         \App\Models\UserSubstitute::where('original_user_id', $user->id)
             ->where('user_id', $substituteId)
             ->delete();
@@ -324,10 +327,12 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $email = User::normalizeEmail($request->input('email'));
+        $this->ensureCanManageUser($user, 'editar');
+
         $request->merge(['email' => $email]);
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email_normalized')->ignore($user->id)],
+            'email' => ['required', 'email', 'max:255', $this->corporateEmailDomainRule(), Rule::unique('users', 'email_normalized')->ignore($user->id)],
             'profile_id' => ['required', 'exists:profiles,id'],
             'status' => ['required', Rule::in(['pending', 'active', 'disabled'])],
             'cost_centers' => ['nullable', 'array'],
@@ -371,6 +376,8 @@ class UserController extends Controller
     public function deactivation(User $user)
     {
         if ($user->getKey() === Auth::id()) return redirect()->route('users.index')->with('error', 'No puedes inhabilitar tu propia cuenta.');
+        $this->ensureCanManageUser($user, 'inhabilitar');
+
         if ($user->isBlocked()) return redirect()->route('users.index')->with('error', 'Esta cuenta ya se encuentra inhabilitada.');
         $pendingStatuses = ['pendiente', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo'];
         $pendingReimbursements = $user->reimbursements()->whereIn('status', $pendingStatuses)->with(['costCenter', 'user', 'payee'])->orderBy('cost_center_id')->orderBy('id')->get();
@@ -384,6 +391,8 @@ class UserController extends Controller
     }    public function destroy(Request $request, User $user, AccountBlockService $blockService)
     {
         if ($user->getKey() === Auth::id()) return back()->with('error', 'No puedes inhabilitar tu propia cuenta.');
+        $this->ensureCanManageUser($user, 'inhabilitar');
+
         if ($user->isBlocked()) return back()->with('error', 'Esta cuenta ya se encuentra inhabilitada.');
 
         $request->validate([
@@ -517,6 +526,8 @@ class UserController extends Controller
      */
     public function resendInvitation(User $user)
     {
+        $this->ensureCanManageUser($user, 'reenviar la invitación de');
+
         if ($user->isRegistered()) {
             return back()->with('error', 'Este usuario ya ha completado su registro.');
         }
@@ -575,5 +586,24 @@ class UserController extends Controller
     {
         return in_array($user->role, ['admin', 'admin_view'], true)
             || ($user->profile && $this->isAdminProfile($user->profile));
+    }
+
+    private function corporateEmailDomainRule(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            $email = User::normalizeEmail($value);
+            $domain = strrchr($email, '@') ?: '';
+
+            if (!in_array($domain, self::ALLOWED_EMAIL_DOMAINS, true)) {
+                $fail('El correo debe pertenecer a @grupoindi.com, @construlerma.com o @archandel.com.');
+            }
+        };
+    }
+
+    private function ensureCanManageUser(User $user, string $action): void
+    {
+        if ($this->isAdminUser($user) && !Auth::user()->isAdmin()) {
+            abort(403, "Solo un administrador puede {$action} usuarios administradores.");
+        }
     }
 }

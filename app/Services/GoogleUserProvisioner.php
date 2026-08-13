@@ -76,6 +76,8 @@ class GoogleUserProvisioner
                 'google_id' => $googleId,
                 'email_verified_at' => $user->email_verified_at ?: now(),
                 'status' => 'active',
+                'invitation_token' => null,
+                'password' => $user->password ?: Hash::make(Str::random(64)),
             ])->save();
 
             return $user->fresh();

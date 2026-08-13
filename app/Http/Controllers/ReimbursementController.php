@@ -210,7 +210,12 @@ class ReimbursementController extends Controller
         $selectedCcName  = $request->input('cc');
         $selectedType    = $request->input('type');
         $selectedPayeeId = $request->input('payee');
-        $selectedUploadWeek = $tab === 'payment' ? null : $request->input('upload_week');
+        $selectedUploadWeek = $request->input('upload_week');
+        $selectedAuditUserId = $request->input('user_id');
+        $fromWeek = $request->input('from_week');
+        $toWeek = $request->input('to_week');
+        $uploadFromWeek = $request->input('upload_from_week');
+        $uploadToWeek = $request->input('upload_to_week');
         $selectedIds = collect(explode(',', (string) $request->input('ids')))
             ->map(fn ($id) => trim($id))
             ->filter(fn ($id) => ctype_digit($id))
@@ -229,7 +234,38 @@ class ReimbursementController extends Controller
             $selectedIds->isNotEmpty()
         );
 
+        $auditFilterUsers = $allReimbursements
+            ->map(fn (Reimbursement $reimbursement) => $reimbursement->payee ?: $reimbursement->user)
+            ->filter()
+            ->unique('id')
+            ->sortBy('name')
+            ->values();
+
+        if ($selectedAuditUserId) {
+            $allReimbursements = $allReimbursements->filter(function (Reimbursement $reimbursement) use ($selectedAuditUserId) {
+                return (string) ($reimbursement->payee_id ?: $reimbursement->user_id) === (string) $selectedAuditUserId;
+            });
+        }
+
         // Global Audit Filters
+        if ($fromWeek || $toWeek) {
+            $auditWeekAttribute = $this->usesOperationalWeek($tab) ? 'operational_week' : 'week';
+            $fromWeekComparable = $fromWeek ? $this->normalizeWeekForComparison($fromWeek) : null;
+            $toWeekComparable = $toWeek ? $this->normalizeWeekForComparison($toWeek) : null;
+
+            $allReimbursements = $allReimbursements->filter(function (Reimbursement $reimbursement) use ($auditWeekAttribute, $fromWeekComparable, $toWeekComparable) {
+                $week = $reimbursement->getAttribute($auditWeekAttribute);
+                if (!$week) {
+                    return false;
+                }
+
+                $comparableWeek = $this->normalizeWeekForComparison($week);
+
+                return (!$fromWeekComparable || $comparableWeek >= $fromWeekComparable)
+                    && (!$toWeekComparable || $comparableWeek <= $toWeekComparable);
+            });
+        }
+
         if ($request->filled('search_audit') || $request->filled('type_audit') || $request->filled('category_audit') || $request->filled('status_audit') || $request->filled('xml_audit') || $request->filled('validation_audit') || $request->filled('method_audit') || $request->filled('usage_audit')) {
             $allReimbursements = $allReimbursements->filter(function($r) use ($request) {
                 $pass = true;
@@ -294,36 +330,47 @@ class ReimbursementController extends Controller
         }
 
         $availableUploadWeeks = collect();
-        if ($tab !== 'payment') {
-            $itemsForUploadWeekOptions = $allReimbursements;
-            if ($selectedWeek) {
-                $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->where(
-                    $this->usesOperationalWeek($tab) ? 'operational_week' : 'week',
-                    $selectedWeek
-                );
-            }
-            if ($selectedCcName) {
-                $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->filter(fn($r) => ($r->costCenter->name ?? 'Sin Centro de Costos') === $selectedCcName);
-            }
-            if ($selectedType) {
-                $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->where('type', $selectedType);
-            }
-            if ($selectedPayeeId) {
-                $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->filter(function ($r) use ($selectedPayeeId) {
-                    return (string) ($r->payee_id ?: $r->user_id) === (string) $selectedPayeeId;
-                });
-            }
+        $itemsForUploadWeekOptions = $allReimbursements;
+        if ($selectedWeek) {
+            $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->where(
+                $this->usesOperationalWeek($tab) ? 'operational_week' : 'week',
+                $selectedWeek
+            );
+        }
+        if ($selectedCcName) {
+            $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->filter(fn($r) => ($r->costCenter->name ?? 'Sin Centro de Costos') === $selectedCcName);
+        }
+        if ($selectedType) {
+            $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->where('type', $selectedType);
+        }
+        if ($selectedPayeeId) {
+            $itemsForUploadWeekOptions = $itemsForUploadWeekOptions->filter(function ($r) use ($selectedPayeeId) {
+                return (string) ($r->payee_id ?: $r->user_id) === (string) $selectedPayeeId;
+            });
+        }
 
-            $availableUploadWeeks = $itemsForUploadWeekOptions
-                ->pluck('week')
-                ->filter()
-                ->unique()
-                ->sortByDesc(fn ($week) => $this->normalizeWeekForComparison((string) $week))
-                ->values();
+        $availableUploadWeeks = $itemsForUploadWeekOptions
+            ->map(fn (Reimbursement $reimbursement) => $this->reimbursementUploadWeek($reimbursement))
+            ->filter()
+            ->unique()
+            ->sortByDesc(fn ($week) => $this->normalizeWeekForComparison((string) $week))
+            ->values();
 
-            if ($selectedUploadWeek) {
-                $allReimbursements = $allReimbursements->where('week', $selectedUploadWeek);
-            }
+        if ($selectedUploadWeek) {
+            $allReimbursements = $allReimbursements->filter(
+                fn (Reimbursement $reimbursement) => $this->reimbursementUploadWeek($reimbursement) === $selectedUploadWeek
+            );
+        } elseif ($uploadFromWeek || $uploadToWeek) {
+            $uploadFromComparable = $uploadFromWeek ? $this->normalizeWeekForComparison($uploadFromWeek) : null;
+            $uploadToComparable = $uploadToWeek ? $this->normalizeWeekForComparison($uploadToWeek) : null;
+
+            $allReimbursements = $allReimbursements->filter(function (Reimbursement $reimbursement) use ($uploadFromComparable, $uploadToComparable) {
+                $uploadWeek = $this->reimbursementUploadWeek($reimbursement);
+                $comparableWeek = $uploadWeek ? $this->normalizeWeekForComparison($uploadWeek) : null;
+
+                return $comparableWeek && (!$uploadFromComparable || $comparableWeek >= $uploadFromComparable)
+                    && (!$uploadToComparable || $comparableWeek <= $uploadToComparable);
+            });
         }
 
         // Build stats for dashboard panels
@@ -417,7 +464,8 @@ class ReimbursementController extends Controller
             'selectedCcName', 'selectedType', 'auditStats', 'categories',
             'availableWeeks', 'authorizedCCs', 'availableMethods', 'availableUsages',
             'selectedPayeeId', 'availableUploadWeeks', 'selectedUploadWeek', 'selectedIds',
-            'editableCostCenters'
+            'editableCostCenters', 'auditFilterUsers', 'selectedAuditUserId',
+            'fromWeek', 'toWeek', 'uploadFromWeek', 'uploadToWeek'
         ));
     }
 
@@ -5659,6 +5707,11 @@ class ReimbursementController extends Controller
         [$weekNumber, $year] = array_pad(explode('-', $week, 2), 2, '0');
 
         return $year . str_pad($weekNumber, 2, '0', STR_PAD_LEFT);
+    }
+
+    private function reimbursementUploadWeek(Reimbursement $reimbursement): ?string
+    {
+        return $reimbursement->created_at?->copy()->addDays(2)->format('W-Y');
     }
 
     /**

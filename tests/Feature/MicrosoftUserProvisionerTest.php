@@ -43,6 +43,7 @@ class MicrosoftUserProvisionerTest extends TestCase
             'profile_id' => $profile->id,
             'status' => 'pending',
             'microsoft_id' => null,
+            'invitation_token' => 'invitation-token',
         ]);
         $user->authorizedCostCenters()->attach($costCenter);
         $user->permissions()->attach($permission);
@@ -56,6 +57,8 @@ class MicrosoftUserProvisionerTest extends TestCase
         $this->assertSame($user->id, $linked->id);
         $this->assertSame('active', $linked->status);
         $this->assertSame('entra-pending', $linked->microsoft_id);
+        $this->assertNull($linked->invitation_token);
+        $this->assertTrue($linked->isRegistered());
         $this->assertSame('Nombre Microsoft', $linked->name);
         $this->assertTrue($linked->authorizedCostCenters()->whereKey($costCenter->id)->exists());
         $this->assertTrue($linked->permissions()->whereKey($permission->id)->exists());

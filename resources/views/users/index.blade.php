@@ -11,10 +11,10 @@
                 <div class="p-6 text-gray-900 dark:text-gray-100">
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
                         <h3 class="text-lg font-medium">Lista de Usuarios</h3>
-                        @if(!Auth::user()->isAdminView())
-                        <a href="{{ route('users.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
-                            Nuevo Usuario
-                        </a>
+                        @if(Auth::user()->canPerform('users.create'))
+                            <a href="{{ route('users.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150">
+                                Nuevo Usuario
+                            </a>
                         @endif
                     </div>
                     
@@ -121,17 +121,18 @@
                                     @endif
 
                                      <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                        @if(!Auth::user()->isAdminView())
-                                            @if($user->invitation_token && !$user->isBlocked())
-                                                <form action="{{ route('users.resend_invitation', $user->id) }}" method="POST" class="inline">
-                                                    @csrf
-                                                    <button type="submit" class="text-amber-600 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-600" title="Reenviar Invitación">✉</button>
-                                                </form>
-                                                <button type="button" onclick="copyInvitationLink('{{ route('invitation.accept', $user->invitation_token) }}')" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-600" title="Copiar Enlace de Invitación">↗</button>
+                                        @if((Auth::user()->canPerform('users.edit') || Auth::user()->canPerform('users.delete')) && (Auth::user()->isAdmin() || (!$user->isAdmin() && !$user->isAdminView())))
+                                            @if(Auth::user()->canPerform('users.edit'))
+                                                @if($user->invitation_token && !$user->isBlocked())
+                                                    <form action="{{ route('users.resend_invitation', $user->id) }}" method="POST" class="inline">
+                                                        @csrf
+                                                        <button type="submit" class="text-amber-600 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-600" title="Reenviar Invitación">✉</button>
+                                                    </form>
+                                                @endif
+                                                <a href="{{ route('users.edit', $user->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Editar</a>
                                             @endif
-                                        <a href="{{ route('users.edit', $user->id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-600">Editar</a>
-                                        
-                                        @if($user->id !== auth()->id())
+
+                                        @if($user->id !== auth()->id() && Auth::user()->canPerform('users.delete'))
                                         <form id="block-user-{{ $user->id }}" action="{{ route('users.destroy', $user->id) }}" method="POST" class="inline">
     @csrf
     @method('DELETE')
@@ -149,7 +150,7 @@
 </form>
                                         @endif
                                         @else
-                                        <span class="text-gray-400 italic">Solo lectura</span>
+                                        <span class="text-gray-400 italic">{{ ($user->isAdmin() || $user->isAdminView()) && !Auth::user()->isAdmin() ? 'Cuenta protegida' : 'Sin acciones' }}</span>
                                         @endif
                                     </td>
                                 </tr>
@@ -249,22 +250,6 @@
             attachPaginationListeners();
         });
 
-        function copyInvitationLink(url) {
-            navigator.clipboard.writeText(url).then(() => {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Enlace Copiado',
-                    text: 'El enlace de invitación ha sido copiado al portapapeles.',
-                    toast: true,
-                    position: 'top-end',
-                    showConfirmButton: false,
-                    timer: 3000,
-                    timerProgressBar: true
-                });
-            }).catch(err => {
-                console.error('Error al copiar: ', err);
-            });
-        }
 
         @php
             $fixedFundTransferCandidateOptions = $fixedFundTransferCandidates->map(function ($candidate) {

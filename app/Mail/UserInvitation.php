@@ -19,17 +19,13 @@ class UserInvitation extends Mailable
 
     public $url;
 
-    public $provider;
-
     /**
      * Create a new message instance.
      */
     public function __construct($user)
     {
         $this->user = $user;
-        $domain = strtolower(substr(strrchr((string) $user->email, '@') ?: '', 1));
-        $this->provider = in_array($domain, config('services.google.allowed_domains', []), true) ? 'Google' : 'Microsoft';
-        $this->url = route($this->provider === 'Google' ? 'auth.google' : 'auth.microsoft');
+        $this->url = config('app.login_url');
     }
 
     /**
@@ -52,7 +48,6 @@ class UserInvitation extends Mailable
             with: [
                 'name' => $this->user->name,
                 'url' => $this->url,
-                'provider' => $this->provider,
             ],
         );
     }

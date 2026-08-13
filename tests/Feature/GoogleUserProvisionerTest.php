@@ -39,6 +39,7 @@ class GoogleUserProvisionerTest extends TestCase
             'profile_id' => $profile->id,
             'status' => 'pending',
             'google_id' => null,
+            'invitation_token' => 'invitation-token',
         ]);
 
         $linked = app(GoogleUserProvisioner::class)->provision([
@@ -52,6 +53,8 @@ class GoogleUserProvisionerTest extends TestCase
         $this->assertSame($profile->id, $linked->profile_id);
         $this->assertSame('active', $linked->status);
         $this->assertSame('google-pending', $linked->google_id);
+        $this->assertNull($linked->invitation_token);
+        $this->assertTrue($linked->isRegistered());
         $this->assertSame('Nombre Google', $linked->name);
     }
 
