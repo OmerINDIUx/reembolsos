@@ -344,6 +344,151 @@
                 </div>
             </section>
 
+            <!-- Delegated Operations -->
+            <section class="grid grid-cols-1 2xl:grid-cols-2 gap-8">
+                @php
+                    $delegateSummary = $delegatedOperations['delegate_summary'];
+                    $substituteSummary = $delegatedOperations['substitute_summary'];
+                @endphp
+
+                <div class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 bg-violet-50/60 dark:bg-violet-900/10">
+                        <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-[0.22em] text-violet-500 mb-1">Captura a nombre de terceros</p>
+                                <h3 class="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Delegados de terceros</h3>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Quién captura, para quién y qué resultado tuvieron esas solicitudes.</p>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 shrink-0">
+                                <div class="px-3 py-2 rounded-xl bg-white dark:bg-gray-800 border border-violet-100 dark:border-violet-800">
+                                    <p class="text-[8px] font-black uppercase tracking-widest text-gray-400">Capturado</p>
+                                    <p class="text-sm font-black text-violet-600">{{ $delegateSummary->count }} · ${{ number_format($delegateSummary->amount, 2) }}</p>
+                                </div>
+                                <div class="px-3 py-2 rounded-xl bg-white dark:bg-gray-800 border border-emerald-100 dark:border-emerald-800">
+                                    <p class="text-[8px] font-black uppercase tracking-widest text-gray-400">Aprobado</p>
+                                    <p class="text-sm font-black text-emerald-600">{{ $delegateSummary->approved_count }} · ${{ number_format($delegateSummary->approved_amount, 2) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead class="bg-gray-50/70 dark:bg-gray-900/30 border-b border-gray-100 dark:border-gray-700">
+                                <tr>
+                                    <th class="px-6 py-4 text-left text-[9px] font-black uppercase tracking-widest text-gray-400">Capturó / Para</th>
+                                    <th class="px-4 py-4 text-left text-[9px] font-black uppercase tracking-widest text-gray-400">Ingresado</th>
+                                    <th class="px-4 py-4 text-left text-[9px] font-black uppercase tracking-widest text-gray-400">Aprobado</th>
+                                    <th class="px-4 py-4 text-left text-[9px] font-black uppercase tracking-widest text-gray-400">Rechazado</th>
+                                    <th class="px-6 py-4 text-right text-[9px] font-black uppercase tracking-widest text-gray-400">Pendiente</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                @forelse($delegatedOperations['delegate_rows'] as $delegate)
+                                    <tr class="hover:bg-gray-50/60 dark:hover:bg-gray-900/20">
+                                        <td class="px-6 py-5 min-w-[220px]">
+                                            <p class="text-sm font-black text-gray-900 dark:text-white">{{ $delegate->delegate?->name ?? 'Usuario no disponible' }}</p>
+                                            <p class="text-[9px] font-bold uppercase tracking-wide text-violet-500">Para {{ $delegate->beneficiary?->name ?? 'Usuario no disponible' }}</p>
+                                        </td>
+                                        <td class="px-4 py-5 whitespace-nowrap">
+                                            <p class="text-xs font-black text-violet-600">{{ $delegate->count }} solicitudes</p>
+                                            <p class="text-[9px] font-bold text-gray-400">${{ number_format($delegate->amount, 2) }}</p>
+                                        </td>
+                                        <td class="px-4 py-5 whitespace-nowrap">
+                                            <p class="text-xs font-black text-emerald-600">{{ $delegate->approved_count }}</p>
+                                            <p class="text-[9px] font-bold text-emerald-500">${{ number_format($delegate->approved_amount, 2) }}</p>
+                                        </td>
+                                        <td class="px-4 py-5 whitespace-nowrap">
+                                            <p class="text-xs font-black text-rose-600">{{ $delegate->rejected_count }}</p>
+                                            <p class="text-[9px] font-bold text-rose-500">${{ number_format($delegate->rejected_amount, 2) }}</p>
+                                        </td>
+                                        <td class="px-6 py-5 text-right whitespace-nowrap">
+                                            <p class="text-xs font-black text-amber-600">{{ $delegate->pending_count }}</p>
+                                            <p class="text-[9px] font-bold text-amber-500">${{ number_format($delegate->pending_amount, 2) }}</p>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="5" class="px-8 py-14 text-center"><p class="text-xs font-black uppercase tracking-widest text-gray-400">No hay reembolsos capturados para terceros en este periodo</p></td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="px-8 py-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20">
+                        <p class="text-[9px] font-bold uppercase tracking-wide text-gray-400">{{ $delegateSummary->delegate_count }} delegados capturaron para {{ $delegateSummary->beneficiary_count }} personas.</p>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 bg-cyan-50/60 dark:bg-cyan-900/10">
+                        <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-500 mb-1">Cobertura del flujo</p>
+                                <h3 class="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Sustitutos</h3>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Decisiones realizadas en sustitución de responsables del centro.</p>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 shrink-0">
+                                <div class="px-3 py-2 rounded-xl bg-white dark:bg-gray-800 border border-cyan-100 dark:border-cyan-800">
+                                    <p class="text-[8px] font-black uppercase tracking-widest text-gray-400">Activos</p>
+                                    <p class="text-sm font-black text-cyan-600">{{ $substituteSummary->active_assignments }}</p>
+                                </div>
+                                <div class="px-3 py-2 rounded-xl bg-white dark:bg-gray-800 border border-emerald-100 dark:border-emerald-800">
+                                    <p class="text-[8px] font-black uppercase tracking-widest text-gray-400">Aprobado</p>
+                                    <p class="text-sm font-black text-emerald-600">{{ $substituteSummary->approved_count }} · ${{ number_format($substituteSummary->approved_amount, 2) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead class="bg-gray-50/70 dark:bg-gray-900/30 border-b border-gray-100 dark:border-gray-700">
+                                <tr>
+                                    <th class="px-6 py-4 text-left text-[9px] font-black uppercase tracking-widest text-gray-400">Sustituto / Responsable</th>
+                                    <th class="px-4 py-4 text-left text-[9px] font-black uppercase tracking-widest text-gray-400">Estado</th>
+                                    <th class="px-4 py-4 text-left text-[9px] font-black uppercase tracking-widest text-gray-400">Aprobado</th>
+                                    <th class="px-4 py-4 text-left text-[9px] font-black uppercase tracking-widest text-gray-400">Rechazado</th>
+                                    <th class="px-6 py-4 text-right text-[9px] font-black uppercase tracking-widest text-gray-400">Correcciones</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                @forelse($delegatedOperations['substitute_rows'] as $substitute)
+                                    <tr class="hover:bg-gray-50/60 dark:hover:bg-gray-900/20">
+                                        <td class="px-6 py-5 min-w-[220px]">
+                                            <p class="text-sm font-black text-gray-900 dark:text-white">{{ $substitute->substitute?->name ?? 'Usuario no disponible' }}</p>
+                                            <p class="text-[9px] font-bold uppercase tracking-wide text-cyan-600">Sustituye a {{ $substitute->original?->name ?? 'Usuario no disponible' }}</p>
+                                        </td>
+                                        <td class="px-4 py-5 whitespace-nowrap">
+                                            @if($substitute->is_active === true)
+                                                <span class="inline-flex px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 text-[8px] font-black uppercase">Activo</span>
+                                            @elseif($substitute->is_active === false)
+                                                <span class="inline-flex px-2 py-1 rounded-lg bg-gray-100 text-gray-500 text-[8px] font-black uppercase">Inactivo</span>
+                                            @else
+                                                <span class="inline-flex px-2 py-1 rounded-lg bg-indigo-100 text-indigo-700 text-[8px] font-black uppercase">Histórico</span>
+                                            @endif
+                                            <p class="text-[9px] font-bold text-gray-400 mt-1">{{ $substitute->decision_count }} decisiones</p>
+                                        </td>
+                                        <td class="px-4 py-5 whitespace-nowrap">
+                                            <p class="text-xs font-black text-emerald-600">{{ $substitute->approved_count }}</p>
+                                            <p class="text-[9px] font-bold text-emerald-500">${{ number_format($substitute->approved_amount, 2) }}</p>
+                                        </td>
+                                        <td class="px-4 py-5 whitespace-nowrap">
+                                            <p class="text-xs font-black text-rose-600">{{ $substitute->rejected_count }}</p>
+                                            <p class="text-[9px] font-bold text-rose-500">${{ number_format($substitute->rejected_amount, 2) }}</p>
+                                        </td>
+                                        <td class="px-6 py-5 text-right whitespace-nowrap">
+                                            <p class="text-xs font-black text-amber-600">{{ $substitute->correction_count }}</p>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="5" class="px-8 py-14 text-center"><p class="text-xs font-black uppercase tracking-widest text-gray-400">No hay sustitutos configurados ni actividad de sustitución en este centro</p></td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="px-8 py-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20">
+                        <p class="text-[9px] font-bold uppercase tracking-wide text-gray-400">Rechazado: {{ $substituteSummary->rejected_count }} · ${{ number_format($substituteSummary->rejected_amount, 2) }} · Correcciones: {{ $substituteSummary->correction_count }}</p>
+                    </div>
+                </div>
+            </section>
+
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
                 <!-- Bottleneck Analysis (Progress) -->

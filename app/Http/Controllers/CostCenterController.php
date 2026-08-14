@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CostCenter;
 use App\Models\Company;
 use App\Models\ReimbursementApproval;
+use App\Models\UserSubstitute;
 use App\Models\FixedFund;
 use App\Models\User;
 use App\Models\BudgetRenewal;
@@ -274,6 +275,7 @@ class CostCenterController extends Controller
             ->get();
 
         $approverEfficiency = $this->getApproverEfficiency($request, $costCenter);
+        $delegatedOperations = $this->getDelegatedOperations($request, $costCenter);
         $stats['avg_decision_minutes'] = $approverEfficiency['summary']->avg_approval_minutes;
 
         // 4. Category Breakdown
@@ -322,7 +324,7 @@ class CostCenterController extends Controller
             ->withSum(['reimbursements as spent_tips' => fn ($query) => $query->whereNotIn('status', ['borrador', 'rechazado'])], 'propina')
             ->get();
 
-        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements', 'budgetRenewals', 'fundSummaries', 'periods', 'approverEfficiency'));
+        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements', 'budgetRenewals', 'fundSummaries', 'periods', 'approverEfficiency', 'delegatedOperations'));
     }
 
     private function getApproverEfficiency(Request $request, CostCenter $costCenter): array
@@ -500,6 +502,124 @@ class CostCenterController extends Controller
         ];
     }
 
+    private function getDelegatedOperations(Request $request, CostCenter $costCenter): array
+    {
+        $thirdPartyReimbursements = $costCenter->reimbursements()
+            ->applyTimeFilters($request)
+            ->whereNotNull('created_by_id')
+            ->whereColumn('created_by_id', '!=', 'user_id')
+            ->where('status', '!=', 'borrador')
+            ->with(['createdBy', 'user'])
+            ->get(['id', 'created_by_id', 'user_id', 'status', 'total', 'propina']);
+
+        $delegateRows = $thirdPartyReimbursements
+            ->groupBy(fn ($reimbursement) => $reimbursement->created_by_id . ':' . $reimbursement->user_id)
+            ->map(function ($items) {
+                $first = $items->first();
+                $approved = $items->whereIn('status', ['aprobado', 'pagado']);
+                $rejected = $items->where('status', 'rechazado');
+                $pending = $items->whereNotIn('status', ['aprobado', 'pagado', 'rechazado', 'borrador']);
+                $amount = fn ($collection) => (float) $collection->sum(
+                    fn ($reimbursement) => (float) $reimbursement->total + (float) ($reimbursement->propina ?? 0)
+                );
+
+                return (object) [
+                    'delegate' => $first->createdBy,
+                    'beneficiary' => $first->user,
+                    'count' => $items->count(),
+                    'amount' => $amount($items),
+                    'approved_count' => $approved->count(),
+                    'approved_amount' => $amount($approved),
+                    'rejected_count' => $rejected->count(),
+                    'rejected_amount' => $amount($rejected),
+                    'pending_count' => $pending->count(),
+                    'pending_amount' => $amount($pending),
+                ];
+            })
+            ->sortByDesc('amount')
+            ->values();
+
+        $substituteEventsQuery = ReimbursementApproval::query()
+            ->whereNotNull('substituted_user_id')
+            ->whereIn('action', ['aprobado', 'rechazado', 'requiere_correccion'])
+            ->whereHas('reimbursement', fn ($query) => $query->where('cost_center_id', $costCenter->id))
+            ->with(['user', 'substitutedUser', 'reimbursement']);
+
+        $this->applyApprovalEventPeriod($substituteEventsQuery, $request);
+        $substituteEvents = $substituteEventsQuery->get();
+        $eventsByPair = $substituteEvents->groupBy(
+            fn (ReimbursementApproval $event) => $event->user_id . ':' . $event->substituted_user_id
+        );
+
+        $configuredSubstitutes = UserSubstitute::query()
+            ->whereIn('original_user_id', $costCenter->approvalSteps->pluck('user_id')->filter()->unique())
+            ->with(['user', 'originalUser'])
+            ->get()
+            ->keyBy(fn (UserSubstitute $assignment) => $assignment->user_id . ':' . $assignment->original_user_id);
+
+        $substituteRows = $configuredSubstitutes->keys()
+            ->merge($eventsByPair->keys())
+            ->unique()
+            ->map(function (string $pairKey) use ($configuredSubstitutes, $eventsByPair) {
+                $assignment = $configuredSubstitutes->get($pairKey);
+                $events = $eventsByPair->get($pairKey, collect());
+                $firstEvent = $events->first();
+                $approved = $events->where('action', 'aprobado')->unique('reimbursement_id');
+                $rejected = $events->where('action', 'rechazado')->unique('reimbursement_id');
+                $corrections = $events->where('action', 'requiere_correccion');
+                $amount = fn ($collection) => (float) $collection->sum(
+                    fn (ReimbursementApproval $event) => (float) ($event->reimbursement?->total ?? 0)
+                        + (float) ($event->reimbursement?->propina ?? 0)
+                );
+
+                return (object) [
+                    'substitute' => $assignment?->user ?? $firstEvent?->user,
+                    'original' => $assignment?->originalUser ?? $firstEvent?->substitutedUser,
+                    'is_active' => $assignment ? (bool) $assignment->is_active : null,
+                    'decision_count' => $events->count(),
+                    'approved_count' => $approved->count(),
+                    'approved_amount' => $amount($approved),
+                    'rejected_count' => $rejected->count(),
+                    'rejected_amount' => $amount($rejected),
+                    'correction_count' => $corrections->count(),
+                ];
+            })
+            ->filter(fn ($row) => $row->substitute && $row->original)
+            ->sortBy([
+                [fn ($row) => $row->is_active === true ? 0 : 1, 'asc'],
+                ['approved_amount', 'desc'],
+            ])
+            ->values();
+
+        $allDelegated = $thirdPartyReimbursements;
+        $approvedDelegated = $allDelegated->whereIn('status', ['aprobado', 'pagado']);
+        $delegatedAmount = fn ($collection) => (float) $collection->sum(
+            fn ($reimbursement) => (float) $reimbursement->total + (float) ($reimbursement->propina ?? 0)
+        );
+
+        return [
+            'delegate_rows' => $delegateRows,
+            'substitute_rows' => $substituteRows,
+            'delegate_summary' => (object) [
+                'delegate_count' => $allDelegated->pluck('created_by_id')->unique()->count(),
+                'beneficiary_count' => $allDelegated->pluck('user_id')->unique()->count(),
+                'count' => $allDelegated->count(),
+                'amount' => $delegatedAmount($allDelegated),
+                'approved_count' => $approvedDelegated->count(),
+                'approved_amount' => $delegatedAmount($approvedDelegated),
+            ],
+            'substitute_summary' => (object) [
+                'active_assignments' => $configuredSubstitutes->where('is_active', true)->count(),
+                'substitutes_with_activity' => $substituteEvents->pluck('user_id')->unique()->count(),
+                'decision_count' => $substituteEvents->count(),
+                'approved_count' => $substituteEvents->where('action', 'aprobado')->count(),
+                'approved_amount' => (float) $substituteRows->sum('approved_amount'),
+                'rejected_count' => $substituteEvents->where('action', 'rechazado')->count(),
+                'rejected_amount' => (float) $substituteRows->sum('rejected_amount'),
+                'correction_count' => $substituteEvents->where('action', 'requiere_correccion')->count(),
+            ],
+        ];
+    }
     private function applyApprovalEventPeriod($query, Request $request): void
     {
         switch ($request->input('period_type')) {
