@@ -15,6 +15,19 @@ class Company extends Model
         'account',
     ];
 
+    protected $hidden = [
+        'rfc',
+        'account',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'rfc' => 'encrypted',
+            'account' => 'encrypted',
+        ];
+    }
+
     public function costCenters()
     {
         return $this->hasMany(CostCenter::class);

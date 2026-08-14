@@ -129,6 +129,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'bank_name',
+        'clabe',
     ];
 
     /**
@@ -146,6 +148,8 @@ class User extends Authenticatable
             'email_workflow_notifications' => 'boolean',
             'email_payment_notifications' => 'boolean',
             'password' => 'hashed',
+            'bank_name' => 'encrypted',
+            'clabe' => 'encrypted',
             'blocked_at' => 'datetime',
         ];
     }

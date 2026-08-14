@@ -65,7 +65,7 @@
          class="px-8 pb-8 pt-2 border-t border-gray-50 dark:border-gray-700/50">
         
         <form action="{{ $action }}" method="GET" class="flex flex-col xl:flex-row items-start xl:items-end gap-6 animate-fadeIn">
-            @foreach(request()->except(['period_type', 'period_week', 'period_month', 'period_quarter', 'period_year']) as $key => $val)
+            @foreach(request()->except(['period_type', 'period_week', 'period_month', 'period_quarter', 'period_year', 'history_page']) as $key => $val)
                 @if(!is_array($val))
                     <input type="hidden" name="{{ $key }}" value="{{ $val }}">
                 @endif

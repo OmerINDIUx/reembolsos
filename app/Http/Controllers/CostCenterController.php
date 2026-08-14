@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CostCenter;
 use App\Models\Company;
+use App\Models\ReimbursementApproval;
 use App\Models\FixedFund;
 use App\Models\User;
 use App\Models\BudgetRenewal;
@@ -241,19 +242,18 @@ class CostCenterController extends Controller
 
         $pendingQuery = $costCenter->reimbursements()->applyTimeFilters($request)->whereNotIn('status', ['aprobado', 'pagado', 'rechazado', 'borrador']);
         $approvedQuery = $costCenter->reimbursements()->applyTimeFilters($request)->whereIn('status', ['aprobado', 'pagado']);
-
-        $pendingBudgetQuery = clone $pendingQuery;
-        $approvedBudgetQuery = clone $approvedQuery;
+        $correctionQuery = $costCenter->reimbursements()->applyTimeFilters($request)->where('status', 'requiere_correccion');
+        $rejectedQuery = $costCenter->reimbursements()->applyTimeFilters($request)->where('status', 'rechazado');
 
         $stats = [
             'pending_count' => (clone $pendingQuery)->count(),
-            'pending_amount' => (clone $pendingBudgetQuery)->sum(DB::raw('total + COALESCE(propina, 0)')),
+            'pending_amount' => (clone $pendingQuery)->sum(DB::raw('total + COALESCE(propina, 0)')),
             'approved_count' => (clone $approvedQuery)->count(),
-            'approved_amount' => (clone $approvedBudgetQuery)->sum(DB::raw('total + COALESCE(propina, 0)')),
-            'correction_count' => $costCenter->reimbursements()->applyTimeFilters($request)->where('status', 'requiere_correccion')->count(),
-            'rejected_count' => $costCenter->reimbursements()->applyTimeFilters($request)->where('status', 'rechazado')->count(),
-            'avg_approval_days' => $approvedQuery->whereNotNull('approved_by_treasury_at')
-                ->avg(DB::raw('TIMESTAMPDIFF(SECOND, created_at, approved_by_treasury_at) / 86400')) ?? 0,
+            'approved_amount' => (clone $approvedQuery)->sum(DB::raw('total + COALESCE(propina, 0)')),
+            'correction_count' => (clone $correctionQuery)->count(),
+            'correction_amount' => (clone $correctionQuery)->sum(DB::raw('total + COALESCE(propina, 0)')),
+            'rejected_count' => (clone $rejectedQuery)->count(),
+            'rejected_amount' => (clone $rejectedQuery)->sum(DB::raw('total + COALESCE(propina, 0)')),
         ];
 
         // 2. Status Breakdown (for chart/overview)
@@ -272,6 +272,9 @@ class CostCenterController extends Controller
             ->select('current_step_id', DB::raw('count(*) as count'), DB::raw('sum(total + COALESCE(propina, 0)) as amount'))
             ->groupBy('current_step_id')
             ->get();
+
+        $approverEfficiency = $this->getApproverEfficiency($request, $costCenter);
+        $stats['avg_decision_minutes'] = $approverEfficiency['summary']->avg_approval_minutes;
 
         // 4. Category Breakdown
         $categoryBreakdown = $costCenter->reimbursements()
@@ -319,7 +322,260 @@ class CostCenterController extends Controller
             ->withSum(['reimbursements as spent_tips' => fn ($query) => $query->whereNotIn('status', ['borrador', 'rechazado'])], 'propina')
             ->get();
 
-        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements', 'budgetRenewals', 'fundSummaries', 'periods'));
+        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements', 'budgetRenewals', 'fundSummaries', 'periods', 'approverEfficiency'));
+    }
+
+    private function getApproverEfficiency(Request $request, CostCenter $costCenter): array
+    {
+        $decisionEventsQuery = ReimbursementApproval::query()
+            ->whereIn('action', ['aprobado', 'rechazado', 'requiere_correccion'])
+            ->whereHas('reimbursement', fn ($query) => $query->where('cost_center_id', $costCenter->id))
+            ->with(['user', 'reimbursement.approvals']);
+
+        $this->applyApprovalEventPeriod($decisionEventsQuery, $request);
+
+        $decisionEvents = $decisionEventsQuery
+            ->get()
+            ->map(function (ReimbursementApproval $decision) {
+                $reimbursement = $decision->reimbursement;
+                if (! $reimbursement) {
+                    return null;
+                }
+
+                $previousEvent = $reimbursement->approvals
+                    ->filter(fn (ReimbursementApproval $event) =>
+                        $event->created_at->lt($decision->created_at)
+                        || ($event->created_at->equalTo($decision->created_at) && $event->id < $decision->id)
+                    )
+                    ->last();
+
+                $startedAt = $previousEvent?->created_at ?? $reimbursement->created_at;
+
+                return (object) [
+                    'id' => $decision->id,
+                    'reimbursement_id' => $decision->reimbursement_id,
+                    'user_id' => $decision->user_id,
+                    'user' => $decision->user,
+                    'step_name' => $decision->step_name,
+                    'action' => $decision->action,
+                    'amount' => (float) $reimbursement->total + (float) ($reimbursement->propina ?? 0),
+                    'elapsed_minutes' => max(0, $startedAt->diffInMinutes($decision->created_at)),
+                ];
+            })
+            ->filter();
+
+        $activeItems = $costCenter->reimbursements()
+            ->applyTimeFilters($request)
+            ->whereNotIn('status', ['aprobado', 'pagado', 'rechazado', 'borrador'])
+            ->with('currentStep')
+            ->get(['id', 'status', 'current_step_id', 'total', 'propina', 'approved_by_treasury_at'])
+            ->map(function ($reimbursement) use ($costCenter) {
+                $assignedUserId = $reimbursement->currentStep?->user_id;
+                $queueLabel = null;
+
+                if (! $assignedUserId && $reimbursement->status === 'pendiente_revision_cxp') {
+                    $assignedUserId = $costCenter->accountant_id;
+                    $queueLabel = $assignedUserId ? null : 'Cuentas por Pagar · Revisión';
+                }
+
+                if (
+                    ! $assignedUserId
+                    && $reimbursement->status === 'pendiente_pago'
+                    && $reimbursement->approved_by_treasury_at === null
+                ) {
+                    $assignedUserId = $costCenter->tesoreria_id;
+                    $queueLabel = $assignedUserId ? null : 'Cuentas por Pagar · Pago';
+                }
+
+                if (
+                    ! $assignedUserId
+                    && $reimbursement->status === 'pendiente_pago'
+                    && $reimbursement->approved_by_treasury_at !== null
+                ) {
+                    $queueLabel = 'Tesorería · Listo para pago';
+                }
+
+                return (object) [
+                    'reimbursement_id' => $reimbursement->id,
+                    'assigned_user_id' => $assignedUserId,
+                    'queue_label' => $queueLabel,
+                    'amount' => (float) $reimbursement->total + (float) ($reimbursement->propina ?? 0),
+                ];
+            });
+
+        $configuredByUser = $costCenter->approvalSteps
+            ->filter(fn ($step) => $step->user_id && $step->user)
+            ->groupBy('user_id');
+
+        $approverIds = $configuredByUser->keys()
+            ->merge($decisionEvents->pluck('user_id'))
+            ->merge($activeItems->pluck('assigned_user_id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $rows = $approverIds
+            ->map(function (int $userId) use ($configuredByUser, $decisionEvents, $activeItems) {
+                $configuredSteps = $configuredByUser->get($userId, collect());
+                $personEvents = $decisionEvents->where('user_id', $userId);
+                $approvedEvents = $personEvents->where('action', 'aprobado');
+                $rejectedEvents = $personEvents->where('action', 'rechazado');
+                $correctionEvents = $personEvents->where('action', 'requiere_correccion');
+                $pendingItems = $activeItems->where('assigned_user_id', $userId);
+                $user = $configuredSteps->first()?->user ?? $personEvents->first()?->user ?? User::withTrashed()->find($userId);
+
+                if (! $user) {
+                    return null;
+                }
+
+                $decisionCount = $personEvents->count();
+                $uniqueApprovedRequests = $approvedEvents->unique('reimbursement_id');
+                $uniqueRejectedRequests = $rejectedEvents->unique('reimbursement_id');
+
+                return (object) [
+                    'user' => $user,
+                    'sort_order' => $configuredSteps->min('order') ?? 999,
+                    'step_names' => $configuredSteps->pluck('name')
+                        ->merge($personEvents->pluck('step_name'))
+                        ->filter()
+                        ->unique()
+                        ->values(),
+                    'avg_approval_minutes' => $approvedEvents->isNotEmpty()
+                        ? (float) $approvedEvents->avg('elapsed_minutes')
+                        : null,
+                    'approval_count' => $approvedEvents->count(),
+                    'approved_request_count' => $uniqueApprovedRequests->count(),
+                    'approved_amount' => (float) $uniqueApprovedRequests->sum('amount'),
+                    'rejection_count' => $rejectedEvents->count(),
+                    'rejected_amount' => (float) $uniqueRejectedRequests->sum('amount'),
+                    'correction_count' => $correctionEvents->count(),
+                    'pending_count' => $pendingItems->count(),
+                    'pending_amount' => (float) $pendingItems->sum('amount'),
+                    'approval_rate' => $decisionCount > 0
+                        ? ($approvedEvents->count() / $decisionCount) * 100
+                        : null,
+                    'instant_approval_count' => $approvedEvents->where('elapsed_minutes', '<', 1)->count(),
+                ];
+            })
+            ->filter()
+            ->sortBy([
+                ['sort_order', 'asc'],
+                [fn ($row) => $row->user->name, 'asc'],
+            ])
+            ->values();
+
+        $approvedDecisions = $decisionEvents->where('action', 'aprobado');
+        $operationalQueues = $activeItems
+            ->whereNull('assigned_user_id')
+            ->whereNotNull('queue_label')
+            ->groupBy('queue_label')
+            ->map(fn ($items, $label) => (object) [
+                'label' => $label,
+                'count' => $items->count(),
+                'amount' => (float) $items->sum('amount'),
+            ])
+            ->values();
+        $unassignedPending = $activeItems
+            ->whereNull('assigned_user_id')
+            ->whereNull('queue_label');
+
+        return [
+            'rows' => $rows,
+            'operational_queues' => $operationalQueues,
+            'summary' => (object) [
+                'avg_approval_minutes' => $approvedDecisions->isNotEmpty()
+                    ? (float) $approvedDecisions->avg('elapsed_minutes')
+                    : null,
+                'approval_count' => $approvedDecisions->count(),
+                'rejection_count' => $decisionEvents->where('action', 'rechazado')->count(),
+                'correction_count' => $decisionEvents->where('action', 'requiere_correccion')->count(),
+                'instant_approval_count' => $approvedDecisions->where('elapsed_minutes', '<', 1)->count(),
+                'unique_requests' => $decisionEvents->pluck('reimbursement_id')->unique()->count(),
+                'queue_pending_count' => $operationalQueues->sum('count'),
+                'queue_pending_amount' => (float) $operationalQueues->sum('amount'),
+                'unassigned_pending_count' => $unassignedPending->count(),
+                'unassigned_pending_amount' => (float) $unassignedPending->sum('amount'),
+            ],
+        ];
+    }
+
+    private function applyApprovalEventPeriod($query, Request $request): void
+    {
+        switch ($request->input('period_type')) {
+            case 'week':
+                if ($request->filled('period_week')) {
+                    $query->whereHas('reimbursement', fn ($reimbursement) =>
+                        $reimbursement->where('week', $request->input('period_week'))
+                    );
+                }
+                break;
+            case 'month':
+                if ($request->filled('period_month')) {
+                    $date = \Carbon\Carbon::parse($request->input('period_month'));
+                    $query->whereMonth('reimbursement_approvals.created_at', $date->month)
+                        ->whereYear('reimbursement_approvals.created_at', $date->year);
+                }
+                break;
+            case 'quarter':
+                if ($request->filled('period_quarter')) {
+                    [$year, $quarter] = array_pad(explode('-Q', $request->input('period_quarter')), 2, null);
+                    if ($year && $quarter) {
+                        $query->whereYear('reimbursement_approvals.created_at', $year)
+                            ->where(DB::raw('QUARTER(reimbursement_approvals.created_at)'), $quarter);
+                    }
+                }
+                break;
+            case 'year':
+                if ($request->filled('period_year')) {
+                    $query->whereYear('reimbursement_approvals.created_at', $request->input('period_year'));
+                }
+                break;
+        }
+    }
+
+    public function categoryMatrix(Request $request, CostCenter $costCenter)
+    {
+        if (! $request->filled('period_type')) {
+            $request->merge([
+                'period_type' => 'month',
+                'period_month' => now()->format('Y-m'),
+            ]);
+        }
+
+        $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
+
+        $categories = $costCenter->reimbursements()
+            ->applyTimeFilters($request)
+            ->where('status', '!=', 'borrador')
+            ->select(
+                'category',
+                DB::raw('count(*) as count'),
+                DB::raw('sum(total + COALESCE(propina, 0)) as amount'),
+                DB::raw("sum(case when status in ('aprobado', 'pagado') then 1 else 0 end) as approved_count"),
+                DB::raw("sum(case when status in ('aprobado', 'pagado') then total + COALESCE(propina, 0) else 0 end) as approved_amount"),
+                DB::raw("sum(case when status = 'rechazado' then 1 else 0 end) as rejected_count"),
+                DB::raw("sum(case when status = 'rechazado' then total + COALESCE(propina, 0) else 0 end) as rejected_amount"),
+                DB::raw("sum(case when status not in ('aprobado', 'pagado', 'rechazado', 'borrador') then 1 else 0 end) as pending_count"),
+                DB::raw("sum(case when status not in ('aprobado', 'pagado', 'rechazado', 'borrador') then total + COALESCE(propina, 0) else 0 end) as pending_amount")
+            )
+            ->groupBy('category')
+            ->orderByDesc('amount')
+            ->get();
+
+        $totals = (object) [
+            'categories' => $categories->count(),
+            'count' => $categories->sum('count'),
+            'amount' => (float) $categories->sum('amount'),
+            'approved_count' => $categories->sum('approved_count'),
+            'approved_amount' => (float) $categories->sum('approved_amount'),
+            'rejected_count' => $categories->sum('rejected_count'),
+            'rejected_amount' => (float) $categories->sum('rejected_amount'),
+            'pending_count' => $categories->sum('pending_count'),
+            'pending_amount' => (float) $categories->sum('pending_amount'),
+        ];
+
+        return view('cost_centers.category-matrix', compact('costCenter', 'categories', 'totals', 'periods'));
     }
 
     /**

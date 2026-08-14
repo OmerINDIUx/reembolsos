@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class CompanyController extends Controller
@@ -17,18 +19,24 @@ class CompanyController extends Controller
 
     public function index(Request $request)
     {
-        $query = Company::withCount('costCenters')->orderBy('name');
+        $companies = Company::withCount('costCenters')->orderBy('name')->get();
 
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('rfc', 'like', "%{$search}%")
-                    ->orWhere('account', 'like', "%{$search}%");
-            });
+            $search = Str::lower(trim((string) $request->search));
+            $companies = $companies->filter(fn (Company $company) => Str::contains(
+                Str::lower(implode(' ', [$company->name, $company->rfc, $company->account])),
+                $search
+            ));
         }
 
-        $companies = $query->paginate(10)->appends($request->all());
+        $page = LengthAwarePaginator::resolveCurrentPage();
+        $companies = new LengthAwarePaginator(
+            $companies->forPage($page, 10)->values(),
+            $companies->count(),
+            10,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         return view('companies.index', compact('companies'));
     }

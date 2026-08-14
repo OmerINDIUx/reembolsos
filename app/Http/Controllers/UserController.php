@@ -25,6 +25,22 @@ class UserController extends Controller
         '@archandel.com',
     ];
 
+    private const REIMBURSEMENT_STATUS_LABELS = [
+        'pendiente' => 'En proceso',
+        'requiere_correccion' => 'Requiere corrección',
+        'aprobado_director' => 'Aprobado por director',
+        'aprobado_control' => 'Aprobado por control de obra',
+        'aprobado_ejecutivo' => 'Aprobado por dirección ejecutiva',
+        'aprobado_direccion' => 'Aprobado por subdirección',
+        'aprobado_tesoreria' => 'Aprobado por tesorería',
+        'pendiente_revision_cxp' => 'Pendiente de revisión CXP',
+        'pendiente_pago' => 'Pendiente de pago',
+        'en_evento' => 'En evento',
+        'pagado' => 'Pagado',
+        'aprobado' => 'Pago aprobado',
+        'rechazado' => 'Rechazado',
+    ];
+
 
     /**
      * Display a listing of the resource.
@@ -231,13 +247,34 @@ class UserController extends Controller
             ->orderBy('month', 'asc')
             ->get();
 
-        // 5. Recent Activity
-        $recentReimbursements = $user->reimbursements()
+        // 5. Complete request history, filterable and paginated.
+        $historyStatusOptions = $user->reimbursements()
+            ->where('status', '!=', 'borrador')
+            ->distinct()
+            ->orderBy('status')
+            ->pluck('status')
+            ->mapWithKeys(fn (string $status) => [
+                $status => self::REIMBURSEMENT_STATUS_LABELS[$status] ?? Str::headline($status),
+            ]);
+
+        $historyStatus = (string) $request->query('history_status', '');
+        if (! $historyStatusOptions->has($historyStatus)) {
+            $historyStatus = '';
+        }
+
+        $reimbursementsHistoryQuery = $user->reimbursements()
+            ->applyTimeFilters($request)
             ->where('status', '!=', 'borrador')
             ->with(['costCenter', 'currentStep'])
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get();
+            ->orderByDesc('created_at');
+
+        if ($historyStatus !== '') {
+            $reimbursementsHistoryQuery->where('status', $historyStatus);
+        }
+
+        $reimbursementsHistory = $reimbursementsHistoryQuery
+            ->paginate(15, ['*'], 'history_page')
+            ->withQueryString();
 
         // 6. Approval Task Stats (if they are an approver)
         $pendingApprovalsCount = \App\Models\Reimbursement::whereHas('currentStep', function($q) use ($user) {
@@ -247,7 +284,7 @@ class UserController extends Controller
         // 7. Substitutes
         $allUsers = User::where('id', '!=', $user->id)->orderBy('name')->get();
 
-        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'recentReimbursements', 'pendingApprovalsCount', 'periods', 'allUsers', 'costCenterAssignments'));
+        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'reimbursementsHistory', 'historyStatusOptions', 'historyStatus', 'pendingApprovalsCount', 'periods', 'allUsers', 'costCenterAssignments'));
     }
 
     /**

@@ -86,6 +86,7 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('permission:cost_centers.view')->group(function() {
         Route::resource('companies', CompanyController::class)->except(['show']);
         Route::resource('cost_centers', CostCenterController::class);
+        Route::get('cost_centers/{cost_center}/category-matrix', [CostCenterController::class, 'categoryMatrix'])->name('cost_centers.category_matrix');
         Route::patch('cost_centers/{cost_center}/toggle-status', [CostCenterController::class, 'toggleStatus'])->name('cost_centers.toggle_status');
         Route::post('cost_centers/{cost_center}/renew-budget', [CostCenterController::class, 'renewBudget'])->name('cost_centers.renew_budget');
     });

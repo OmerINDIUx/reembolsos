@@ -17,7 +17,7 @@
         </h2>
     </x-slot>
 
-    <div class="py-12 relative" x-data="reimbursementForm()">
+    <div class="py-6 sm:py-12 relative" x-data="reimbursementForm()">
         <!-- Loading Overlay -->
         <div id="loading-overlay" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-60 backdrop-blur-sm">
             <div class="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-sm w-full mx-4 border border-gray-200 dark:border-gray-700">
@@ -32,8 +32,8 @@
 
 
 
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="mb-8 flex justify-between items-center">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="mb-6 sm:mb-8 flex justify-between items-center">
                 <a href="{{ route('reimbursements.create') }}" class="inline-flex items-center text-sm font-bold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 transition-colors">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
                     CAMBIAR TIPO DE SOLICITUD
@@ -51,7 +51,7 @@
 
                 <!-- Paso 1: Clasificación de Gasto -->
                 <div class="bg-white dark:bg-gray-800 shadow-xl rounded-3xl mb-10 overflow-hidden border border-gray-100 dark:border-gray-700">
-                    <div class="p-8 md:p-10">
+                    <div class="p-4 sm:p-8 md:p-10">
                         <div class="flex items-center mb-8">
                             <div class="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 mr-5">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
@@ -269,27 +269,27 @@
                 </div>
 
                 <!-- REPEATER (FOR REEMBOLSO, FONDO FIJO, COMIDA, VIAJE) -->
-                <div class="space-y-16 mt-16" x-show="isValidOwner()" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 transform translate-y-10" x-transition:enter-end="opacity-100 transform translate-y-0">
+                <div class="space-y-10 sm:space-y-16 mt-10 sm:mt-16" x-show="isValidOwner()" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 transform translate-y-10" x-transition:enter-end="opacity-100 transform translate-y-0">
                     <template x-for="(item, index) in items" :key="item.id">
-                        <div class="bg-white dark:bg-gray-800 shadow-2xl rounded-[2.5rem] border border-gray-100 dark:border-gray-700 overflow-hidden animate-fadeIn relative">
+                        <div class="bg-white dark:bg-gray-800 shadow-2xl rounded-2xl sm:rounded-[2.5rem] border border-gray-100 dark:border-gray-700 overflow-hidden animate-fadeIn relative">
                             <input type="hidden" :name="'items['+index+'][draft_id]'" :value="item.draftId">
                             
                             <!-- Card Header -->
-                            <div class="bg-gray-50 dark:bg-gray-900/40 px-8 md:px-10 py-6 flex justify-between items-center border-b border-gray-100 dark:border-gray-700">
-                                <div class="flex items-center space-x-4">
-                                    <div class="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center font-black text-lg" x-text="index + 1"></div>
-                                    <h3 class="text-xl font-bold text-gray-800 dark:text-white" x-text="item.fileName || 'Paso 2: Sube tu factura y completa la información requerida.'"></h3>
+                            <div class="bg-gray-50 dark:bg-gray-900/40 px-4 sm:px-8 md:px-10 py-5 sm:py-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 border-b border-gray-100 dark:border-gray-700">
+                                <div class="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0">
+                                    <div class="w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center font-black text-base sm:text-lg" x-text="index + 1"></div>
+                                    <h3 class="min-w-0 break-words text-base sm:text-xl font-bold leading-snug text-gray-800 dark:text-white" x-text="item.fileName || 'Paso 2: Sube tu factura y completa la información requerida.'"></h3>
                                 </div>
-                                <button type="button" x-on:click="removeItem(index)" class="flex items-center space-x-2 text-red-500 hover:text-white hover:bg-red-500 px-4 py-2 rounded-xl transition-all font-bold text-sm">
+                                <button type="button" x-on:click="removeItem(index)" class="self-end sm:self-auto flex flex-shrink-0 items-center space-x-2 text-red-500 hover:text-white hover:bg-red-500 px-3 sm:px-4 py-2 rounded-xl transition-all font-bold text-xs sm:text-sm">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                     <span>ELIMINAR FACTURA</span>
                                 </button>
                             </div>
 
-                            <div class="p-8 md:p-10">
-                                <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+                            <div class="p-4 sm:p-8 md:p-10">
+                                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
                                     <!-- Left Column: XML/PDF Carga -->
-                                    <div class="lg:col-span-4 space-y-8 border-r border-gray-50 dark:border-gray-700/50 pr-6">
+                                    <div class="lg:col-span-4 space-y-8 lg:border-r border-gray-50 dark:border-gray-700/50 lg:pr-6">
                                         <div class="space-y-6" x-show="hasInvoice">
                                             <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3">Archivos Fuente</h4>
                                             
@@ -481,10 +481,10 @@
                                     </div>
 
                                     <!-- Right Column: ALL DATA FIELDS -->
-                                    <div class="lg:col-span-8 space-y-8">
-                                        <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] border-b pb-3" x-text="hasInvoice ? 'Información del Sistema (CFDI)' : 'Información Manual'"></h4>
+                                    <div class="lg:col-span-8 min-w-0 space-y-8">
+                                        <h4 class="text-xs sm:text-[10px] font-black uppercase text-gray-500 sm:text-gray-400 tracking-[0.12em] sm:tracking-[0.2em] border-b pb-3" x-text="hasInvoice ? 'Información del Sistema (CFDI)' : 'Información Manual'"></h4>
                                         
-                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5 sm:gap-y-6">
                                             <div class="col-span-1 md:col-span-2" x-show="hasInvoice">
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Folio Fiscal (UUID)</label>
                                                 <input type="text" :name="'items['+index+'][uuid]'" :value="item.data.uuid" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs font-mono text-gray-600 dark:text-gray-400" readonly placeholder="Esperando XML...">
@@ -519,7 +519,7 @@
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Lugar Expedición (CP)</label>
                                                 <input type="text" :name="'items['+index+'][lugar_expedicion]'" :value="item.data.lugar_expedicion" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
                                             </div>
-                                            <div x-show="hasInvoice" class="col-span-2">
+                                            <div x-show="hasInvoice" class="col-span-1 md:col-span-2">
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Regimen Fiscal Emisor</label>
                                                 <input type="text" :name="'items['+index+'][regimen_fiscal_emisor]'" :value="item.data.regimen_fiscal_emisor" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" readonly>
                                             </div>
@@ -551,7 +551,7 @@
                                                 </div>
                                             </div>
 
-                                            <div :class="!hasInvoice ? 'col-span-2' : ''">
+                                            <div :class="!hasInvoice ? 'col-span-1 md:col-span-2' : ''">
                                                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Nombre Emisor *</label>
                                                 <input type="text" :name="'items['+index+'][nombre_emisor]'" x-model="item.data.nombre_emisor" class="w-full bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 rounded-xl text-xs" :readonly="hasInvoice" :required="!hasInvoice" placeholder="Nombre de la empresa o negocio">
                                             </div>
@@ -580,7 +580,7 @@
                                                         </div>
                                                     </div>
 
-                                                    <div class="border-t border-gray-50 dark:border-gray-700/50 pt-4 col-span-2"></div>
+                                                    <div class="border-t border-gray-50 dark:border-gray-700/50 pt-4 col-span-1 md:col-span-2"></div>
                                                 </div>
                                             </template>
 

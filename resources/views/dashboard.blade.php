@@ -283,15 +283,23 @@
                             <h4 class="text-xl font-black mb-1 uppercase tracking-tighter">Velocidad de Flujo</h4>
                             <p class="text-[10px] text-indigo-300 font-bold mb-8 uppercase tracking-widest">¿Qué tan rápido aprobamos?</p>
                             
+                            @php
+                                $maxFlowHours = max((float) $analytics['avg_time_by_cost_center']->max('avg_hours'), 1);
+                            @endphp
                             <div class="space-y-6">
                                 @forelse($analytics['avg_time_by_cost_center'] as $cc)
                                     <div>
                                         <div class="flex justify-between items-end mb-2">
                                             <span class="text-[10px] font-black text-gray-400 truncate uppercase">{{ $cc->costCenter->code ?? 'CC' }}</span>
-                                            <span class="text-xs font-black text-indigo-400">{{ number_format($cc->avg_hours / 24, 1) }} d</span>
+                                            <div class="text-right">
+                                                <span class="block text-xs font-black text-indigo-400">
+                                                    {{ $cc->avg_hours < 24 ? number_format($cc->avg_hours, 1) . ' h' : number_format($cc->avg_hours / 24, 1) . ' d' }}
+                                                </span>
+                                                <span class="block text-[8px] font-bold uppercase tracking-widest text-gray-500">{{ $cc->approvals_count }} {{ $cc->approvals_count === 1 ? 'aprobación' : 'aprobaciones' }}</span>
+                                            </div>
                                         </div>
                                         <div class="w-full bg-white/10 rounded-full h-1">
-                                            <div class="bg-indigo-500 h-full rounded-full transition-all duration-1000" style="width: {{ min(($cc->avg_hours / 24) * 5, 100) }}%"></div>
+                                            <div class="bg-indigo-500 h-full rounded-full transition-all duration-1000" style="width: {{ max(($cc->avg_hours / $maxFlowHours) * 100, 8) }}%"></div>
                                         </div>
                                     </div>
                                 @empty

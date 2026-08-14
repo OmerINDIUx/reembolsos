@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Reimbursement;
+use App\Models\ReimbursementApproval;
 use App\Models\CostCenter;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
@@ -178,16 +179,57 @@ class DashboardController extends Controller
         $previousWeekAmount = $weeklyTotals->slice(-2, 1)->first()->amount ?? 0;
         $weekGrowth = $previousWeekAmount > 0 ? (($currentWeekAmount - $previousWeekAmount) / $previousWeekAmount) * 100 : 0;
 
-        // 3. Average Approval Time (Hours) by Cost Center
-        $avgTimeByCostCenter = (clone $queryBuilder)
-            ->where('status', 'aprobado')
-            ->whereNotNull('approved_by_treasury_at')
-            ->select('cost_center_id', DB::raw('AVG(TIMESTAMPDIFF(HOUR, created_at, approved_by_treasury_at)) as avg_hours'))
+        // 3. Average response time between workflow events and approvals by cost center.
+        $approvalEventsQuery = ReimbursementApproval::query()
+            ->where('action', 'aprobado')
+            ->whereHas('reimbursement', fn ($query) => $query->whereNotIn('status', ['rechazado', 'borrador']));
+
+        if (! $hasFullAccess) {
+            $approvalEventsQuery->whereHas('reimbursement', function ($query) use ($user) {
+                $query->where('user_id', $user->id)
+                    ->orWhereHas('costCenter.approvalSteps', fn ($steps) => $steps->where('user_id', $user->id));
+            });
+        }
+
+        $this->applyApprovalPeriod($approvalEventsQuery, $request);
+
+        $avgTimeByCostCenter = $approvalEventsQuery
+            ->with(['reimbursement.costCenter', 'reimbursement.approvals'])
+            ->get()
+            ->map(function (ReimbursementApproval $approval) {
+                $reimbursement = $approval->reimbursement;
+                if (! $reimbursement?->costCenter) {
+                    return null;
+                }
+
+                $previousEvent = $reimbursement->approvals
+                    ->filter(fn (ReimbursementApproval $event) =>
+                        $event->created_at->lt($approval->created_at)
+                        || ($event->created_at->equalTo($approval->created_at) && $event->id < $approval->id)
+                    )
+                    ->last();
+
+                $startedAt = $previousEvent?->created_at ?? $reimbursement->created_at;
+
+                return (object) [
+                    'cost_center_id' => $reimbursement->cost_center_id,
+                    'costCenter' => $reimbursement->costCenter,
+                    'hours' => max(0, $startedAt->diffInMinutes($approval->created_at) / 60),
+                ];
+            })
+            ->filter()
             ->groupBy('cost_center_id')
-            ->with('costCenter')
-            ->orderBy('avg_hours', 'asc')
-            ->limit(5)
-            ->get();
+            ->map(function ($events) {
+                return (object) [
+                    'cost_center_id' => $events->first()->cost_center_id,
+                    'costCenter' => $events->first()->costCenter,
+                    'avg_hours' => $events->avg('hours'),
+                    'approvals_count' => $events->count(),
+                ];
+            })
+            ->sortBy('avg_hours')
+            ->take(5)
+            ->values();
 
         // 4. Top Spenders (Users)
         $topSpenders = (clone $queryBuilder)
@@ -243,5 +285,39 @@ class DashboardController extends Controller
             'daily_activity' => $dailyActivity,
             'avg_ticket' => (clone $queryBuilder)->avg(DB::raw('total + COALESCE(propina, 0)')) ?: 0
         ];
+    }
+
+    private function applyApprovalPeriod($query, Request $request): void
+    {
+        switch ($request->input('period_type')) {
+            case 'week':
+                if ($request->filled('period_week')) {
+                    $query->whereHas('reimbursement', fn ($reimbursement) =>
+                        $reimbursement->where('week', $request->input('period_week'))
+                    );
+                }
+                break;
+            case 'month':
+                if ($request->filled('period_month')) {
+                    $date = Carbon::parse($request->input('period_month'));
+                    $query->whereMonth('reimbursement_approvals.created_at', $date->month)
+                        ->whereYear('reimbursement_approvals.created_at', $date->year);
+                }
+                break;
+            case 'quarter':
+                if ($request->filled('period_quarter')) {
+                    [$year, $quarter] = array_pad(explode('-Q', $request->input('period_quarter')), 2, null);
+                    if ($year && $quarter) {
+                        $query->whereYear('reimbursement_approvals.created_at', $year)
+                            ->where(DB::raw('QUARTER(reimbursement_approvals.created_at)'), $quarter);
+                    }
+                }
+                break;
+            case 'year':
+                if ($request->filled('period_year')) {
+                    $query->whereYear('reimbursement_approvals.created_at', $request->input('period_year'));
+                }
+                break;
+        }
     }
 }

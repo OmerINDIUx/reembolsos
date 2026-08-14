@@ -96,24 +96,6 @@
                     </div>
                 </div>
 
-                <!-- Bank Info -->
-                <div class="bg-indigo-50 dark:bg-indigo-900/10 p-6 rounded-3xl border border-indigo-100 dark:border-indigo-800 relative overflow-hidden group col-span-1 md:col-span-2 lg:col-span-1">
-                    <div class="relative z-10">
-                        <p class="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 mb-4">Información Bancaria</p>
-                        <div class="space-y-3">
-                            <div class="flex items-center gap-2">
-                                <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"></path></svg>
-                                <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">Banco:</p>
-                                <p class="text-xs font-black text-gray-900 dark:text-white uppercase">{{ $user->bank_name ?? 'No registrado' }}</p>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
-                                <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">CLABE:</p>
-                                <p class="text-xs font-black text-gray-900 dark:text-white">{{ $user->clabe ?? 'No registrado' }}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <!-- Cost Center Assignments -->
@@ -198,13 +180,48 @@
                 </div>
             </div>
 
-            <!-- Recent Activity Table -->
+            <!-- Request History -->
             <div class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                    <h3 class="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Historial de Solicitudes de {{ explode(' ', $user->name)[0] }}</h3>
+                <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 flex flex-col xl:flex-row xl:items-end justify-between gap-5">
+                    <div>
+                        <h3 class="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Historial de Solicitudes de {{ explode(' ', $user->name)[0] }}</h3>
+                        <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mt-1">
+                            {{ number_format($reimbursementsHistory->total()) }} {{ $reimbursementsHistory->total() === 1 ? 'solicitud encontrada' : 'solicitudes encontradas' }} · agrupadas por semana
+                        </p>
+                    </div>
+
+                    <form action="{{ route('users.show', $user) }}" method="GET" class="flex flex-col sm:flex-row sm:items-end gap-3 w-full xl:w-auto">
+                        @foreach(request()->except(['history_status', 'history_page']) as $key => $value)
+                            @if(!is_array($value))
+                                <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                            @endif
+                        @endforeach
+                        <div class="w-full sm:w-64">
+                            <label for="history_status" class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Filtrar por estatus</label>
+                            <select id="history_status" name="history_status" class="w-full rounded-xl border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-white text-xs font-bold focus:border-indigo-500 focus:ring-indigo-500">
+                                <option value="">Todos los estatus</option>
+                                @foreach($historyStatusOptions as $status => $label)
+                                    <option value="{{ $status }}" @selected($historyStatus === $status)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <button type="submit" class="inline-flex items-center justify-center px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors">
+                            Aplicar
+                        </button>
+                        @if($historyStatus !== '')
+                            <a href="{{ route('users.show', ['user' => $user] + request()->except(['history_status', 'history_page'])) }}" class="inline-flex items-center justify-center px-4 py-3 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                                Limpiar
+                            </a>
+                        @endif
+                    </form>
                 </div>
                 <div class="overflow-x-auto text-sm">
-                    @if($recentReimbursements->count() > 0)
+                    @if($reimbursementsHistory->count() > 0)
+                    @php
+                        $weeklyReimbursements = $reimbursementsHistory->getCollection()->groupBy(
+                            fn ($reimbursement) => $reimbursement->created_at->copy()->startOfWeek()->toDateString()
+                        );
+                    @endphp
                     <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-700">
                         <thead class="bg-gray-50/50 dark:bg-gray-900/50">
                             <tr>
@@ -216,53 +233,75 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-50 dark:divide-gray-700">
-                            @foreach($recentReimbursements as $r)
-                            <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-900/10 cursor-pointer" onclick="window.location='{{ route('reimbursements.show', $r) }}'">
-                                <td class="px-8 py-5">
-                                    <div class="font-black text-gray-900 dark:text-white uppercase">{{ $r->folio }}</div>
-                                    <div class="text-[9px] text-gray-400 font-bold">{{ $r->created_at->isoFormat('D MMM YYYY') }}</div>
-                                </td>
-                                <td class="px-8 py-5">
-                                    <div class="text-[10px] font-black text-indigo-600 uppercase">{{ $r->costCenter->code ?? 'S/C' }}</div>
-                                    <div class="text-[9px] text-gray-400 truncate max-w-[150px] font-medium">{{ $r->costCenter->name ?? '-' }}</div>
-                                </td>
-                                <td class="px-8 py-5 font-black text-gray-900 dark:text-white">${{ number_format($r->total, 2) }}</td>
-                                <td class="px-8 py-5">
-                                    @if($r->status === 'aprobado')
-                                        <span class="text-[10px] font-bold text-emerald-600">Pago aprobado</span>
-                                    @elseif($r->status === 'rechazado')
-                                        <span class="text-[10px] font-bold text-rose-600">Rechazado Definitivamente</span>
-                                    @else
-                                        <span class="text-[10px] font-bold text-gray-900 dark:text-white flex items-center">
-                                            <svg class="w-3 h-3 mr-1 text-amber-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-                                            {{ $r->currentStep->name ?? 'En Validación' }}
+                            @foreach($weeklyReimbursements as $weekStartDate => $weeklyItems)
+                                @php
+                                    $weekStart = \Carbon\Carbon::parse($weekStartDate)->locale('es');
+                                    $weekEnd = $weekStart->copy()->endOfWeek();
+                                @endphp
+                                <tr class="bg-indigo-50/70 dark:bg-indigo-900/20">
+                                    <td colspan="5" class="px-8 py-3">
+                                        <div class="flex flex-wrap items-center justify-between gap-2">
+                                            <span class="text-[10px] font-black uppercase tracking-[0.18em] text-indigo-700 dark:text-indigo-300">
+                                                Semana {{ $weekStart->isoWeek() }} · {{ $weekStart->isoFormat('D MMM') }} al {{ $weekEnd->isoFormat('D MMM YYYY') }}
+                                            </span>
+                                            <span class="text-[9px] font-black uppercase tracking-widest text-indigo-500 dark:text-indigo-400">
+                                                {{ $weeklyItems->count() }} {{ $weeklyItems->count() === 1 ? 'solicitud' : 'solicitudes' }}
+                                            </span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                @foreach($weeklyItems as $r)
+                                <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-900/10 cursor-pointer transition-colors" onclick="window.location='{{ route('reimbursements.show', $r) }}'">
+                                    <td class="px-8 py-5">
+                                        <div class="font-black text-gray-900 dark:text-white uppercase">{{ $r->folio }}</div>
+                                        <div class="text-[9px] text-gray-400 font-bold">{{ $r->created_at->isoFormat('D MMM YYYY') }}</div>
+                                    </td>
+                                    <td class="px-8 py-5">
+                                        <div class="text-[10px] font-black text-indigo-600 uppercase">{{ $r->costCenter->code ?? 'S/C' }}</div>
+                                        <div class="text-[9px] text-gray-400 truncate max-w-[150px] font-medium">{{ $r->costCenter->name ?? '-' }}</div>
+                                    </td>
+                                    <td class="px-8 py-5 font-black text-gray-900 dark:text-white">${{ number_format($r->total, 2) }}</td>
+                                    <td class="px-8 py-5">
+                                        @if($r->status === 'aprobado')
+                                            <span class="text-[10px] font-bold text-emerald-600">Pago aprobado</span>
+                                        @elseif($r->status === 'rechazado')
+                                            <span class="text-[10px] font-bold text-rose-600">Rechazado Definitivamente</span>
+                                        @else
+                                            <span class="text-[10px] font-bold text-gray-900 dark:text-white flex items-center">
+                                                <svg class="w-3 h-3 mr-1 text-amber-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                                                {{ $r->currentStep->name ?? 'En Validación' }}
+                                            </span>
+                                        @endif
+                                    </td>
+                                    <td class="px-8 py-5">
+                                        <span class="px-3 py-1 inline-flex text-[9px] leading-4 font-black rounded-full uppercase tracking-widest
+                                            {{ $r->status === 'aprobado' ? 'bg-emerald-100 text-emerald-800' : '' }}
+                                            {{ $r->status === 'requiere_correccion' ? 'bg-amber-100 text-amber-800' : '' }}
+                                            {{ $r->status === 'rechazado' ? 'bg-rose-100 text-rose-800' : '' }}
+                                            {{ !in_array($r->status, ['aprobado', 'requiere_correccion', 'rechazado']) ? 'bg-indigo-100 text-indigo-800' : '' }}
+                                        ">
+                                            {{ $historyStatusOptions[$r->status] ?? \Illuminate\Support\Str::headline($r->status) }}
                                         </span>
-                                    @endif
-                                </td>
-                                <td class="px-8 py-5">
-                                    <span class="px-3 py-1 inline-flex text-[9px] leading-4 font-black rounded-full uppercase tracking-widest
-                                        {{ $r->status === 'aprobado' ? 'bg-emerald-100 text-emerald-800' : '' }}
-                                        {{ $r->status === 'requiere_correccion' ? 'bg-amber-100 text-amber-800' : '' }}
-                                        {{ $r->status === 'rechazado' ? 'bg-rose-100 text-rose-800' : '' }}
-                                        {{ !in_array($r->status, ['aprobado', 'requiere_correccion', 'rechazado']) ? 'bg-indigo-100 text-indigo-800' : '' }}
-                                    ">
-                                        @if($r->status === 'aprobado') Pago aprobado 
-                                        @elseif($r->status === 'pendiente') En Proceso
-                                        @else {{ str_replace('_', ' ', $r->status) }} @endif
-                                    </span>
-                                </td>
-                            </tr>
+                                    </td>
+                                </tr>
+                                @endforeach
                             @endforeach
                         </tbody>
                     </table>
                     @else
                         <div class="py-20 text-center">
-                            <p class="text-xs font-black uppercase text-gray-400 tracking-widest">Este usuario no tiene solicitudes registradas</p>
+                            <p class="text-xs font-black uppercase text-gray-400 tracking-widest">
+                                {{ $historyStatus !== '' ? 'No hay solicitudes con el estatus seleccionado' : 'Este usuario no tiene solicitudes registradas' }}
+                            </p>
                         </div>
                     @endif
                 </div>
+                @if($reimbursementsHistory->hasPages())
+                    <div class="px-8 py-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50/40 dark:bg-gray-900/20">
+                        {{ $reimbursementsHistory->onEachSide(1)->links() }}
+                    </div>
+                @endif
             </div>
-
             <!-- Admin Section: Substitutes Management -->
             @if(Auth::user()->canPerform('users.edit') && (Auth::user()->isAdmin() || (!$user->isAdmin() && !$user->isAdminView())))
             <div x-data="{ showModal: false }">

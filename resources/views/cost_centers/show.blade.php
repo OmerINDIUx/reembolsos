@@ -110,8 +110,16 @@
                     </div>
                     <div class="relative z-10">
                         <p class="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200 mb-1">Velocidad de Flujo</p>
-                        <h4 class="text-4xl font-black leading-none">{{ number_format($stats['avg_approval_days'], 1) }} d</h4>
-                        <p class="text-xs font-bold text-indigo-100 mt-2 opacity-80 mb-4">Promedio aprobación</p>
+                        @php $avgDecisionMinutes = $stats['avg_decision_minutes']; @endphp
+                        <h4 class="text-4xl font-black leading-none">
+                            @if($avgDecisionMinutes === null) Sin datos
+                            @elseif($avgDecisionMinutes < 1) &lt; 1 min
+                            @elseif($avgDecisionMinutes < 60) {{ number_format($avgDecisionMinutes, 0) }} min
+                            @elseif($avgDecisionMinutes < 1440) {{ number_format($avgDecisionMinutes / 60, 1) }} h
+                            @else {{ number_format($avgDecisionMinutes / 1440, 1) }} d
+                            @endif
+                        </h4>
+                        <p class="text-xs font-bold text-indigo-100 mt-2 opacity-80 mb-4">Promedio por aprobación</p>
                         
                         <div class="flex -space-x-2 overflow-hidden">
                             @foreach($costCenter->approvalSteps as $step)
@@ -149,7 +157,7 @@
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                         </div>
                         <div>
-                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Pagado (Histórico)</p>
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Aprobado / Pagado</p>
                             <h4 class="text-xl font-black text-gray-900 dark:text-white">${{ number_format($stats['approved_amount'], 0) }}</h4>
                             <p class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Aprobados: {{ $stats['approved_count'] }}</p>
                         </div>
@@ -166,15 +174,175 @@
                             <a href="{{ route('reimbursements.index', ['cost_center_id' => $costCenter->id, 'status' => 'requiere_correccion']) }}" class="hover:text-amber-600 transition-colors">
                                 <p class="text-[9px] font-black uppercase text-gray-400">Corrección</p>
                                 <h4 class="text-lg font-black text-gray-900 dark:text-white">{{ $stats['correction_count'] }}</h4>
+                                <p class="text-[9px] font-bold text-amber-500">${{ number_format($stats['correction_amount'], 2) }}</p>
                             </a>
                             <a href="{{ route('reimbursements.index', ['cost_center_id' => $costCenter->id, 'status' => 'rechazado']) }}" class="hover:text-rose-600 transition-colors">
                                 <p class="text-[9px] font-black uppercase text-gray-400">Rechazos</p>
                                 <h4 class="text-lg font-black text-gray-900 dark:text-white">{{ $stats['rejected_count'] }}</h4>
+                                <p class="text-[9px] font-bold text-rose-500">${{ number_format($stats['rejected_amount'], 2) }}</p>
                             </a>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Approver Efficiency -->
+            <section class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                @php $efficiencySummary = $approverEfficiency['summary']; @endphp
+                <div class="px-8 py-7 border-b border-gray-100 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/20">
+                    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-5">
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-[0.22em] text-indigo-500 mb-1">Rendimiento del flujo</p>
+                            <h3 class="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Eficiencia por aprobador</h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Tiempo de respuesta, decisiones, montos gestionados y carga pendiente durante el periodo seleccionado.</p>
+                        </div>
+                        <div class="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-3">
+                            <div class="px-4 py-3 rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 min-w-[120px]">
+                                <p class="text-[8px] font-black uppercase tracking-widest text-gray-400">Tiempo medio</p>
+                                <p class="text-lg font-black text-indigo-600 dark:text-indigo-400">
+                                    @if($efficiencySummary->avg_approval_minutes === null) —
+                                    @elseif($efficiencySummary->avg_approval_minutes < 1) &lt; 1 min
+                                    @elseif($efficiencySummary->avg_approval_minutes < 60) {{ number_format($efficiencySummary->avg_approval_minutes, 0) }} min
+                                    @elseif($efficiencySummary->avg_approval_minutes < 1440) {{ number_format($efficiencySummary->avg_approval_minutes / 60, 1) }} h
+                                    @else {{ number_format($efficiencySummary->avg_approval_minutes / 1440, 1) }} d
+                                    @endif
+                                </p>
+                            </div>
+                            <div class="px-4 py-3 rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 min-w-[120px]">
+                                <p class="text-[8px] font-black uppercase tracking-widest text-gray-400">Aprobaciones</p>
+                                <p class="text-lg font-black text-emerald-600">{{ $efficiencySummary->approval_count }}</p>
+                            </div>
+                            <div class="px-4 py-3 rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 min-w-[120px]">
+                                <p class="text-[8px] font-black uppercase tracking-widest text-gray-400">Rechazos / Correcciones</p>
+                                <p class="text-lg font-black text-rose-600">{{ $efficiencySummary->rejection_count }} / {{ $efficiencySummary->correction_count }}</p>
+                            </div>
+                            <div class="px-4 py-3 rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 min-w-[120px]">
+                                <p class="text-[8px] font-black uppercase tracking-widest text-gray-400">Solicitudes evaluadas</p>
+                                <p class="text-lg font-black text-gray-900 dark:text-white">{{ $efficiencySummary->unique_requests }}</p>
+                            </div>
+                            <div class="px-4 py-3 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 min-w-[120px]">
+                                <p class="text-[8px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Dinero aprobado</p>
+                                <p class="text-lg font-black text-emerald-700 dark:text-emerald-300">${{ number_format($stats['approved_amount'], 2) }}</p>
+                            </div>
+                            <div class="px-4 py-3 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800 min-w-[120px]">
+                                <p class="text-[8px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400">Dinero rechazado</p>
+                                <p class="text-lg font-black text-rose-700 dark:text-rose-300">${{ number_format($stats['rejected_amount'], 2) }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if($efficiencySummary->instant_approval_count > 0 || $efficiencySummary->queue_pending_count > 0 || $efficiencySummary->unassigned_pending_count > 0)
+                        <div class="grid grid-cols-1 xl:grid-cols-3 gap-3 mt-5">
+                            @if($efficiencySummary->instant_approval_count > 0)
+                                <div class="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                                    <svg class="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path></svg>
+                                    <div>
+                                        <p class="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">Aprobaciones instantáneas</p>
+                                        <p class="text-xs text-amber-700/80 dark:text-amber-200/80 mt-1">{{ $efficiencySummary->instant_approval_count }} decisiones se registraron en menos de un minuto. Conviene revisar si fueron procesos masivos o intervenciones administrativas.</p>
+                                    </div>
+                                </div>
+                            @endif
+                            @foreach($approverEfficiency['operational_queues'] as $queue)
+                                <div class="flex items-start gap-3 p-4 rounded-2xl bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800">
+                                    <svg class="w-5 h-5 text-sky-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                    <div>
+                                        <p class="text-[10px] font-black uppercase tracking-widest text-sky-700 dark:text-sky-300">{{ $queue->label }}</p>
+                                        <p class="text-xs text-sky-700/80 dark:text-sky-200/80 mt-1">{{ $queue->count }} {{ $queue->count === 1 ? 'solicitud' : 'solicitudes' }} por ${{ number_format($queue->amount, 2) }} están en esta cola operativa.</p>
+                                    </div>
+                                </div>
+                            @endforeach
+                            @if($efficiencySummary->unassigned_pending_count > 0)
+                                <div class="flex items-start gap-3 p-4 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
+                                    <svg class="w-5 h-5 text-rose-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.36 6.64a9 9 0 11-12.72 0M12 2v10"></path></svg>
+                                    <div>
+                                        <p class="text-[10px] font-black uppercase tracking-widest text-rose-700 dark:text-rose-300">Pendientes sin responsable explícito</p>
+                                        <p class="text-xs text-rose-700/80 dark:text-rose-200/80 mt-1">{{ $efficiencySummary->unassigned_pending_count }} solicitudes por ${{ number_format($efficiencySummary->unassigned_pending_amount, 2) }} no tienen una persona asignada dentro del centro.</p>
+                                    </div>
+                                </div>
+                            @endif
+                        </div>
+                    @endif
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-50/70 dark:bg-gray-900/30 border-b border-gray-100 dark:border-gray-700">
+                            <tr>
+                                <th class="px-8 py-4 text-left text-[9px] font-black uppercase tracking-widest text-gray-400">Persona / Etapas</th>
+                                <th class="px-6 py-4 text-left text-[9px] font-black uppercase tracking-widest text-gray-400">Tiempo al aprobar</th>
+                                <th class="px-6 py-4 text-left text-[9px] font-black uppercase tracking-widest text-gray-400">Aprobado</th>
+                                <th class="px-6 py-4 text-left text-[9px] font-black uppercase tracking-widest text-gray-400">Rechazado / Corrección</th>
+                                <th class="px-6 py-4 text-left text-[9px] font-black uppercase tracking-widest text-gray-400">Pendiente</th>
+                                <th class="px-8 py-4 text-right text-[9px] font-black uppercase tracking-widest text-gray-400">Efectividad</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                            @forelse($approverEfficiency['rows'] as $approver)
+                                <tr class="hover:bg-gray-50/60 dark:hover:bg-gray-900/20 transition-colors">
+                                    <td class="px-8 py-5 min-w-[260px]">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center font-black">
+                                                {{ substr($approver->user->name, 0, 1) }}
+                                            </div>
+                                            <div>
+                                                <p class="text-sm font-black text-gray-900 dark:text-white">{{ $approver->user->name }}</p>
+                                                <p class="text-[9px] font-bold uppercase tracking-wide text-gray-400 max-w-[300px]">{{ $approver->step_names->join(' · ') ?: 'Intervención registrada' }}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-5 whitespace-nowrap">
+                                        @if($approver->avg_approval_minutes === null)
+                                            <span class="text-xs font-black text-gray-400">Sin aprobaciones</span>
+                                        @else
+                                            <p class="text-sm font-black text-indigo-600 dark:text-indigo-400">
+                                                @if($approver->avg_approval_minutes < 1) &lt; 1 min
+                                                @elseif($approver->avg_approval_minutes < 60) {{ number_format($approver->avg_approval_minutes, 0) }} min
+                                                @elseif($approver->avg_approval_minutes < 1440) {{ number_format($approver->avg_approval_minutes / 60, 1) }} h
+                                                @else {{ number_format($approver->avg_approval_minutes / 1440, 1) }} d
+                                                @endif
+                                            </p>
+                                            <p class="text-[9px] font-bold uppercase tracking-widest text-gray-400">{{ $approver->approval_count }} decisiones</p>
+                                            @if($approver->instant_approval_count > 0)
+                                                <span class="inline-flex mt-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[8px] font-black uppercase">{{ $approver->instant_approval_count }} instantáneas</span>
+                                            @endif
+                                        @endif
+                                    </td>
+                                    <td class="px-6 py-5 whitespace-nowrap">
+                                        <p class="text-sm font-black text-emerald-600">{{ $approver->approval_count }} decisiones</p>
+                                        <p class="text-[9px] font-bold text-gray-400">{{ $approver->approved_request_count }} solicitudes · ${{ number_format($approver->approved_amount, 2) }}</p>
+                                    </td>
+                                    <td class="px-6 py-5 whitespace-nowrap">
+                                        <p class="text-xs font-black text-rose-600">{{ $approver->rejection_count }} rechazos · ${{ number_format($approver->rejected_amount, 2) }}</p>
+                                        <p class="text-[9px] font-bold text-amber-500 mt-1">{{ $approver->correction_count }} correcciones</p>
+                                    </td>
+                                    <td class="px-6 py-5 whitespace-nowrap">
+                                        <p class="text-sm font-black {{ $approver->pending_count > 0 ? 'text-amber-600' : 'text-gray-400' }}">{{ $approver->pending_count }} solicitudes</p>
+                                        <p class="text-[9px] font-bold text-gray-400">${{ number_format($approver->pending_amount, 2) }}</p>
+                                    </td>
+                                    <td class="px-8 py-5 text-right whitespace-nowrap">
+                                        @if($approver->approval_rate === null)
+                                            <span class="text-xs font-black text-gray-400">—</span>
+                                        @else
+                                            <span class="inline-flex px-3 py-1.5 rounded-xl text-xs font-black {{ $approver->approval_rate >= 80 ? 'bg-emerald-100 text-emerald-700' : ($approver->approval_rate >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700') }}">
+                                                {{ number_format($approver->approval_rate, 0) }}%
+                                            </span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6" class="px-8 py-16 text-center">
+                                        <p class="text-xs font-black uppercase tracking-widest text-gray-400">No hay aprobadores ni decisiones registradas en este periodo</p>
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-8 py-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20">
+                    <p class="text-[9px] text-gray-400 font-bold uppercase tracking-wide">Los montos por persona se contabilizan una sola vez por solicitud, aunque haya intervenido en varias etapas. No deben sumarse entre aprobadores.</p>
+                </div>
+            </section>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
@@ -231,7 +399,7 @@
                     </h3>
                     
                     <div class="flex-1 space-y-6">
-                        @forelse($categoryBreakdown as $cat)
+                        @forelse($categoryBreakdown->take(3) as $cat)
                             @php
                                 $maxAmount = $categoryBreakdown->max('amount') ?: 1;
                                 $percent = ($cat->amount / $maxAmount) * 100;
@@ -250,11 +418,15 @@
                         @endforelse
                     </div>
                     
-                    <div class="mt-8 pt-6 border-t border-gray-50 dark:border-gray-700">
+                    <div class="mt-8 pt-6 border-t border-gray-50 dark:border-gray-700 space-y-4">
                         <div class="flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-widest">
                             <span>Total Comprobantes</span>
                             <span class="text-gray-900 dark:text-white">{{ $categoryBreakdown->sum('count') }}</span>
                         </div>
+                        <a href="{{ route('cost_centers.category_matrix', array_merge(['cost_center' => $costCenter], request()->only(['period_type', 'period_week', 'period_month', 'period_quarter', 'period_year']))) }}" class="flex items-center justify-center w-full px-4 py-3 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors">
+                            Ver más
+                            <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </a>
                     </div>
                 </div>
             </div>
