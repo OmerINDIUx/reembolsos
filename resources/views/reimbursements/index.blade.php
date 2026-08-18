@@ -455,10 +455,11 @@
                                         $userName = $group['context'];
                                         $userItems = $group['items'];
                                         $week = $group['week'];
+                                        $selectionWeekKey = 'week-' . $week;
                                     @endphp
                                     <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
                                         {{-- Header Responsable --}}
-                                        <div class="bg-indigo-50/50 dark:bg-indigo-900/20 px-8 py-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                                        <div class="bg-indigo-50/50 dark:bg-indigo-900/20 px-5 sm:px-8 py-5 border-b border-gray-100 dark:border-gray-800 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
                                             <div class="flex items-center space-x-4">
                                                 <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-none">
                                                     <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -468,9 +469,21 @@
                                                     <p class="text-xl font-black text-gray-900 dark:text-white leading-none mt-1">{{ $userName }}</p>
                                                 </div>
                                             </div>
-                                            <div class="text-right">
-                                                <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total en Grupo</h3>
-                                                <p class="text-2xl font-black text-indigo-700 dark:text-indigo-400 leading-none mt-1">${{ number_format($userItems->sum('total') + $userItems->sum('propina'), 2) }}</p>
+                                            <div class="w-full md:w-auto flex items-center justify-between md:justify-end gap-4 sm:gap-6 pt-4 md:pt-0 border-t border-indigo-100 dark:border-indigo-900/40 md:border-0">
+                                                @if($tab !== 'management' || $user->isAdmin())
+                                                    <label class="flex items-center space-x-2 cursor-pointer select-none shrink-0">
+                                                        <input type="checkbox"
+                                                               :checked="isWeekSelected('{{ $selectionWeekKey }}')"
+                                                               :indeterminate="isWeekPartiallySelected('{{ $selectionWeekKey }}')"
+                                                               @change="toggleWeek('{{ $selectionWeekKey }}', $event.target.checked)"
+                                                               class="w-5 h-5 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200" />
+                                                        <span class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Seleccionar semana</span>
+                                                    </label>
+                                                @endif
+                                                <div class="text-right shrink-0">
+                                                    <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total en Grupo</h3>
+                                                    <p class="text-2xl font-black text-indigo-700 dark:text-indigo-400 leading-none mt-1">${{ number_format($userItems->sum('total') + $userItems->sum('propina'), 2) }}</p>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -515,6 +528,7 @@
                                                                    data-statuses='@json($batchItems->pluck("status")->filter()->unique()->values())'
                                                                    data-types='@json($batchItems->pluck("type")->filter()->unique()->values())'
                                                                    data-cost-center-ids='@json($batchItems->pluck("cost_center_id")->filter()->unique()->values())'
+                                                                   data-week-group="{{ $selectionWeekKey }}"
                                                                    class="cc-group-checkbox w-6 h-6 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition-all duration-200 cursor-pointer" 
                                                                    @change="toggleGroupData($event.target)" />
                                                         </div>
@@ -1192,6 +1206,35 @@
                         this.metadata = [];
                     }
                     this.syncBulkEditDefaults();
+                },
+
+                weekCheckboxes(weekKey) {
+                    return Array.from(document.querySelectorAll(`.cc-group-checkbox[data-week-group="${weekKey}"]`));
+                },
+
+                isCheckboxSelected(checkbox) {
+                    const ids = JSON.parse(checkbox.dataset.ids || '[]').map(String);
+                    return ids.length > 0 && ids.every(id => this.selectedIds.includes(id));
+                },
+
+                isWeekSelected(weekKey) {
+                    const checkboxes = this.weekCheckboxes(weekKey);
+                    return checkboxes.length > 0 && checkboxes.every(checkbox => this.isCheckboxSelected(checkbox));
+                },
+
+                isWeekPartiallySelected(weekKey) {
+                    const checkboxes = this.weekCheckboxes(weekKey);
+                    const selectedCount = checkboxes.filter(checkbox => this.isCheckboxSelected(checkbox)).length;
+                    return selectedCount > 0 && selectedCount < checkboxes.length;
+                },
+
+                toggleWeek(weekKey, checked) {
+                    this.weekCheckboxes(weekKey).forEach(checkbox => {
+                        if (checkbox.checked === checked) return;
+
+                        checkbox.checked = checked;
+                        this.toggleGroupData(checkbox);
+                    });
                 },
                 
                 get selectedGroupCount() {

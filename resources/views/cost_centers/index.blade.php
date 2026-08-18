@@ -207,27 +207,8 @@
                                                         Editar
                                                     </a>
 
-                                                    <form action="{{ route('cost_centers.toggle_status', $cc->id) }}" method="POST" class="inline">
-                                                        @csrf
-                                                        @method('PATCH')
-                                                        <button type="submit" class="text-amber-600 hover:text-amber-900 transition-colors">
-                                                            Desactivar
-                                                        </button>
-                                                    </form>
+                                                    <a href="{{ route('cost_centers.deactivation', $cc) }}" class="text-amber-600 hover:text-amber-900 transition-colors">Desactivar</a>
 
-                                                    @if($cc->reimbursements_count == 0)
-                                                    <form action="{{ route('cost_centers.destroy', $cc->id) }}" method="POST" class="inline"
-                                                          data-confirm="Se eliminará permanentemente este centro de costos y sus datos vinculados."
-                                                          data-confirm-title="¿Eliminar centro de costos?"
-                                                          data-confirm-type="danger"
-                                                          data-confirm-btn="SÍ, ELIMINAR">
-                                                        @csrf
-                                                        @method('DELETE')
-                                                        <button type="submit" class="text-red-600 hover:text-red-900 transition-colors">
-                                                            Eliminar
-                                                        </button>
-                                                    </form>
-                                                    @endif
                                                 @else
                                                     <form action="{{ route('cost_centers.toggle_status', $cc->id) }}" method="POST" class="inline">
                                                         @csrf
@@ -237,19 +218,6 @@
                                                         </button>
                                                     </form>
 
-                                                    @if($cc->reimbursements_count == 0)
-                                                    <form action="{{ route('cost_centers.destroy', $cc->id) }}" method="POST" class="inline"
-                                                          data-confirm="Se eliminará permanentemente este centro de costos del historial."
-                                                          data-confirm-title="¿Eliminar del historial?"
-                                                          data-confirm-type="danger"
-                                                          data-confirm-btn="SÍ, ELIMINAR">
-                                                        @csrf
-                                                        @method('DELETE')
-                                                        <button type="submit" class="text-red-600 hover:text-red-900 transition-colors">
-                                                            Eliminar
-                                                        </button>
-                                                    </form>
-                                                    @endif
                                                 @endif
                                             @else
                                                 <span class="text-gray-400 italic">Lectura</span>

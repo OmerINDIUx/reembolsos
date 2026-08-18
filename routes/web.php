@@ -42,7 +42,6 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::patch('/profile/notifications', [ProfileController::class, 'updateNotificationPreferences'])->name('profile.notifications.update');
     Route::post('/profile/personal-info/remind-later', [ProfileController::class, 'remindPersonalInfoLater'])->name('profile.personal_info.remind_later');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::post('reimbursements/bulk/store', [ReimbursementController::class, 'bulkStore'])->name('reimbursements.bulk_store');
     Route::post('reimbursements/bulk/approve', [ReimbursementController::class, 'bulkApprove'])->name('reimbursements.bulk_approve');
@@ -85,8 +84,11 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware('permission:cost_centers.view')->group(function() {
         Route::resource('companies', CompanyController::class)->except(['show']);
-        Route::resource('cost_centers', CostCenterController::class);
+        Route::get('cost_centers/{cost_center}/deactivation', [CostCenterController::class, 'deactivation'])->name('cost_centers.deactivation');
+        Route::resource('cost_centers', CostCenterController::class)->except(['destroy']);
         Route::get('cost_centers/{cost_center}/category-matrix', [CostCenterController::class, 'categoryMatrix'])->name('cost_centers.category_matrix');
+        Route::get('cost_centers/{cost_center}/activity', [CostCenterController::class, 'activity'])->name('cost_centers.activity');
+        Route::get('cost_centers/{cost_center}/fixed-fund-history', [CostCenterController::class, 'fixedFundHistory'])->name('cost_centers.fixed_fund_history');
         Route::patch('cost_centers/{cost_center}/toggle-status', [CostCenterController::class, 'toggleStatus'])->name('cost_centers.toggle_status');
         Route::post('cost_centers/{cost_center}/renew-budget', [CostCenterController::class, 'renewBudget'])->name('cost_centers.renew_budget');
     });

@@ -9,9 +9,12 @@ use App\Models\UserSubstitute;
 use App\Models\FixedFund;
 use App\Models\User;
 use App\Models\BudgetRenewal;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 
 class CostCenterController extends Controller
@@ -21,6 +24,12 @@ class CostCenterController extends Controller
         'rechazado',
         'aprobado',
         'pagado',
+    ];
+
+    private const COST_CENTER_TERMINAL_REIMBURSEMENT_STATUSES = [
+        'aprobado',
+        'pagado',
+        'rechazado',
     ];
 
     private function syncFixedFunds(CostCenter $costCenter, array $funds, array $transfers = []): void
@@ -317,15 +326,220 @@ class CostCenterController extends Controller
             ->limit(10)
             ->get();
 
-        // 8. Budget Renewals
-        $budgetRenewals = $costCenter->budgetRenewals()->with('user')->get();
-        $fundSummaries = $costCenter->fixedFunds()->where('is_active', true)->with('user')
-            ->withSum(['reimbursements as spent_total' => fn ($query) => $query->whereNotIn('status', ['borrador', 'rechazado'])], 'total')
-            ->withSum(['reimbursements as spent_tips' => fn ($query) => $query->whereNotIn('status', ['borrador', 'rechazado'])], 'propina')
+        $fixedFundStatement = $this->fixedFundStatementData($costCenter);
+        $budgetRenewals = $fixedFundStatement['budgetRenewals'];
+        $fundSummaries = $fixedFundStatement['fundSummaries'];
+        $fixedFundLedger = $fixedFundStatement['fixedFundLedger']->take(10)->values();
+        $fixedFundLedgerTotals = $fixedFundStatement['fixedFundLedgerTotals'];
+        $budgetRenewalCount = $fixedFundStatement['budgetRenewalCount'];
+
+        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements', 'budgetRenewals', 'fundSummaries', 'fixedFundLedger', 'fixedFundLedgerTotals', 'budgetRenewalCount', 'periods', 'approverEfficiency', 'delegatedOperations'));
+    }
+
+    public function activity(Request $request, CostCenter $costCenter)
+    {
+        $costCenter->load('fixedFunds.user');
+
+        $query = $costCenter->reimbursements()
+            ->with(['user', 'payee', 'fixedFund'])
+            ->where('status', '!=', 'borrador');
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $query->where(function ($subquery) use ($search) {
+                $subquery->where('folio', 'like', "%{$search}%")
+                    ->orWhere('title', 'like', "%{$search}%")
+                    ->orWhere('category', 'like', "%{$search}%")
+                    ->orWhere('nombre_emisor', 'like', "%{$search}%")
+                    ->orWhereHas('user', fn ($userQuery) => $userQuery->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('payee', fn ($payeeQuery) => $payeeQuery->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request->filled('fixed_fund_id')) {
+            $query->where('fixed_fund_id', $request->fixed_fund_id);
+        }
+        if ($request->filled('category')) {
+            $query->where('category', $request->category);
+        }
+        if ($request->filled('from_date')) {
+            $query->whereDate('created_at', '>=', $request->from_date);
+        }
+        if ($request->filled('to_date')) {
+            $query->whereDate('created_at', '<=', $request->to_date);
+        }
+
+        $activities = $query->latest('created_at')->paginate(20)->withQueryString();
+        $statusOptions = $costCenter->reimbursements()->where('status', '!=', 'borrador')->distinct()->orderBy('status')->pluck('status');
+        $categoryOptions = $costCenter->reimbursements()->whereNotNull('category')->distinct()->orderBy('category')->pluck('category');
+
+        return view('cost_centers.activity', compact('costCenter', 'activities', 'statusOptions', 'categoryOptions'));
+    }
+
+    public function fixedFundHistory(Request $request, CostCenter $costCenter)
+    {
+        $costCenter->load('fixedFunds.user');
+        $statement = $this->fixedFundStatementData($costCenter);
+        $ledger = $statement['fixedFundLedger'];
+
+        if ($request->filled('search')) {
+            $search = mb_strtolower(trim((string) $request->search));
+            $ledger = $ledger->filter(function (array $entry) use ($search) {
+                return str_contains(mb_strtolower($entry['concept'] . ' ' . $entry['detail'] . ' ' . $entry['fund_name'] . ' ' . $entry['status']), $search);
+            });
+        }
+        if ($request->filled('direction')) {
+            $ledger = $ledger->where('direction', $request->direction);
+        }
+        if ($request->filled('kind')) {
+            $ledger = $ledger->where('kind', $request->kind);
+        }
+        if ($request->filled('fixed_fund_id')) {
+            $ledger = $ledger->where('fixed_fund_id', (int) $request->fixed_fund_id);
+        }
+        if ($request->filled('from_date')) {
+            $fromDate = Carbon::parse($request->from_date)->startOfDay();
+            $ledger = $ledger->filter(fn (array $entry) => $entry['occurred_at']->gte($fromDate));
+        }
+        if ($request->filled('to_date')) {
+            $toDate = Carbon::parse($request->to_date)->endOfDay();
+            $ledger = $ledger->filter(fn (array $entry) => $entry['occurred_at']->lte($toDate));
+        }
+
+        $ledger = $ledger->values();
+        $page = max(1, $request->integer('page', 1));
+        $perPage = 25;
+        $movements = new LengthAwarePaginator(
+            $ledger->forPage($page, $perPage)->values(),
+            $ledger->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+
+        return view('cost_centers.fixed-fund-history', [
+            'costCenter' => $costCenter,
+            'movements' => $movements,
+            'fundSummaries' => $statement['fundSummaries'],
+            'fixedFundLedgerTotals' => $statement['fixedFundLedgerTotals'],
+            'budgetRenewalCount' => $statement['budgetRenewalCount'],
+        ]);
+    }
+
+    private function fixedFundStatementData(CostCenter $costCenter): array
+    {
+        $budgetRenewals = $costCenter->budgetRenewals()
+            ->with(['user', 'fixedFund'])
             ->get();
 
-        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements', 'budgetRenewals', 'fundSummaries', 'periods', 'approverEfficiency', 'delegatedOperations'));
+        $fundReimbursements = $costCenter->reimbursements()
+            ->whereNotNull('fixed_fund_id')
+            ->whereNotIn('status', ['borrador', 'rechazado'])
+            ->with(['fixedFund', 'user', 'payee', 'treasuryApprover'])
+            ->orderBy('created_at')
+            ->get();
+
+        $fundSummaries = $costCenter->fixedFunds()
+            ->where('is_active', true)
+            ->with('user')
+            ->get()
+            ->each(function (FixedFund $fund) use ($fundReimbursements) {
+                $movements = $fundReimbursements->where('fixed_fund_id', $fund->id);
+                $outflow = $movements->sum(fn ($reimbursement) => (float) $reimbursement->total + (float) ($reimbursement->propina ?? 0));
+                $replenished = $movements->whereNotNull('approved_by_treasury_at')
+                    ->sum(fn ($reimbursement) => (float) $reimbursement->total + (float) ($reimbursement->propina ?? 0));
+                $pendingReplenishment = max(0, $outflow - $replenished);
+                $capital = (float) $fund->budget;
+                $renewalCount = $fund->completedRenewalCycles($replenished);
+                $renewalProgress = $fund->renewalCycleProgress($replenished);
+                $renewalProgressPercentage = $capital > 0 ? ($renewalProgress / $capital) * 100 : 0;
+
+                $fund->setAttribute('outflow_total', $outflow);
+                $fund->setAttribute('replenished_total', $replenished);
+                $fund->setAttribute('pending_replenishment', $pendingReplenishment);
+                $fund->setAttribute('available_balance', (float) $fund->budget - $pendingReplenishment);
+                $fund->setAttribute('renewal_count', $renewalCount);
+                $fund->setAttribute('renewal_progress', $renewalProgress);
+                $fund->setAttribute('renewal_progress_percentage', $renewalProgressPercentage);
+            });
+
+        $budgetRenewalCount = (int) $fundSummaries->sum('renewal_count');
+
+        $fixedFundLedger = collect();
+
+        foreach ($budgetRenewals as $renewal) {
+            $fixedFundLedger->push([
+                'occurred_at' => Carbon::parse($renewal->renewal_date)->startOfDay(),
+                'direction' => 'in',
+                'kind' => 'capital',
+                'fixed_fund_id' => $renewal->fixed_fund_id ? (int) $renewal->fixed_fund_id : null,
+                'fund_name' => $renewal->fixedFund?->name ?? 'Todos los fondos',
+                'concept' => $renewal->description ?: 'Capital agregado al fondo fijo',
+                'detail' => 'Registrado por ' . ($renewal->user?->name ?? 'Sistema'),
+                'amount' => (float) $renewal->amount,
+                'status' => 'Capital agregado',
+                'reimbursement_id' => null,
+            ]);
+        }
+
+        foreach ($fundReimbursements as $reimbursement) {
+            $amount = (float) $reimbursement->total + (float) ($reimbursement->propina ?? 0);
+            $expenseLabel = $reimbursement->title ?: $reimbursement->nombre_emisor ?: $reimbursement->category ?: 'Gasto de fondo fijo';
+            $payeeName = $reimbursement->payee?->name ?? $reimbursement->user?->name ?? 'Sin beneficiario';
+
+            $fixedFundLedger->push([
+                'occurred_at' => $reimbursement->fecha ?? $reimbursement->created_at,
+                'direction' => 'out',
+                'kind' => 'expense',
+                'fixed_fund_id' => (int) $reimbursement->fixed_fund_id,
+                'fund_name' => $reimbursement->fixedFund?->name ?? 'Fondo sin identificar',
+                'concept' => $expenseLabel,
+                'detail' => ($reimbursement->folio ?: 'Reembolso #' . $reimbursement->id)
+                    . ' · ' . ($reimbursement->category ?: ucfirst(str_replace('_', ' ', $reimbursement->type)))
+                    . ' · ' . $payeeName,
+                'amount' => $amount,
+                'status' => $reimbursement->approved_by_treasury_at ? 'Reposición aprobada' : 'Pendiente de reposición',
+                'reimbursement_id' => $reimbursement->id,
+            ]);
+
+            if ($reimbursement->approved_by_treasury_at) {
+                $fixedFundLedger->push([
+                    'occurred_at' => $reimbursement->approved_by_treasury_at,
+                    'direction' => 'in',
+                    'kind' => 'replenishment',
+                    'fixed_fund_id' => (int) $reimbursement->fixed_fund_id,
+                    'fund_name' => $reimbursement->fixedFund?->name ?? 'Fondo sin identificar',
+                    'concept' => 'Reposición aprobada para pago',
+                    'detail' => ($reimbursement->folio ?: 'Reembolso #' . $reimbursement->id)
+                        . ' · Aprobado por ' . ($reimbursement->treasuryApprover?->name ?? 'Pagadores'),
+                    'amount' => $amount,
+                    'status' => 'Se agrega al fondo fijo',
+                    'reimbursement_id' => $reimbursement->id,
+                ]);
+            }
+        }
+
+        $fixedFundLedger = $fixedFundLedger->sortByDesc('occurred_at')->values();
+
+        return [
+            'budgetRenewals' => $budgetRenewals,
+            'fundSummaries' => $fundSummaries,
+            'fixedFundLedger' => $fixedFundLedger,
+            'budgetRenewalCount' => $budgetRenewalCount,
+            'fixedFundLedgerTotals' => [
+                'capital' => (float) $fundSummaries->sum('budget'),
+                'inflows' => (float) $fixedFundLedger->where('direction', 'in')->sum('amount'),
+                'outflows' => (float) $fundSummaries->sum('outflow_total'),
+                'replenished' => (float) $fundSummaries->sum('replenished_total'),
+                'pending_replenishment' => (float) $fundSummaries->sum('pending_replenishment'),
+                'available_balance' => (float) $fundSummaries->sum('available_balance'),
+            ],
+        ];
     }
+
 
     private function getApproverEfficiency(Request $request, CostCenter $costCenter): array
     {
@@ -757,13 +971,16 @@ class CostCenterController extends Controller
         $this->syncFixedFunds($cc, $fixedFunds);
 
         if ($fixedFunds !== []) {
-            // Create the initial budget record only when a fund was configured.
-            $cc->budgetRenewals()->create([
-                'amount' => collect($fixedFunds)->sum('budget'),
-                'description' => 'Presupuesto inicial',
-                'renewal_date' => now(),
-                'user_id' => Auth::id(),
-            ]);
+            // Keep the opening capital traceable to each individual fixed fund.
+            foreach ($cc->fixedFunds()->where('is_active', true)->get() as $fixedFund) {
+                $cc->budgetRenewals()->create([
+                    'fixed_fund_id' => $fixedFund->id,
+                    'amount' => $fixedFund->budget,
+                    'description' => 'Capital inicial · ' . $fixedFund->name,
+                    'renewal_date' => now(),
+                    'user_id' => Auth::id(),
+                ]);
+            }
         }
 
         foreach ($request->steps as $index => $step) {
@@ -997,37 +1214,120 @@ class CostCenterController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Show the decisions required before deactivating a cost center.
      */
-    public function destroy(CostCenter $costCenter)
+    public function deactivation(CostCenter $costCenter)
     {
         if (!Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'accountant', 'direccion')) {
              abort(403, 'Unauthorized action.');
         }
 
-        if ($costCenter->reimbursements()->exists()) {
-            return redirect()->back()->with('error', 'No se puede eliminar un centro de costos con reembolsos asociados. Considere desactivarlo en su lugar.');
+        if (!$costCenter->is_active) {
+            return redirect()->route('cost_centers.index', ['tab' => 'history'])
+                ->with('error', 'Este centro de costos ya está desactivado.');
         }
 
-        $costCenter->delete();
+        $pendingReimbursements = $costCenter->reimbursements()
+            ->whereNotIn('status', self::COST_CENTER_TERMINAL_REIMBURSEMENT_STATUSES)
+            ->with(['user', 'payee', 'currentStep'])
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
 
-        return redirect()->route('cost_centers.index')->with('success', 'Centro de Costos eliminado.');
+        return view('cost_centers.deactivation', compact('costCenter', 'pendingReimbursements'));
     }
 
     /**
-     * Toggle the active status of a cost center.
+     * Activate a cost center or deactivate it after resolving every open reimbursement.
      */
-    public function toggleStatus(CostCenter $costCenter)
+    public function toggleStatus(Request $request, CostCenter $costCenter)
     {
         if (!Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'accountant', 'direccion')) {
              abort(403, 'Unauthorized action.');
         }
 
-        $costCenter->is_active = !$costCenter->is_active;
-        $costCenter->save();
+        if (!$costCenter->is_active) {
+            $costCenter->update(['is_active' => true]);
 
-        $status = $costCenter->is_active ? 'activado' : 'desactivado (enviado a Historial)';
-        return redirect()->back()->with('success', "Centro de Costos {$status} correctamente.");
+            return redirect()->route('cost_centers.index', ['tab' => 'active'])
+                ->with('success', 'Centro de Costos reactivado correctamente.');
+        }
+
+        $request->validate([
+            'reimbursement_decisions' => ['nullable', 'array'],
+            'reimbursement_decisions.*' => [Rule::in(['continue', 'reject'])],
+            'deactivation_reason' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $decisions = $request->input('reimbursement_decisions', []);
+        $openReimbursements = $costCenter->reimbursements()
+            ->whereNotIn('status', self::COST_CENTER_TERMINAL_REIMBURSEMENT_STATUSES)
+            ->get(['id']);
+        $missingDecisions = $openReimbursements->pluck('id')
+            ->reject(fn ($id) => array_key_exists($id, $decisions));
+
+        if ($missingDecisions->isNotEmpty()) {
+            return redirect()->route('cost_centers.deactivation', $costCenter)
+                ->withInput()
+                ->with('error', 'Selecciona qué ocurrirá con cada reembolso abierto.');
+        }
+
+        $rejectedCount = $openReimbursements
+            ->filter(fn ($reimbursement) => ($decisions[$reimbursement->id] ?? null) === 'reject')
+            ->count();
+
+        if ($rejectedCount > 0 && !$request->filled('deactivation_reason')) {
+            return redirect()->route('cost_centers.deactivation', $costCenter)
+                ->withInput()
+                ->withErrors(['deactivation_reason' => 'Indica el motivo para detener los reembolsos seleccionados.']);
+        }
+
+        DB::transaction(function () use ($request, $costCenter, $decisions) {
+            $lockedCostCenter = CostCenter::lockForUpdate()->findOrFail($costCenter->id);
+            $openReimbursements = $lockedCostCenter->reimbursements()
+                ->whereNotIn('status', self::COST_CENTER_TERMINAL_REIMBURSEMENT_STATUSES)
+                ->with('currentStep')
+                ->lockForUpdate()
+                ->get();
+
+            $missingDecisions = $openReimbursements->pluck('id')
+                ->reject(fn ($id) => array_key_exists($id, $decisions));
+
+            if ($missingDecisions->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    'reimbursement_decisions' => 'Hay reembolsos nuevos sin una decisión. Revisa nuevamente la desactivación.',
+                ]);
+            }
+
+            foreach ($openReimbursements as $reimbursement) {
+                if (($decisions[$reimbursement->id] ?? null) !== 'reject') {
+                    continue;
+                }
+
+                $stepName = $reimbursement->currentStep?->name ?? 'Desactivación de centro de costos';
+                $reason = trim($request->string('deactivation_reason')->toString());
+                $auditComment = 'Reembolso detenido al desactivar el centro de costos '
+                    . $lockedCostCenter->code . ': ' . $reason;
+                $observations = trim(($reimbursement->observaciones ? $reimbursement->observaciones . PHP_EOL : '') . $auditComment);
+
+                $reimbursement->update([
+                    'status' => 'rechazado',
+                    'current_step_id' => null,
+                    'observaciones' => $observations,
+                ]);
+                $reimbursement->approvals()->create([
+                    'user_id' => Auth::id(),
+                    'step_name' => $stepName,
+                    'action' => 'rechazado',
+                    'comment' => $auditComment,
+                ]);
+            }
+
+            $lockedCostCenter->update(['is_active' => false]);
+        });
+
+        return redirect()->route('cost_centers.index', ['tab' => 'history'])
+            ->with('success', "Centro de Costos desactivado. {$rejectedCount} reembolso(s) fueron detenidos y los demás continuarán su flujo.");
     }
 
     /**
@@ -1053,6 +1353,7 @@ class CostCenterController extends Controller
             $fixedFund = $costCenter->fixedFunds()->whereKey($request->fixed_fund_id)->lockForUpdate()->firstOrFail();
             // Create renewal record
             $costCenter->budgetRenewals()->create([
+                'fixed_fund_id' => $fixedFund->id,
                 'amount' => $request->amount,
                 'description' => '[' . $fixedFund->name . '] ' . ($request->description ?: 'Renovación de fondo fijo'),
                 'renewal_date' => $request->renewal_date,

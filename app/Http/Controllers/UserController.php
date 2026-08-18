@@ -13,7 +13,6 @@ use App\Mail\UserInvitation;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use App\Models\Profile;
-use App\Models\Permission;
 use App\Models\CostCenter;
 use App\Services\AccountBlockService;
 
@@ -349,13 +348,9 @@ class UserController extends Controller
             abort(403, 'Solo un administrador puede editar usuarios administradores.');
         }
 
-        $directors = User::whereIn('role', ['admin', 'director'])->where('id', '!=', $user->id)->get();
         $profiles = $this->availableProfilesFor(Auth::user(), $user->profile_id);
-        $costCenters = CostCenter::active()->orderBy('name')->get(['id', 'code', 'name']);
-        $permissions = Permission::orderBy('module')->orderBy('display_name')->get();
-        $user->loadMissing(['authorizedCostCenters:id', 'permissions:id']);
 
-        return view('users.edit', compact('user', 'directors', 'profiles', 'costCenters', 'permissions'));
+        return view('users.edit', compact('user', 'profiles'));
     }
 
     /**
@@ -371,14 +366,6 @@ class UserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', $this->corporateEmailDomainRule(), Rule::unique('users', 'email_normalized')->ignore($user->id)],
             'profile_id' => ['required', 'exists:profiles,id'],
-            'status' => ['required', Rule::in(['pending', 'active', 'disabled'])],
-            'cost_centers' => ['nullable', 'array'],
-            'cost_centers.*' => ['integer', 'exists:cost_centers,id'],
-            'permissions' => ['nullable', 'array'],
-            'permissions.*' => ['integer', 'exists:permissions,id'],
-            'bank_name' => ['nullable', 'string', 'max:255'],
-            'clabe' => ['nullable', 'string', 'size:18', 'regex:/^[0-9]+$/'],
-            'rfc' => ['nullable', 'string', 'min:12', 'max:13'],
         ]);
 
         $profile = Profile::findOrFail($request->profile_id);
@@ -389,16 +376,9 @@ class UserController extends Controller
                 'name' => $request->name,
                 'email' => $email,
                 'email_normalized' => $email,
-                'status' => $request->status,
                 'role' => in_array($profile->name, ['admin', 'admin_view', 'director', 'control_obra', 'director_ejecutivo', 'accountant', 'direccion', 'tesoreria', 'user']) ? $profile->name : 'user',
                 'profile_id' => $profile->id,
-                'bank_name' => $request->filled('bank_name') ? strtoupper(trim($request->bank_name)) : null,
-                'clabe' => $request->clabe,
-                'rfc' => $request->filled('rfc') ? strtoupper(trim($request->rfc)) : null,
-                'blocked_at' => $request->status === 'disabled' ? ($user->blocked_at ?: now()) : null,
             ]);
-            $user->authorizedCostCenters()->sync($request->input('cost_centers', []));
-            $user->permissions()->sync($request->input('permissions', []));
         });
 
         return redirect()->route('users.index')->with('success', 'Usuario actualizado exitosamente.');

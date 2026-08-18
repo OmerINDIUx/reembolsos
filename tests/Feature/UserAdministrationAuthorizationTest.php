@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\CostCenter;
 use App\Models\Permission;
 use App\Models\Profile;
 use App\Models\User;
@@ -138,6 +139,53 @@ class UserAdministrationAuthorizationTest extends TestCase
             ->assertRedirect(route('users.index'));
 
         $this->assertSame('Usuario Actualizado', $user->refresh()->name);
+    }
+
+    public function test_edit_only_shows_general_data_and_update_preserves_restricted_assignments_and_status(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'user',
+            'email' => 'usuario-protegido@archandel.com',
+            'profile_id' => $this->userProfile->id,
+            'status' => 'active',
+        ]);
+        $costCenter = CostCenter::create([
+            'code' => 'CC-EDIT',
+            'name' => 'Centro protegido',
+            'director_id' => $this->manager->id,
+        ]);
+        $permission = Permission::create([
+            'name' => 'reports.protected',
+            'display_name' => 'Permiso protegido',
+            'module' => 'reports',
+        ]);
+        $user->authorizedCostCenters()->attach($costCenter);
+        $user->permissions()->attach($permission);
+
+        $this->actingAs($this->manager)
+            ->get(route('users.edit', $user))
+            ->assertOk()
+            ->assertSee('Datos generales')
+            ->assertSee('Activo')
+            ->assertDontSee('Centros de costos')
+            ->assertDontSee('Permisos directos')
+            ->assertDontSee('name="status"', false);
+
+        $this->actingAs($this->manager)
+            ->put(route('users.update', $user), [
+                'name' => 'Usuario Protegido Actualizado',
+                'email' => $user->email,
+                'profile_id' => $this->userProfile->id,
+                'status' => 'disabled',
+                'cost_centers' => [],
+                'permissions' => [],
+            ])
+            ->assertRedirect(route('users.index'));
+
+        $user->refresh();
+        $this->assertSame('active', $user->status);
+        $this->assertTrue($user->authorizedCostCenters()->whereKey($costCenter->id)->exists());
+        $this->assertTrue($user->permissions()->whereKey($permission->id)->exists());
     }
 
     public function test_user_manager_cannot_edit_or_update_an_administrator(): void

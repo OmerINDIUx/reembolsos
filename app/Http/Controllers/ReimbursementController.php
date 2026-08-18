@@ -2921,12 +2921,16 @@ class ReimbursementController extends Controller
             abort(403, 'Solo puedes eliminar tus propios borradores.');
         }
 
+        $wasDraft = $reimbursement->status === 'borrador';
         $this->deleteReimbursementWithFiles($reimbursement);
 
-        return redirect()->back()
-                         ->with('success', $reimbursement->status === 'borrador'
-                             ? 'Borrador eliminado correctamente.'
-                             : 'Reembolso eliminado correctamente.');
+        if ($wasDraft) {
+            return redirect()->route('reimbursements.create')
+                ->with('success', 'Borrador eliminado correctamente.');
+        }
+
+        return redirect()->route('reimbursements.index')
+            ->with('success', 'Reembolso eliminado correctamente.');
     }
 
     /**

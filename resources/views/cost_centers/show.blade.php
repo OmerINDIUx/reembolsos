@@ -49,16 +49,39 @@
             <x-time-filter-bar :action="route('cost_centers.show', $costCenter)" :periods="$periods" />
 
             <div class="bg-white dark:bg-gray-800 rounded-[2rem] border border-gray-100 dark:border-gray-700 p-6">
-                <h3 class="text-sm font-black uppercase tracking-widest text-emerald-600 mb-5">Presupuesto por fondo fijo</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    @foreach($fundSummaries as $fund)
-                        @php $fundSpent = (float)($fund->spent_total ?? 0) + (float)($fund->spent_tips ?? 0); @endphp
+                <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-5">
+                    <div>
+                        <h3 class="text-sm font-black uppercase tracking-widest text-emerald-600">Presupuesto por fondo fijo</h3>
+                        <p class="text-xs text-gray-500 mt-1">Capital, gastos y reposiciones aprobadas para pago.</p>
+                    </div>
+                    <div class="md:text-right">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Saldo operativo total</p>
+                        <p class="text-2xl font-black {{ $fixedFundLedgerTotals['available_balance'] < 0 ? 'text-red-600' : 'text-emerald-600' }}">${{ number_format($fixedFundLedgerTotals['available_balance'], 2) }}</p>
+                        <p class="text-[10px] font-black uppercase text-indigo-500 mt-1">{{ $budgetRenewalCount }} renovaciones completas</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    @forelse($fundSummaries as $fund)
+                        @php $pendingPercentage = (float) $fund->budget > 0 ? min(100, ((float) $fund->pending_replenishment / (float) $fund->budget) * 100) : 0; @endphp
                         <div class="p-5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800">
-                            <p class="font-black text-gray-900 dark:text-white">{{ $fund->name }}</p>
-                            <p class="text-xs text-gray-500 mb-3">{{ $fund->user->name ?? 'Sin responsable' }}</p>
-                            <p class="text-lg font-black text-emerald-700 dark:text-emerald-400">${{ number_format($fundSpent, 2) }} / ${{ number_format($fund->budget, 2) }}</p>
+                            <div class="flex items-start justify-between gap-4 mb-5">
+                                <div><p class="font-black text-gray-900 dark:text-white">{{ $fund->name }}</p><p class="text-xs text-gray-500">{{ $fund->user->name ?? 'Sin responsable' }}</p><p class="text-[9px] font-black uppercase text-indigo-500 mt-1">{{ $fund->renewal_count }} renovaciones completas</p><p class="text-[9px] text-gray-400">${{ number_format($fund->renewal_progress, 2) }} hacia la siguiente</p></div>
+                                <div class="text-right"><p class="text-[9px] font-black uppercase text-gray-400">Saldo operativo</p><p class="text-xl font-black {{ $fund->available_balance < 0 ? 'text-red-600' : 'text-emerald-700 dark:text-emerald-400' }}">${{ number_format($fund->available_balance, 2) }}</p></div>
+                            </div>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div><p class="text-[9px] font-black uppercase text-gray-400">Capital</p><p class="text-sm font-black dark:text-white">${{ number_format($fund->budget, 2) }}</p></div>
+                                <div><p class="text-[9px] font-black uppercase text-gray-400">Salidas</p><p class="text-sm font-black text-red-600">-${{ number_format($fund->outflow_total, 2) }}</p></div>
+                                <div><p class="text-[9px] font-black uppercase text-gray-400">Por reponer</p><p class="text-sm font-black text-amber-600">${{ number_format($fund->pending_replenishment, 2) }}</p></div>
+                                <div><p class="text-[9px] font-black uppercase text-gray-400">Aprobado a pago</p><p class="text-sm font-black text-blue-600">+${{ number_format($fund->replenished_total, 2) }}</p></div>
+                            </div>
+                            <div class="mt-4">
+                                <div class="flex justify-between text-[9px] font-black uppercase text-gray-400 mb-1"><span>Capital pendiente de reponer</span><span>{{ number_format($pendingPercentage, 1) }}%</span></div>
+                                <div class="h-2 rounded-full bg-white dark:bg-gray-900 overflow-hidden"><div class="h-full {{ $pendingPercentage > 80 ? 'bg-red-500' : ($pendingPercentage > 50 ? 'bg-amber-500' : 'bg-emerald-500') }}" style="width: {{ $pendingPercentage }}%"></div></div>
+                            </div>
                         </div>
-                    @endforeach
+                    @empty
+                        <div class="xl:col-span-2 p-10 text-center rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-xs font-black uppercase text-gray-400">No hay fondos fijos activos</div>
+                    @endforelse
                 </div>
             </div>
             
@@ -576,11 +599,12 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="grid grid-cols-1 gap-8">
                 <!-- Recent Activity -->
                 <div class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
                     <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/10">
                         <h3 class="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter">Actividad Reciente</h3>
+                        <a href="{{ route('cost_centers.activity', $costCenter) }}" class="px-4 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100">Ver más</a>
                     </div>
                     <div class="overflow-x-auto flex-1 text-sm">
                         @if($recentReimbursements->count() > 0)
@@ -594,16 +618,24 @@
                             </thead>
                             <tbody class="divide-y divide-gray-50 dark:divide-gray-700">
                                 @foreach($recentReimbursements as $r)
+                                @php
+                                    $recentPaymentApproved = $r->status === 'pendiente_pago' && $r->approved_by_treasury_at;
+                                    $recentTraffic = match (true) {
+                                        in_array($r->status, ['aprobado', 'pagado'], true) || $recentPaymentApproved => ['bg-emerald-500', 'bg-emerald-100 text-emerald-700', $recentPaymentApproved ? 'Aprobado para pago' : ($r->status === 'pagado' ? 'Pagado' : 'Aprobado')],
+                                        in_array($r->status, ['rechazado', 'requiere_correccion'], true) => ['bg-red-500', 'bg-red-100 text-red-700', $r->status === 'rechazado' ? 'Rechazado' : 'Requiere corrección'],
+                                        default => ['bg-amber-500', 'bg-amber-100 text-amber-700', ucwords(str_replace('_', ' ', $r->status))],
+                                    };
+                                @endphp
                                 <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-900/10 cursor-pointer" onclick="window.location='{{ route('reimbursements.show', $r) }}'">
                                     <td class="px-8 py-4">
                                         <div class="font-black text-gray-900 dark:text-white uppercase">{{ $r->folio }}</div>
                                         <div class="text-[9px] text-gray-400 font-bold italic">{{ $r->created_at->format('d/m/Y') }}</div>
                                     </td>
                                     <td class="px-8 py-4 font-black text-gray-900 dark:text-white">${{ number_format($r->total, 2) }}</td>
-                                    <td class="px-8 py-4 text-xs font-bold uppercase tracking-wider text-gray-500">
-                                        @if($r->status === 'aprobado') Pago aprobado 
-                                        @elseif($r->status === 'pendiente') En Proceso
-                                        @else {{ str_replace('_', ' ', $r->status) }} @endif
+                                    <td class="px-8 py-4">
+                                        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black uppercase {{ $recentTraffic[1] }}">
+                                            <span class="w-2.5 h-2.5 rounded-full {{ $recentTraffic[0] }}"></span>{{ $recentTraffic[2] }}
+                                        </span>
                                     </td>
                                 </tr>
                                 @endforeach
@@ -617,38 +649,64 @@
                     </div>
                 </div>
 
-                <!-- Budget Renewal History -->
+                <!-- Fixed Fund Statement -->
                 <div class="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
-                    <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/10">
-                        <h3 class="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter">Historial de Budget</h3>
+                    <div class="px-8 py-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/10">
+                        <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5">
+                            <div>
+                                <h3 class="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter">Historial de Budget · Entradas y salidas</h3>
+                                <p class="text-xs text-gray-500 mt-1">Últimos 10 movimientos de los fondos fijos.</p>
+                                <a href="{{ route('cost_centers.fixed_fund_history', $costCenter) }}" class="inline-flex mt-3 px-4 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100">Ver más</a>
+                            </div>
+                            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                <div><p class="text-[9px] font-black uppercase text-gray-400">Capital</p><p class="text-sm font-black dark:text-white">${{ number_format($fixedFundLedgerTotals['capital'], 2) }}</p></div>
+                                <div><p class="text-[9px] font-black uppercase text-gray-400">Salidas</p><p class="text-sm font-black text-red-600">-${{ number_format($fixedFundLedgerTotals['outflows'], 2) }}</p></div>
+                                <div><p class="text-[9px] font-black uppercase text-gray-400">Repuesto a pago</p><p class="text-sm font-black text-blue-600">+${{ number_format($fixedFundLedgerTotals['replenished'], 2) }}</p></div>
+                                <div><p class="text-[9px] font-black uppercase text-gray-400">Pendiente</p><p class="text-sm font-black text-amber-600">${{ number_format($fixedFundLedgerTotals['pending_replenishment'], 2) }}</p></div>
+                                <div><p class="text-[9px] font-black uppercase text-indigo-500">Renovaciones completas</p><p class="text-sm font-black text-indigo-600">{{ $budgetRenewalCount }}</p></div>
+                            </div>
+                        </div>
                     </div>
                     <div class="overflow-x-auto flex-1 text-sm">
                         <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-700">
                             <thead>
                                 <tr class="bg-gray-50/30 dark:bg-gray-900/10">
-                                    <th class="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Fecha</th>
-                                    <th class="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Concepto</th>
-                                    <th class="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Importe</th>
+                                    <th class="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase">Fecha</th>
+                                    <th class="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase">Fondo fijo</th>
+                                    <th class="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase">Concepto / destino</th>
+                                    <th class="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase">Entrada</th>
+                                    <th class="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase">Salida</th>
+                                    <th class="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase">Estado</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-50 dark:divide-gray-700">
-                                @forelse($budgetRenewals as $renewal)
-                                <tr>
-                                    <td class="px-8 py-4">
-                                        <div class="font-black text-gray-900 dark:text-white">{{ \Carbon\Carbon::parse($renewal->renewal_date)->format('d/m/Y') }}</div>
-                                        <div class="text-[9px] text-gray-400 font-bold uppercase">Por: {{ $renewal->user->name }}</div>
+                                @forelse($fixedFundLedger as $entry)
+                                <tr class="hover:bg-gray-50/60 dark:hover:bg-gray-900/20">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="font-black dark:text-white">{{ $entry['occurred_at']->format('d/m/Y') }}</div>
+                                        <div class="text-[9px] text-gray-400">{{ $entry['occurred_at']->format('H:i') }}</div>
                                     </td>
-                                    <td class="px-8 py-4">
-                                        <div class="text-[10px] font-bold text-gray-600 dark:text-gray-400 leading-tight uppercase">{{ $renewal->description ?: 'Renovación de presupuesto' }}</div>
+                                    <td class="px-6 py-4"><span class="inline-flex px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-[10px] font-black uppercase text-gray-600 dark:text-gray-300">{{ $entry['fund_name'] }}</span></td>
+                                    <td class="px-6 py-4 min-w-[280px]">
+                                        @if($entry['reimbursement_id'])
+                                            <a href="{{ route('reimbursements.show', $entry['reimbursement_id']) }}" class="font-black dark:text-white hover:text-indigo-600">{{ $entry['concept'] }}</a>
+                                        @else
+                                            <div class="font-black dark:text-white">{{ $entry['concept'] }}</div>
+                                        @endif
+                                        <div class="text-[10px] text-gray-500 mt-1">{{ $entry['detail'] }}</div>
                                     </td>
-                                    <td class="px-8 py-4">
-                                        <div class="text-sm font-black text-emerald-600 dark:text-emerald-400">+${{ number_format($renewal->amount, 2) }}</div>
+                                    <td class="px-6 py-4 text-right whitespace-nowrap">
+                                        @if($entry['direction'] === 'in')<span class="text-sm font-black {{ $entry['kind'] === 'replenishment' ? 'text-blue-600' : 'text-emerald-600' }}">+${{ number_format($entry['amount'], 2) }}</span>@else<span class="text-gray-300">—</span>@endif
+                                    </td>
+                                    <td class="px-6 py-4 text-right whitespace-nowrap">
+                                        @if($entry['direction'] === 'out')<span class="text-sm font-black text-red-600">-${{ number_format($entry['amount'], 2) }}</span>@else<span class="text-gray-300">—</span>@endif
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="inline-flex px-2.5 py-1 rounded-full text-[9px] font-black uppercase {{ $entry['kind'] === 'replenishment' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : ($entry['direction'] === 'out' ? ($entry['status'] === 'Pendiente de reposición' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-emerald-100 text-emerald-700') : 'bg-emerald-100 text-emerald-700') }}">{{ $entry['status'] }}</span>
                                     </td>
                                 </tr>
                                 @empty
-                                <tr>
-                                    <td colspan="3" class="px-8 py-10 text-center text-gray-400 text-xs font-bold uppercase tracking-widest italic">No hay historial de renovaciones</td>
-                                </tr>
+                                <tr><td colspan="6" class="px-8 py-10 text-center text-gray-400 text-xs font-bold uppercase">No hay movimientos de fondo fijo</td></tr>
                                 @endforelse
                             </tbody>
                         </table>

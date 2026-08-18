@@ -8,6 +8,7 @@ class BudgetRenewal extends Model
 {
     protected $fillable = [
         'cost_center_id',
+        'fixed_fund_id',
         'amount',
         'description',
         'renewal_date',
@@ -22,5 +23,10 @@ class BudgetRenewal extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function fixedFund()
+    {
+        return $this->belongsTo(FixedFund::class);
     }
 }
