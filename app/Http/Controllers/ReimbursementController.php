@@ -5352,12 +5352,20 @@ class ReimbursementController extends Controller
                 } catch (\Exception $e) {
                     $diagnosticId = (string) Str::uuid();
                     $isDatabaseError = property_exists($e, 'errorInfo');
-                    $errorType = $isDatabaseError
-                        ? 'database_error'
-                        : 'server_error';
                     $technicalCode = $isDatabaseError
-                        ? ($e->errorInfo[0] ?? $e->getCode())
+                        ? ($e->errorInfo[1] ?? $e->errorInfo[0] ?? $e->getCode())
                         : $e->getCode();
+                    $errorType = $isDatabaseError
+                        ? match ((int) $technicalCode) {
+                            1062 => 'duplicate_key',
+                            1451 => 'foreign_key_restricted',
+                            1452 => 'foreign_key_missing',
+                            1048 => 'null_not_allowed',
+                            1364 => 'required_field_missing',
+                            3819 => 'constraint_failed',
+                            default => 'database_error',
+                        }
+                        : 'server_error';
 
                     Log::error("Failed to save draft item {$index}: " . $e->getMessage(), [
                         'diagnostic_id' => $diagnosticId,
