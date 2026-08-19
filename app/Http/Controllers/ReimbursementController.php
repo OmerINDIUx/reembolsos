@@ -5105,6 +5105,7 @@ class ReimbursementController extends Controller
             $user = Auth::user();
             $items = $request->input('items', []);
             $draftIds = [];
+            $itemErrors = [];
             $travelEventId = $request->input('travel_event_id');
             $travelEvent = $travelEventId ? \App\Models\TravelEvent::find($travelEventId) : null;
             $requestCostCenterId = $travelEvent ? $travelEvent->cost_center_id : $request->input('cost_center_id');
@@ -5349,9 +5350,36 @@ class ReimbursementController extends Controller
                     Log::info("Draft saved for item {$index}: ID {$reimbursement->id}");
 
                 } catch (\Exception $e) {
-                    Log::error("Failed to save draft item {$index}: " . $e->getMessage());
-                    // For AJAX drafts, we continue the loop but log the error
+                    $diagnosticId = (string) Str::uuid();
+                    $isDatabaseError = property_exists($e, 'errorInfo');
+                    $errorType = $isDatabaseError
+                        ? 'database_error'
+                        : 'server_error';
+                    $technicalCode = $isDatabaseError
+                        ? ($e->errorInfo[0] ?? $e->getCode())
+                        : $e->getCode();
+
+                    Log::error("Failed to save draft item {$index}: " . $e->getMessage(), [
+                        'diagnostic_id' => $diagnosticId,
+                        'user_id' => $user?->id,
+                        'exception' => get_class($e),
+                    ]);
+
+                    $itemErrors[] = [
+                        'index' => (int) $index,
+                        'diagnostic_id' => $diagnosticId,
+                        'type' => $errorType,
+                        'technical_code' => (string) $technicalCode,
+                    ];
                 }
+            }
+
+            if (!empty($itemErrors)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'El servidor no pudo guardar uno o más gastos.',
+                    'errors' => $itemErrors,
+                ], 422);
             }
 
             return response()->json([

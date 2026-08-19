@@ -1372,7 +1372,8 @@
                 async saveSlot(index, isAuto = false) {
                     if (!this.items[index] || !this.itemHasContent(this.items[index], index)) return true;
 
-                    const response = await fetch('{{ route("reimbursements.auto_save") }}', {
+                    const autoSaveUrl = @json(route('reimbursements.auto_save', [], false));
+                    const response = await fetch(autoSaveUrl, {
                         method: 'POST',
                         body: this.buildSlotFormData(index),
                         headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -1380,6 +1381,14 @@
 
                     const raw = await response.text();
                     let result = {};
+
+                    console.groupCollapsed(`[AUTO-SAVE] POST ${autoSaveUrl} -> HTTP ${response.status}`);
+                    console.log('URL:', response.url || autoSaveUrl);
+                    console.log('Estado HTTP:', response.status, response.statusText);
+                    console.log('Content-Type:', response.headers.get('content-type'));
+                    console.log('Respuesta del servidor:', raw.substring(0, 2000));
+                    console.groupEnd();
+
                     try {
                         result = raw ? JSON.parse(raw) : {};
                     } catch (parseError) {
@@ -1387,7 +1396,13 @@
                     }
 
                     if (!response.ok || !result.success) {
-                        throw new Error(result.error || `No se pudo guardar el slot ${index + 1}`);
+                        const error = new Error(result.error || `No se pudo guardar el registro ${index + 1}`);
+                        error.name = 'AutoSaveError';
+                        error.httpStatus = response.status;
+                        error.statusText = response.statusText;
+                        error.requestUrl = response.url || autoSaveUrl;
+                        error.responseBody = result;
+                        throw error;
                     }
 
                     this.applyDraftResult(result);
@@ -1971,6 +1986,20 @@
 
                         form.submit();
                     } catch (error) {
+                        console.group('[SUBMIT] No se pudo preparar o enviar el formulario');
+                        console.error('Error:', error);
+                        console.error('Nombre:', error.name);
+                        console.error('Mensaje:', error.message);
+                        console.error('Estado HTTP:', error.httpStatus ?? 'No disponible');
+                        if (error.responseBody) {
+                            console.error('Respuesta de auto-save:', error.responseBody);
+                            if (Array.isArray(error.responseBody.errors)) {
+                                console.table(error.responseBody.errors);
+                            }
+                        }
+                        console.error('Stack:', error.stack);
+                        console.groupEnd();
+
                         this.isSubmitting = false;
                         document.getElementById('loading-overlay').classList.add('hidden');
                         Swal.fire({
