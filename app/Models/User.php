@@ -14,6 +14,15 @@ class User extends Authenticatable
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, SoftDeletes;
 
+    public const REIMBURSEMENT_TAB_PERMISSIONS = [
+        'management' => 'reimbursements.view_management',
+        'rejections' => 'reimbursements.view_rejections',
+        'payment' => 'reimbursements.view_payment',
+        'global_history' => 'reimbursements.global_history',
+        'active' => 'reimbursements.view_own',
+        'history' => 'reimbursements.view_own_history',
+    ];
+
     public static function normalizeEmail(mixed $email): string
     {
         return Str::lower(trim((string) $email));
@@ -282,11 +291,6 @@ class User extends Authenticatable
             return true;
         }
 
-        // Dynamically allow global_history permission for any approver or role-linked user
-        if ($permission === 'reimbursements.global_history' && $this->isApproverOrLinked()) {
-            return true;
-        }
-
         if (! $this->profile) {
             return false;
         }
@@ -296,6 +300,14 @@ class User extends Authenticatable
         }
 
         return $this->profile->hasPermission($permission);
+    }
+
+    public function canViewReimbursementTab(string $tab): bool
+    {
+        $tab = $tab === 'weekly_summary' ? 'management' : $tab;
+        $permission = self::REIMBURSEMENT_TAB_PERMISSIONS[$tab] ?? null;
+
+        return $permission !== null && $this->canPerform($permission);
     }
 
     public function isDisabled(): bool

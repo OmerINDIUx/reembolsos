@@ -14,7 +14,7 @@ class RBACSeeder extends Seeder
         // Define Modules and Permissions
         $modules = [
             'dashboard' => ['view_own', 'view_global'],
-            'reimbursements' => ['view', 'create', 'create_on_behalf', 'create_all_cost_centers', 'edit', 'delete', 'approve', 'bulk_approve', 'export', 'global_history'],
+            'reimbursements' => ['view', 'view_management', 'view_rejections', 'view_payment', 'global_history', 'view_own', 'view_own_history', 'create', 'create_on_behalf', 'create_all_cost_centers', 'edit', 'delete', 'approve', 'bulk_approve', 'export'],
             'users' => ['view', 'create', 'edit', 'delete'],
             'cost_centers' => ['view', 'create', 'edit', 'delete'],
             'travel_events' => ['view', 'create', 'edit', 'delete', 'close'],
@@ -33,6 +33,11 @@ class RBACSeeder extends Seeder
             'export' => 'Permite exportar datos a formatos Excel/CSV.',
             'close' => 'Permite dar por finalizados los eventos de viaje.',
             'global_history' => 'Permite visualizar la pestaña de Historial Global en el listado de reembolsos.',
+            'view_management' => 'Permite visualizar la pestaña Módulo de Gestión.',
+            'view_rejections' => 'Permite visualizar la pestaña Módulo de Rechazos.',
+            'view_payment' => 'Permite visualizar la pestaña Módulo de Pago.',
+            'view_own' => 'Permite visualizar la pestaña Mis Reembolsos.',
+            'view_own_history' => 'Permite visualizar la pestaña Mis Pagados/Rechazados.',
             'create_all_cost_centers' => 'Permite crear reembolsos en cualquier centro de costos activo, sin estar asignado al centro.',
         ];
 
@@ -46,6 +51,14 @@ class RBACSeeder extends Seeder
                 if ($action === 'global_history') {
                     $displayName = 'Ver Historial Global';
                 }
+                $displayName = match ($action) {
+                    'view_management' => 'Ver Módulo de Gestión',
+                    'view_rejections' => 'Ver Módulo de Rechazos',
+                    'view_payment' => 'Ver Módulo de Pago',
+                    'view_own' => 'Ver Mis Reembolsos',
+                    'view_own_history' => 'Ver Mis Pagados/Rechazados',
+                    default => $displayName,
+                };
                 if ($action === 'create_all_cost_centers') {
                     $displayName = 'Reembolsar en todos los centros de costos';
                 }
@@ -110,6 +123,16 @@ class RBACSeeder extends Seeder
         ];
 
         foreach ($profilesData as $name => $data) {
+            $tabPermissions = ['reimbursements.view_own', 'reimbursements.view_own_history'];
+            if (array_intersect($data['permissions'], ['reimbursements.approve', 'users.view', 'reimbursements.global_history'])) {
+                $tabPermissions[] = 'reimbursements.view_management';
+                $tabPermissions[] = 'reimbursements.view_rejections';
+            }
+            if (in_array($name, ['admin', 'admin_view', 'accountant', 'tesoreria'], true)) {
+                $tabPermissions[] = 'reimbursements.view_payment';
+            }
+            $data['permissions'] = array_values(array_unique([...$data['permissions'], ...$tabPermissions]));
+
             $profile = Profile::updateOrCreate(
                 ['name' => $name],
                 ['display_name' => $data['display_name']]

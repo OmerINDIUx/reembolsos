@@ -39,8 +39,19 @@ class ReimbursementController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->isAdminView() || $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
-        $tab = $request->input('tab', $canManage ? 'management' : 'active');
+        $availableTabs = collect(User::REIMBURSEMENT_TAB_PERMISSIONS)
+            ->keys()
+            ->filter(fn (string $candidate) => $allIdentities->contains(fn (User $identity) => $identity->canViewReimbursementTab($candidate)))
+            ->values();
+
+        abort_if($availableTabs->isEmpty(), 403, 'Tu perfil no tiene módulos de reembolsos habilitados.');
+
+        $defaultTab = $availableTabs->first();
+        $tab = $request->input('tab', $defaultTab);
+        $authorizedTab = $tab === 'weekly_summary' ? 'management' : $tab;
+        abort_unless($availableTabs->contains($authorizedTab), 403, 'Tu perfil no tiene acceso a este módulo de reembolsos.');
+
+        $canManage = $availableTabs->intersect(['management', 'rejections', 'global_history'])->isNotEmpty();
         $globalSearch = $request->input('global_search');
         
         $query = Reimbursement::with(['user', 'costCenter'])
@@ -193,7 +204,7 @@ class ReimbursementController extends Controller
         // Standard users can access this page to see their own items or those they need to approve.
 
         // Load reimbursements based on tab scope
-        $tab = $request->input('tab', 'management');
+        $tab = $this->resolveAuthorizedReimbursementTab($request, $user);
         $query = Reimbursement::with(['user', 'payee', 'costCenter'])
             ->where('status', '!=', 'borrador')
             ->orderBy('created_at', 'desc');
@@ -5764,6 +5775,24 @@ class ReimbursementController extends Controller
         });
     }
 
+    private function resolveAuthorizedReimbursementTab(Request $request, User $user): string
+    {
+        $allIdentities = collect([$user])
+            ->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
+        $availableTabs = collect(User::REIMBURSEMENT_TAB_PERMISSIONS)
+            ->keys()
+            ->filter(fn (string $candidate) => $allIdentities->contains(fn (User $identity) => $identity->canViewReimbursementTab($candidate)))
+            ->values();
+
+        abort_if($availableTabs->isEmpty(), 403, 'Tu perfil no tiene módulos de reembolsos habilitados.');
+
+        $tab = $request->input('tab', $availableTabs->first());
+        $authorizedTab = $tab === 'weekly_summary' ? 'management' : $tab;
+        abort_unless($availableTabs->contains($authorizedTab), 403, 'Tu perfil no tiene acceso a este módulo de reembolsos.');
+
+        return $tab;
+    }
+
     /**
      * Helper to apply tab-specific scoping to a query.
      */
@@ -5811,7 +5840,7 @@ class ReimbursementController extends Controller
             });
 
         } elseif ($tab === 'payment') {
-            $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isAdminView() || $identity->isTreasury() || $identity->isCxp());
+            $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->canViewReimbursementTab('payment'));
 
             if (!$canUsePaymentModule) {
                 $query->whereRaw('1 = 0');
@@ -5882,7 +5911,8 @@ class ReimbursementController extends Controller
 
         } elseif ($tab === 'global_history') {
             // Check permission dynamically
-            if (!$user->isAdminView() && !$user->canPerform('reimbursements.global_history')) {
+            $canViewGlobalHistory = $allIdentities->contains(fn($identity) => $identity->canViewReimbursementTab('global_history'));
+            if (!$canViewGlobalHistory) {
                 // If they don't have permission, restrict to their own items
                 $query->where(function ($q) use ($identityIds, $user) {
                     $this->applyRequesterManagedScopeForIdentities($q, $identityIds, $user);

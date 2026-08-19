@@ -21,11 +21,18 @@
                                         @php
                         $user = Auth::user();
                         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
-                        $canManage = $allIdentities->count() > 1 || $allIdentities->contains(fn($identity) => $identity->isAdminView() || $identity->canPerform('reimbursements.approve') || $identity->hasPendingApprovals() || $identity->canPerform('users.view') || $identity->canPerform('reimbursements.global_history'));
-                        $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isAdminView() || $identity->isTreasury() || $identity->isCxp());
+                        $canViewManagement = $allIdentities->contains(fn($identity) => $identity->canViewReimbursementTab('management'));
+                        $canViewRejections = $allIdentities->contains(fn($identity) => $identity->canViewReimbursementTab('rejections'));
+                        $canUsePaymentModule = $allIdentities->contains(fn($identity) => $identity->canViewReimbursementTab('payment'));
+                        $canViewGlobalHistory = $allIdentities->contains(fn($identity) => $identity->canViewReimbursementTab('global_history'));
+                        $canViewOwn = $allIdentities->contains(fn($identity) => $identity->canViewReimbursementTab('active'));
+                        $canViewOwnHistory = $allIdentities->contains(fn($identity) => $identity->canViewReimbursementTab('history'));
+                        $canManage = $canViewManagement || $canViewRejections || $canViewGlobalHistory;
                         $canDownloadPaymentFile = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury() || $identity->isCxp());
                         $canReturnPayment = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury() || $identity->isCxp());
-                        $defaultTab = $canManage ? 'management' : 'active';
+                        $defaultTab = collect(\App\Models\User::REIMBURSEMENT_TAB_PERMISSIONS)
+                            ->keys()
+                            ->first(fn($candidate) => $allIdentities->contains(fn($identity) => $identity->canViewReimbursementTab($candidate)));
                         $tab = request('tab', $defaultTab);
                     @endphp
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
@@ -78,10 +85,12 @@
 
                             {{-- Active substitutes inherit access to the approval queue from the
                                  identity they are replacing, even if their own profile is "user". --}}
-                            @if($canManage)
+                            @if($canViewManagement)
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'management'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab', $defaultTab) == 'management' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="management-tab" type="button" role="tab" aria-controls="management" aria-selected="false">Módulo de Gestión</a>
                             </li>
+                            @endif
+                            @if($canViewRejections)
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'rejections'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'rejections' ? 'border-red-600 text-red-600 dark:text-red-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="rejections-tab" type="button" role="tab" aria-controls="rejections" aria-selected="false">Módulo de Rechazos</a>
                             </li>
@@ -93,7 +102,7 @@
                             </li>
                             @endif
 
-                            @if($user->isAdminView() || $user->canPerform('reimbursements.global_history'))
+                            @if($canViewGlobalHistory)
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'global_history'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'global_history' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="global-history-tab" type="button" role="tab" aria-controls="global_history" aria-selected="false">
                                     Historial Global
@@ -101,12 +110,16 @@
                             </li>
                             @endif
 
+                            @if($canViewOwn)
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'active'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab', $defaultTab) == 'active' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="active-tab" type="button" role="tab" aria-controls="active" aria-selected="false">Mis Reembolsos</a>
                             </li>
+                            @endif
+                            @if($canViewOwnHistory)
                             <li class="mr-2" role="presentation">
                                 <a href="{{ route('reimbursements.index', array_merge(request()->except('tab', 'page'), ['tab' => 'history'])) }}" class="inline-block p-4 border-b-2 rounded-t-lg {{ request('tab') == 'history' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-500' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 dark:hover:border-gray-300 text-gray-500 dark:text-gray-400' }}" id="history-tab" type="button" role="tab" aria-controls="history" aria-selected="false">Mis Pagados/Rechazados</a>
                             </li>
+                            @endif
                         </ul>
                     </div>
 
