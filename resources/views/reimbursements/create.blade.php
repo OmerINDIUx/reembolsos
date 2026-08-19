@@ -1396,7 +1396,19 @@
                     }
 
                     if (!response.ok || !result.success) {
-                        const error = new Error(result.error || `No se pudo guardar el registro ${index + 1}`);
+                        const diagnostic = Array.isArray(result.errors) ? result.errors[0] : null;
+                        const diagnosticText = diagnostic
+                            ? ` Diagnóstico: ${diagnostic.diagnostic_id} (${diagnostic.type}, código ${diagnostic.technical_code || 'N/D'}).`
+                            : '';
+
+                        console.error('[AUTO-SAVE] Respuesta de error:', result);
+                        if (Array.isArray(result.errors)) {
+                            console.table(result.errors);
+                        }
+
+                        const error = new Error(
+                            (result.error || `No se pudo guardar el registro ${index + 1}`) + diagnosticText
+                        );
                         error.name = 'AutoSaveError';
                         error.httpStatus = response.status;
                         error.statusText = response.statusText;
