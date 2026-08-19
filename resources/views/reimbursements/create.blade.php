@@ -1635,12 +1635,40 @@
                     }
                     formData.append('_token', '{{ csrf_token() }}');
 
-                    fetch('{{ route("reimbursements.parse") }}', { 
+                    const parseXmlUrl = @json(route('reimbursements.parse', [], false));
+
+                    fetch(parseXmlUrl, { 
                         method: 'POST', 
                         body: formData, 
                         headers: { 'X-Requested-With': 'XMLHttpRequest' } 
                     })
-                    .then(r => r.json().then(data => ({ status: r.status, ok: r.ok, data })))
+                    .then(async response => {
+                        const rawResponse = await response.text();
+                        let data;
+
+                        console.groupCollapsed(`[CFDI] POST ${parseXmlUrl} -> HTTP ${response.status}`);
+                        console.log('URL:', response.url || parseXmlUrl);
+                        console.log('Estado HTTP:', response.status, response.statusText);
+                        console.log('Content-Type:', response.headers.get('content-type'));
+                        console.log('Respuesta del servidor:', rawResponse.substring(0, 2000));
+                        console.groupEnd();
+
+                        try {
+                            data = rawResponse ? JSON.parse(rawResponse) : {};
+                        } catch (parseError) {
+                            const error = new Error(`El servidor no devolvió JSON válido (HTTP ${response.status}).`);
+                            error.name = 'InvalidServerResponseError';
+                            error.httpStatus = response.status;
+                            error.statusText = response.statusText;
+                            error.requestUrl = response.url || parseXmlUrl;
+                            error.contentType = response.headers.get('content-type');
+                            error.responsePreview = rawResponse.substring(0, 2000);
+                            error.cause = parseError;
+                            throw error;
+                        }
+
+                        return { status: response.status, ok: response.ok, data };
+                    })
                     .then(({ status, ok, data: d }) => {
                         if (!ok || d.error) { 
                             if (d.error === 'duplicate_cfdi') {
@@ -1765,12 +1793,43 @@
                         }
                     })
                     .catch(e => {
-                        console.error(e);
+                        console.group('[CFDI] Error al procesar la factura');
+                        console.error('Error:', e);
+                        console.error('Nombre:', e.name);
+                        console.error('Mensaje:', e.message);
+                        console.error('URL solicitada:', e.requestUrl || parseXmlUrl);
+                        console.error('Estado HTTP:', e.httpStatus ?? 'Sin respuesta HTTP');
+                        console.error('Texto del estado:', e.statusText || 'No disponible');
+                        console.error('Content-Type:', e.contentType || 'No disponible');
+                        if (e.responsePreview) {
+                            console.error('Respuesta recibida:', e.responsePreview);
+                        }
+                        console.error('Stack:', e.stack);
+                        console.groupEnd();
+
                         item.fileName = '';
+
+                        let title = 'Error de Red';
+                        let message = 'No se pudo comunicar con el servidor. Abre la consola del navegador para ver el detalle.';
+
+                        if (e.httpStatus === 413) {
+                            title = 'Archivo demasiado grande';
+                            message = 'El servidor rechazó el archivo por su tamaño. Revisa la consola para ver el detalle.';
+                        } else if (e.httpStatus === 419) {
+                            title = 'Sesión vencida';
+                            message = 'Actualiza la página, inicia sesión nuevamente y vuelve a seleccionar el archivo.';
+                        } else if (e.httpStatus >= 500) {
+                            title = 'Error del servidor';
+                            message = `Producción respondió con HTTP ${e.httpStatus}. El detalle está disponible en la consola.`;
+                        } else if (e.httpStatus) {
+                            title = 'Respuesta inválida';
+                            message = `El servidor respondió con HTTP ${e.httpStatus}. Revisa la consola para ver la respuesta.`;
+                        }
+
                         Swal.fire({
                             icon: 'error',
-                            title: 'Error de Red',
-                            text: 'No se pudo comunicar con el servidor.'
+                            title,
+                            text: message
                         });
                     });
                 },
