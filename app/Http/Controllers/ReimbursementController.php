@@ -5201,6 +5201,42 @@ class ReimbursementController extends Controller
                                                     ->where('uuid', $itemData['uuid'])
                                                     ->where('status', 'borrador')
                                                     ->first();
+
+                        if (!$reimbursement) {
+                            $uuidMatch = Reimbursement::where('uuid', $itemData['uuid'])->first();
+
+                            if (
+                                $uuidMatch
+                                && $uuidMatch->status === 'borrador'
+                                && $this->canRequesterManageReimbursement($uuidMatch, $user)
+                            ) {
+                                $reimbursement = $uuidMatch;
+                                Log::info('Reusing requester-managed draft during auto-save.', [
+                                    'reimbursement_id' => $reimbursement->id,
+                                    'user_id' => $user->id,
+                                ]);
+                            } elseif ($uuidMatch) {
+                                $diagnosticId = (string) Str::uuid();
+                                $statusLabel = $this->reimbursementStatusLabel($uuidMatch->status);
+                                Log::warning('Auto-save rejected an existing CFDI UUID.', [
+                                    'diagnostic_id' => $diagnosticId,
+                                    'reimbursement_id' => $uuidMatch->id,
+                                    'user_id' => $user->id,
+                                ]);
+                                $itemErrors[] = [
+                                    'index' => (int) $index,
+                                    'diagnostic_id' => $diagnosticId,
+                                    'type' => 'duplicate_cfdi',
+                                    'technical_code' => 'duplicate_uuid',
+                                    'message' => "El gasto #" . ($index + 1) . " no se guardó porque el CFDI con UUID {$itemData['uuid']} ya está registrado"
+                                        . ($uuidMatch->folio ? " en el reembolso {$uuidMatch->folio}" : ' en otro reembolso')
+                                        . " con estado {$statusLabel}.",
+                                    'action' => 'Retira este comprobante de la solicitud o verifica el reembolso existente antes de continuar.',
+                                    'reference' => $diagnosticId,
+                                ];
+                                continue;
+                            }
+                        }
                     }
 
                     $data = [
@@ -5349,7 +5385,7 @@ class ReimbursementController extends Controller
                     ];
                     Log::info("Draft saved for item {$index}: ID {$reimbursement->id}");
 
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
                     $diagnosticId = (string) Str::uuid();
                     $isDatabaseError = property_exists($e, 'errorInfo');
                     $technicalCode = $isDatabaseError
@@ -5366,6 +5402,7 @@ class ReimbursementController extends Controller
                             default => 'database_error',
                         }
                         : 'server_error';
+                    $errorDetails = $this->draftSaveErrorDetails($errorType, (int) $index, $diagnosticId);
 
                     Log::error("Failed to save draft item {$index}: " . $e->getMessage(), [
                         'diagnostic_id' => $diagnosticId,
@@ -5378,14 +5415,22 @@ class ReimbursementController extends Controller
                         'diagnostic_id' => $diagnosticId,
                         'type' => $errorType,
                         'technical_code' => (string) $technicalCode,
+                        'message' => $errorDetails['message'],
+                        'action' => $errorDetails['action'],
+                        'reference' => $diagnosticId,
                     ];
                 }
             }
 
             if (!empty($itemErrors)) {
+                $errorMessage = collect($itemErrors)
+                    ->map(fn ($itemError) => trim(($itemError['message'] ?? '') . ' ' . ($itemError['action'] ?? '')))
+                    ->filter()
+                    ->implode(' ');
+
                 return response()->json([
                     'success' => false,
-                    'error' => 'El servidor no pudo guardar uno o más gastos.',
+                    'error' => $errorMessage,
                     'errors' => $itemErrors,
                 ], 422);
             }
@@ -5395,10 +5440,83 @@ class ReimbursementController extends Controller
                 'ids' => $draftIds,
                 'main_id' => $mainId ?: (!empty($draftIds) ? collect($draftIds)->first()['id'] : null)
             ]);
-        } catch (\Exception $e) {
-            Log::error('Draft Save Error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
-            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        } catch (\Throwable $e) {
+            $diagnosticId = (string) Str::uuid();
+            $message = 'No se pudo guardar el reembolso porque ocurrió una falla inesperada antes de procesar los gastos.';
+            $action = 'Intenta nuevamente. Si vuelve a ocurrir, comparte la referencia de soporte para localizar la causa.';
+
+            Log::error('Draft Save Error: ' . $e->getMessage(), [
+                'diagnostic_id' => $diagnosticId,
+                'user_id' => Auth::id(),
+                'exception' => get_class($e),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => "{$message} {$action}",
+                'errors' => [[
+                    'index' => null,
+                    'diagnostic_id' => $diagnosticId,
+                    'type' => 'unexpected_server_error',
+                    'technical_code' => (string) $e->getCode(),
+                    'message' => $message,
+                    'action' => $action,
+                    'reference' => $diagnosticId,
+                ]],
+            ], 500);
         }
+    }
+
+    private function draftSaveErrorDetails(string $errorType, int $index, string $diagnosticId): array
+    {
+        $expense = 'El gasto #' . ($index + 1);
+
+        return match ($errorType) {
+            'duplicate_key' => [
+                'message' => "{$expense} no se guardó porque uno de sus identificadores ya pertenece a otro reembolso.",
+                'action' => 'Verifica que el CFDI no esté registrado y vuelve a cargar el comprobante correcto.',
+            ],
+            'foreign_key_missing' => [
+                'message' => "{$expense} no se guardó porque el centro de costos, fondo fijo, evento, beneficiario o borrador seleccionado ya no existe o dejó de estar disponible.",
+                'action' => 'Actualiza la página, selecciona nuevamente esos datos y vuelve a intentar.',
+            ],
+            'foreign_key_restricted' => [
+                'message' => "{$expense} no se guardó porque está relacionado con un registro que el sistema no permite modificar en su estado actual.",
+                'action' => 'Actualiza la página y verifica el estado del reembolso y de sus datos relacionados.',
+            ],
+            'null_not_allowed', 'required_field_missing' => [
+                'message' => "{$expense} no se guardó porque falta un dato obligatorio para crear el reembolso.",
+                'action' => 'Revisa los campos marcados como obligatorios y vuelve a intentar.',
+            ],
+            'constraint_failed' => [
+                'message' => "{$expense} no se guardó porque uno de sus valores incumple una regla del sistema.",
+                'action' => 'Revisa importes, fechas, beneficiario, centro de costos y archivos antes de volver a intentar.',
+            ],
+            'database_error' => [
+                'message' => "{$expense} no se guardó porque la base de datos rechazó la operación.",
+                'action' => "No se envió ese gasto. Intenta nuevamente y, si persiste, comparte la referencia {$diagnosticId} con soporte.",
+            ],
+            default => [
+                'message' => "{$expense} no se guardó porque ocurrió una falla inesperada mientras se procesaban sus datos o archivos.",
+                'action' => "No se envió ese gasto. Intenta nuevamente y, si persiste, comparte la referencia {$diagnosticId} con soporte.",
+            ],
+        };
+    }
+
+    private function reimbursementStatusLabel(?string $status): string
+    {
+        return match ($status) {
+            'borrador' => 'borrador',
+            'pendiente' => 'pendiente de autorización',
+            'requiere_correccion' => 'requiere corrección',
+            'pendiente_revision_cxp' => 'pendiente de revisión por Cuentas por Pagar',
+            'aprobado_cxp' => 'aprobado por Cuentas por Pagar',
+            'pendiente_pago' => 'pendiente de pago',
+            'aprobado' => 'aprobado',
+            'rechazado' => 'rechazado',
+            default => $status ? str_replace('_', ' ', $status) : 'desconocido',
+        };
     }
 
     private function canRegisterOnBehalfInCostCenter(\App\Models\User $actor, \App\Models\User $candidate, $costCenterId): bool

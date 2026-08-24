@@ -1396,9 +1396,13 @@
                     }
 
                     if (!response.ok || !result.success) {
-                        const diagnostic = Array.isArray(result.errors) ? result.errors[0] : null;
-                        const diagnosticText = diagnostic
-                            ? ` Diagnóstico: ${diagnostic.diagnostic_id} (${diagnostic.type}, código ${diagnostic.technical_code || 'N/D'}).`
+                        const details = Array.isArray(result.errors) ? result.errors : [];
+                        const detailText = details.length
+                            ? details.map(detail => {
+                                const explanation = [detail.message, detail.action].filter(Boolean).join(' ');
+                                const reference = detail.reference || detail.diagnostic_id;
+                                return `${explanation}${reference ? ` Referencia de soporte: ${reference}.` : ''}`;
+                            }).filter(Boolean).join(' ')
                             : '';
 
                         console.error('[AUTO-SAVE] Respuesta de error:', result);
@@ -1407,7 +1411,7 @@
                         }
 
                         const error = new Error(
-                            (result.error || `No se pudo guardar el registro ${index + 1}`) + diagnosticText
+                            detailText || result.error || `No se pudo guardar el gasto #${index + 1}. Revisa sus datos y archivos antes de volver a intentar.`
                         );
                         error.name = 'AutoSaveError';
                         error.httpStatus = response.status;
