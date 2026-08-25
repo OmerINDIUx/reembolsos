@@ -84,13 +84,24 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware('permission:cost_centers.view')->group(function() {
         Route::resource('companies', CompanyController::class)->except(['show']);
-        Route::get('cost_centers/{cost_center}/deactivation', [CostCenterController::class, 'deactivation'])->name('cost_centers.deactivation');
-        Route::resource('cost_centers', CostCenterController::class)->except(['destroy']);
+        Route::get('cost_centers', [CostCenterController::class, 'index'])->name('cost_centers.index');
+        Route::middleware('permission:cost_centers.create')->group(function () {
+            Route::get('cost_centers/create', [CostCenterController::class, 'create'])->name('cost_centers.create');
+            Route::post('cost_centers', [CostCenterController::class, 'store'])->name('cost_centers.store');
+        });
+        Route::middleware('permission:cost_centers.edit')->group(function () {
+            Route::get('cost_centers/{cost_center}/edit', [CostCenterController::class, 'edit'])->name('cost_centers.edit');
+            Route::match(['put', 'patch'], 'cost_centers/{cost_center}', [CostCenterController::class, 'update'])->name('cost_centers.update');
+            Route::post('cost_centers/{cost_center}/renew-budget', [CostCenterController::class, 'renewBudget'])->name('cost_centers.renew_budget');
+        });
+        Route::middleware('permission:cost_centers.delete')->group(function () {
+            Route::get('cost_centers/{cost_center}/deactivation', [CostCenterController::class, 'deactivation'])->name('cost_centers.deactivation');
+            Route::patch('cost_centers/{cost_center}/toggle-status', [CostCenterController::class, 'toggleStatus'])->name('cost_centers.toggle_status');
+        });
         Route::get('cost_centers/{cost_center}/category-matrix', [CostCenterController::class, 'categoryMatrix'])->name('cost_centers.category_matrix');
         Route::get('cost_centers/{cost_center}/activity', [CostCenterController::class, 'activity'])->name('cost_centers.activity');
         Route::get('cost_centers/{cost_center}/fixed-fund-history', [CostCenterController::class, 'fixedFundHistory'])->name('cost_centers.fixed_fund_history');
-        Route::patch('cost_centers/{cost_center}/toggle-status', [CostCenterController::class, 'toggleStatus'])->name('cost_centers.toggle_status');
-        Route::post('cost_centers/{cost_center}/renew-budget', [CostCenterController::class, 'renewBudget'])->name('cost_centers.renew_budget');
+        Route::get('cost_centers/{cost_center}', [CostCenterController::class, 'show'])->name('cost_centers.show');
     });
 
     Route::middleware('permission:travel_events.view')->group(function() {

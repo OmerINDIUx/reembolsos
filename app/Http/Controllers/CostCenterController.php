@@ -157,8 +157,6 @@ class CostCenterController extends Controller
      */
     public function index(Request $request)
     {
-        $user = Auth::user();
-
         // Base query
         $query = CostCenter::with(['beneficiary', 'company', 'approvalSteps.user'])
             ->withCount([
@@ -193,14 +191,6 @@ class CostCenterController extends Controller
             ], DB::raw('TIMESTAMPDIFF(SECOND, created_at, approved_by_treasury_at) / 86400'))
             ->where('is_active', $request->get('tab') === 'history' ? false : true)
             ->orderBy('code');
-
-        // Admin, AdminView, Subdirección (N4), Dirección General (N5) see ALL
-        if (!$user->hasRole('admin', 'admin_view', 'accountant', 'direccion')) {
-            // See any cost center where user is part of the approval chain
-            $query->whereHas('approvalSteps', function($q) use ($user) {
-                $q->where('user_id', $user->id);
-            });
-        }
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -917,7 +907,7 @@ class CostCenterController extends Controller
      */
     public function create()
     {
-        if (!Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'accountant', 'direccion')) {
+        if (!Auth::user()->canPerform('cost_centers.create')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -931,7 +921,7 @@ class CostCenterController extends Controller
      */
     public function store(Request $request)
     {
-        if (!Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'accountant', 'direccion')) {
+        if (!Auth::user()->canPerform('cost_centers.create')) {
             abort(403, 'Unauthorized action.');
         }
         $request->merge([
@@ -1009,7 +999,7 @@ class CostCenterController extends Controller
      */
     public function edit(CostCenter $costCenter)
     {
-        if (!Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'accountant', 'direccion')) {
+        if (!Auth::user()->canPerform('cost_centers.edit')) {
              abort(403, 'Unauthorized action.');
         }
 
@@ -1029,7 +1019,7 @@ class CostCenterController extends Controller
      */
     public function update(Request $request, CostCenter $costCenter)
     {
-        if (!Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'accountant', 'direccion')) {
+        if (!Auth::user()->canPerform('cost_centers.edit')) {
              abort(403, 'Unauthorized action.');
         }
 
@@ -1218,7 +1208,7 @@ class CostCenterController extends Controller
      */
     public function deactivation(CostCenter $costCenter)
     {
-        if (!Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'accountant', 'direccion')) {
+        if (!Auth::user()->canPerform('cost_centers.delete')) {
              abort(403, 'Unauthorized action.');
         }
 
@@ -1242,7 +1232,7 @@ class CostCenterController extends Controller
      */
     public function toggleStatus(Request $request, CostCenter $costCenter)
     {
-        if (!Auth::user()->hasRole('admin', 'admin_view', 'director_ejecutivo', 'accountant', 'direccion')) {
+        if (!Auth::user()->canPerform('cost_centers.delete')) {
              abort(403, 'Unauthorized action.');
         }
 
@@ -1335,7 +1325,7 @@ class CostCenterController extends Controller
      */
     public function renewBudget(Request $request, CostCenter $costCenter)
     {
-        if (!Auth::user()->hasRole('admin', 'control_obra', 'accountant', 'direccion')) {
+        if (!Auth::user()->canPerform('cost_centers.edit')) {
             abort(403, 'Unauthorized action.');
         }
 

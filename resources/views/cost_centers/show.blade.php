@@ -28,7 +28,7 @@
             </div>
 
             <div class="flex items-center gap-3">
-                @if(Auth::user()->isAdmin())
+                @if(Auth::user()->canPerform('cost_centers.edit'))
                 <a href="{{ route('cost_centers.edit', $costCenter) }}" class="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-black uppercase tracking-widest text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                     Configurar Flujo
@@ -94,7 +94,7 @@
                         <h4 class="text-4xl font-black leading-none">${{ number_format($costCenter->budget, 2) }}</h4>
                         <div class="mt-6 flex items-center justify-between">
                             <span class="text-[10px] font-bold text-gray-500 uppercase">Estado Global</span>
-                            @if(Auth::user()->isAdmin() || Auth::user()->isControlObra())
+                            @if(Auth::user()->canPerform('cost_centers.edit'))
                             <button @click="openRenewModal = true" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20">
                                 + Renovar
                             </button>
