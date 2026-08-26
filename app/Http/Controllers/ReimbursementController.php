@@ -2104,7 +2104,7 @@ class ReimbursementController extends Controller
                 if ($canSee) break;
 
                 if ($identity->isCxp()) {
-                    if (in_array($status, ['pendiente_revision_cxp', 'pendiente_pago', 'aprobado']) || $reimbursement->approved_by_executive_at !== null) {
+                    if (in_array($status, ['pendiente_revision_cxp', 'pendiente_pago', 'aprobado'])) {
                         $canSee = true;
                         break;
                     }
@@ -2733,7 +2733,7 @@ class ReimbursementController extends Controller
                 'substituted_user_id' => $substitutedUserId
             ]);
         } elseif ($request->status === 'aprobado' && !isset($data['error'])) {
-            // Check for Auto-Approvals for non-consecutive or consecutive levels
+            // Record this approval and advance exactly one configured level.
             $this->handleDynamicApprovals($reimbursement, $user, false, $originalStatus, $stepAtActionTime);
         }
 
@@ -4961,7 +4961,7 @@ class ReimbursementController extends Controller
     }
 
     /**
-     * Recursive/Iterative logic to handle auto-approvals based on historical or current user identity.
+     * Record an approval and advance to the immediate next workflow step.
      */
     private function handleDynamicApprovals(\App\Models\Reimbursement $reimbursement, $user, $isBulk = false, $originalStatus = null, $stepAtActionTime = null)
     {
@@ -5024,65 +5024,33 @@ class ReimbursementController extends Controller
             return;
         }
 
-        // 3. Loop forward to see if the next steps should be auto-approved
-        // Rule: Auto-approve if the assigned user for NEXT step has ALREADY approved this document in any previous level
-        // OR if the current acting user is the one assigned to the next step.
+        // 3. Advance only to the immediate next configured step.
+        // Even when the same person is assigned to consecutive levels (or approved
+        // an earlier level), every step requires its own explicit approval. This
+        // prevents a single action from skipping the remaining workflow and going
+        // directly to Accounts Payable.
         $currentOrder = $stepAtActionTime->order ?? 0;
 
-        while(true) {
-            // Find next step based on the last processed order
-            $nextStep = $reimbursement->costCenter->approvalSteps()
-                ->where('order', '>', $currentOrder)
-                ->orderBy('order', 'asc')
-                ->first();
+        $nextStep = $reimbursement->costCenter->approvalSteps()
+            ->where('order', '>', $currentOrder)
+            ->orderBy('order', 'asc')
+            ->first();
 
-            if (!$nextStep) {
-                // Flow finished custom levels -> Move to CXP reviewers first.
-                $reimbursement->update([
-                    'current_step_id' => null,
-                    'status' => 'pendiente_revision_cxp'
-                ]);
-                break;
-            }
+        if (!$nextStep) {
+            // Flow finished custom levels -> Move to CXP reviewers first.
+            $reimbursement->update([
+                'current_step_id' => null,
+                'status' => 'pendiente_revision_cxp',
+            ]);
+        } else {
+            $reimbursement->update([
+                'current_step_id' => $nextStep->id,
+                'status' => 'pendiente',
+            ]);
 
-            // Check if this step should be auto-approved
-            $hasAlreadyApproved = $reimbursement->approvals()
-                ->where('user_id', $nextStep->user_id)
-                ->where('action', 'aprobado')
-                ->exists();
-            
-            // Auto-approve if assigned user already approved OR if current user is the assigned user
-            if ($hasAlreadyApproved || $nextStep->user_id === $user->id) {
-                $reimbursement->update(['current_step_id' => $nextStep->id]);
-                
-                // Record audit for auto-approval
-                $reimbursement->approvals()->create([
-                    'user_id' => $user->id, // The one who triggered the chain
-                    'step_name' => $nextStep->name,
-                    'action' => 'aprobado',
-                    'comment' => $hasAlreadyApproved ? 'Auto-aprobado por aprobación previa' : 'Auto-aprobado (usuario asignado)',
-                    'is_bulk' => $isBulk
-                ]);
-                
-                // Also update legacy columns for this auto-approved step
-                $this->mapApprovalData($nextStep->order, $user->id, $reimbursement);
-                $reimbursement->save();
-
-                $currentOrder = $nextStep->order;
-                continue;
-            } else {
-                // Different user and hasn't approved yet. Stop and wait.
-                $reimbursement->update([
-                    'current_step_id' => $nextStep->id,
-                    'status' => 'pendiente'
-                ]);
-
-                // Notify next approver
-                $nextApprover = $nextStep->user ?? null;
-                if ($nextApprover) {
-                    \App\Services\NotificationBatchService::add($nextApprover, $reimbursement);
-                }
-                break;
+            $nextApprover = $nextStep->user ?? null;
+            if ($nextApprover) {
+                \App\Services\NotificationBatchService::add($nextApprover, $reimbursement);
             }
         }
         
