@@ -3947,7 +3947,13 @@ class ReimbursementController extends Controller
                         \App\Services\NotificationBatchService::add($owner, $reimbursement);
                     }
                 } else {
-                    $this->handleDynamicApprovals($reimbursement, $user, true, $originalStatus);
+                    $this->handleDynamicApprovals(
+                        $reimbursement,
+                        $user,
+                        true,
+                        $originalStatus,
+                        $currentStep
+                    );
                 }
             }
 

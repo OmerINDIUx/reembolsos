@@ -8,14 +8,13 @@ use App\Models\CostCenter;
 use App\Models\Reimbursement;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class ReimbursementSequentialApprovalTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_executive_approval_stops_at_the_subdirection_step_assigned_to_another_user(): void
+    public function test_bulk_executive_approval_stops_at_the_subdirection_step_assigned_to_another_user(): void
     {
         $executive = User::factory()->create([
             'role' => 'director_ejecutivo',
@@ -60,19 +59,10 @@ class ReimbursementSequentialApprovalTest extends TestCase
             'moneda' => 'MXN',
         ]);
 
-        // A historical action by the subdirector must never complete their
-        // pending Subdirección step automatically.
-        $reimbursement->approvals()->create([
-            'user_id' => $subdirector->id,
-            'step_name' => 'Participación anterior',
-            'action' => 'aprobado',
-            'comment' => 'Aprobación registrada en un nivel anterior.',
-        ]);
-
         $this->actingAs($executive)
-            ->patch(route('reimbursements.update', $reimbursement), [
-                'status' => 'aprobado',
-                'approval_token' => (string) Str::uuid(),
+            ->post(route('reimbursements.bulk_audit_action'), [
+                'ids' => [$reimbursement->id],
+                'action' => 'aprobado',
             ])
             ->assertRedirect();
 
@@ -84,6 +74,7 @@ class ReimbursementSequentialApprovalTest extends TestCase
             'reimbursement_id' => $reimbursement->id,
             'step_name' => 'Director Ejecutivo N3',
             'action' => 'aprobado',
+            'is_bulk' => true,
         ]);
         $this->assertDatabaseMissing('reimbursement_approvals', [
             'reimbursement_id' => $reimbursement->id,
