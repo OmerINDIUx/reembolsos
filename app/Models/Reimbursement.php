@@ -242,6 +242,46 @@ class Reimbursement extends Model
     }
 
     /**
+     * Return the first configured step that has no immutable approval entry.
+     */
+    public function firstPendingConfiguredApprovalStep(): ?ApprovalStep
+    {
+        $this->loadMissing(['costCenter.approvalSteps', 'approvals']);
+
+        if (!$this->costCenter) {
+            return null;
+        }
+
+        $approvedStepNames = $this->approvals
+            ->where('action', 'aprobado')
+            ->pluck('step_name');
+
+        return $this->costCenter->approvalSteps
+            ->first(fn (ApprovalStep $step) => !$approvedStepNames->contains($step->name));
+    }
+
+    public function configuredApprovalFlowIsComplete(): bool
+    {
+        return $this->firstPendingConfiguredApprovalStep() === null;
+    }
+
+    public function scopeWithCompletedConfiguredApprovalFlow($query)
+    {
+        return $query->whereNotExists(function ($steps) {
+            $steps->selectRaw('1')
+                ->from('approval_steps')
+                ->whereColumn('approval_steps.cost_center_id', 'reimbursements.cost_center_id')
+                ->whereNotExists(function ($approvals) {
+                    $approvals->selectRaw('1')
+                        ->from('reimbursement_approvals')
+                        ->whereColumn('reimbursement_approvals.reimbursement_id', 'reimbursements.id')
+                        ->whereColumn('reimbursement_approvals.step_name', 'approval_steps.name')
+                        ->where('reimbursement_approvals.action', 'aprobado');
+                });
+        });
+    }
+
+    /**
      * Check if a specific user is authorized to approve the current step.
      */
     public function canBeApprovedBy(User $user)
@@ -253,6 +293,11 @@ class Reimbursement extends Model
             $this->status === 'pendiente_pago'
             && ($this->approved_by_cxp_id === null || $this->approved_by_cxp_at === null)
         ) {
+            return false;
+        }
+
+        // CXP can only act after every configured step has a real audit entry.
+        if ($this->status === 'pendiente_revision_cxp' && !$this->configuredApprovalFlowIsComplete()) {
             return false;
         }
 

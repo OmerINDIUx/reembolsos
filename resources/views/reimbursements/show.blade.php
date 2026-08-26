@@ -801,15 +801,20 @@
                         <div class="relative">
                             <div class="absolute left-4 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700"></div>
 
+                            @php
+                                $firstPendingConfiguredStep = $reimbursement->costCenter
+                                    ? $reimbursement->firstPendingConfiguredApprovalStep()
+                                    : null;
+                            @endphp
                             @if($reimbursement->costCenter)
                                 @foreach($reimbursement->costCenter->approvalSteps as $step)
                                 @php
                                     $approvalLog = $reimbursement->approvedLogForStep($step->name);
-                                    $isCompleted = $approvalLog !== null ||
-                                                   ($reimbursement->currentStep && $reimbursement->currentStep->order > $step->order) ||
-                                                   in_array($reimbursement->status, ['aprobado', 'pendiente_revision_cxp', 'pendiente_pago']);
-                                    
-                                    $isCurrent = ($reimbursement->current_step_id === $step->id) && !in_array($reimbursement->status, ['aprobado', 'rechazado', 'pendiente_revision_cxp', 'pendiente_pago']);
+                                    $isCompleted = $approvalLog !== null;
+                                    $isCurrent = (
+                                        $reimbursement->current_step_id === $step->id
+                                        || ($reimbursement->status === 'pendiente_revision_cxp' && $firstPendingConfiguredStep?->id === $step->id)
+                                    ) && !in_array($reimbursement->status, ['aprobado', 'rechazado', 'pendiente_pago']);
                                     $displayedApprover = $approvalLog?->user?->name ?? $step->user?->name ?? 'No asignado';
                                 @endphp
                                 <div class="relative flex gap-4 pb-6 last:pb-0">
@@ -839,7 +844,7 @@
                             <!-- PASOS FINALES: CUENTAS POR PAGAR -->
                             @php
                                 $cxpReviewCompleted = in_array($reimbursement->status, ['pendiente_pago', 'aprobado']);
-                                $cxpReviewCurrent = ($reimbursement->status === 'pendiente_revision_cxp');
+                                $cxpReviewCurrent = ($reimbursement->status === 'pendiente_revision_cxp' && $firstPendingConfiguredStep === null);
                                 $cxpPayCompleted = ($reimbursement->approved_by_treasury_at !== null || $reimbursement->status === 'aprobado');
                                 $cxpPayCurrent = ($reimbursement->status === 'pendiente_pago' && $reimbursement->approved_by_treasury_at === null);
                             @endphp

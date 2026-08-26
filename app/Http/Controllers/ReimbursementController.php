@@ -2104,7 +2104,10 @@ class ReimbursementController extends Controller
                 if ($canSee) break;
 
                 if ($identity->isCxp()) {
-                    if (in_array($status, ['pendiente_revision_cxp', 'pendiente_pago', 'aprobado'])) {
+                    if (
+                        in_array($status, ['pendiente_revision_cxp', 'pendiente_pago', 'aprobado'])
+                        && ($status !== 'pendiente_revision_cxp' || $reimbursement->configuredApprovalFlowIsComplete())
+                    ) {
                         $canSee = true;
                         break;
                     }
@@ -3915,7 +3918,7 @@ class ReimbursementController extends Controller
                      $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
                     $currentStep = $reimbursement->currentStep;
                     if ($currentStep) {
-                        $this->mapApprovalData($currentStep->order, $user->id, $data);
+                        $this->mapApprovalData($currentStep, $user->id, $data);
                     }
 
                     $valData = $reimbursement->validation_data ?? [];
@@ -4853,23 +4856,38 @@ class ReimbursementController extends Controller
     }
 
     /**
-     * Maps approval step order to legacy columns for backward compatibility.
+     * Maps the semantic approval role to legacy columns for compatibility.
      */
-    private function mapApprovalData($order, $userId, &$data)
+    private function mapApprovalData($step, $userId, &$data)
     {
-        $map = [
-            1 => ['approved_by_director_id', 'approved_by_director_at'],
-            2 => ['approved_by_control_id', 'approved_by_control_at'],
-            3 => ['approved_by_executive_id', 'approved_by_executive_at'],
-            4 => ['approved_by_cxp_id', 'approved_by_cxp_at'],
-            5 => ['approved_by_direccion_id', 'approved_by_direccion_at'],
-            6 => ['approved_by_treasury_id', 'approved_by_treasury_at'],
-        ];
-
-        if (isset($map[$order])) {
-            $data[$map[$order][0]] = $userId;
-            $data[$map[$order][1]] = now();
+        if (!$step) {
+            return;
         }
+
+        $assignedUser = $step->user;
+        $normalizedName = Str::lower(Str::ascii((string) $step->name));
+        $columns = match (true) {
+            $assignedUser?->isExecutiveDirector() || str_contains($normalizedName, 'director ejecutivo')
+                => ['approved_by_executive_id', 'approved_by_executive_at'],
+            $assignedUser?->isDireccion() || str_contains($normalizedName, 'subdireccion')
+                => ['approved_by_direccion_id', 'approved_by_direccion_at'],
+            $assignedUser?->isControlObra() || str_contains($normalizedName, 'control de obra')
+                => ['approved_by_control_id', 'approved_by_control_at'],
+            $assignedUser?->isCxp() || str_contains($normalizedName, 'cuentas por pagar') || str_contains($normalizedName, 'cxp')
+                => ['approved_by_cxp_id', 'approved_by_cxp_at'],
+            $assignedUser?->isTreasury() || str_contains($normalizedName, 'tesoreria')
+                => ['approved_by_treasury_id', 'approved_by_treasury_at'],
+            $assignedUser?->isDirector() || str_contains($normalizedName, 'director')
+                => ['approved_by_director_id', 'approved_by_director_at'],
+            default => null,
+        };
+
+        if (!$columns) {
+            return;
+        }
+
+        $data[$columns[0]] = $userId;
+        $data[$columns[1]] = now();
     }
 
     /**
@@ -4911,7 +4929,7 @@ class ReimbursementController extends Controller
         $skippedSteps = $steps->where('order', '<=', $requesterOrder)->values();
         foreach ($skippedSteps as $step) {
             $autoNote .= "\n[AUTO-APROBACIÓN: " . ($step->name ?? "Nivel {$step->order}") . "]";
-            $this->mapApprovalData($step->order, $requester->id, $approvalData);
+            $this->mapApprovalData($step, $requester->id, $approvalData);
         }
 
         $nextStep = $steps->firstWhere('order', '>', $requesterOrder);
@@ -4996,7 +5014,7 @@ class ReimbursementController extends Controller
 
         // Record approval in legacy columns if possible (order 1-6) for old reports
         if ($stepAtActionTime) {
-            $this->mapApprovalData($stepAtActionTime->order, $user->id, $reimbursement);
+            $this->mapApprovalData($stepAtActionTime, $user->id, $reimbursement);
         }
 
 
@@ -5030,17 +5048,10 @@ class ReimbursementController extends Controller
             return;
         }
 
-        // 3. Advance only to the immediate next configured step.
-        // Even when the same person is assigned to consecutive levels (or approved
-        // an earlier level), every step requires its own explicit approval. This
-        // prevents a single action from skipping the remaining workflow and going
-        // directly to Accounts Payable.
-        $currentOrder = $stepAtActionTime->order ?? 0;
-
-        $nextStep = $reimbursement->costCenter->approvalSteps()
-            ->where('order', '>', $currentOrder)
-            ->orderBy('order', 'asc')
-            ->first();
+        // 3. Audit history is the source of truth. Find the first configured
+        // step that still lacks an explicit approval, regardless of legacy
+        // status or timestamp fields.
+        $nextStep = $reimbursement->fresh()->firstPendingConfiguredApprovalStep();
 
         if (!$nextStep) {
             // Flow finished custom levels -> Move to CXP reviewers first.
@@ -5955,7 +5966,10 @@ class ReimbursementController extends Controller
 
                 $isCxpReviewer = $allIdentities->contains(fn($identity) => $identity->isCxp());
                 if ($isCxpReviewer) {
-                    $q->orWhere('status', 'pendiente_revision_cxp');
+                    $q->orWhere(function ($cxpQueue) {
+                        $cxpQueue->where('status', 'pendiente_revision_cxp')
+                            ->withCompletedConfiguredApprovalFlow();
+                    });
                 }
 
                 $isTreasuryApprover = $allIdentities->contains(fn($identity) => $identity->isAdmin() || $identity->isTreasury());

@@ -81,5 +81,59 @@ class ReimbursementSequentialApprovalTest extends TestCase
             'step_name' => 'Subdirección N5',
             'action' => 'aprobado',
         ]);
+
+        $this->actingAs($subdirector)
+            ->post(route('reimbursements.bulk_audit_action'), [
+                'ids' => [$reimbursement->id],
+                'action' => 'aprobado',
+            ])
+            ->assertRedirect();
+
+        $reimbursement->refresh();
+
+        $this->assertSame('pendiente_revision_cxp', $reimbursement->status);
+        $this->assertSame($subdirector->id, $reimbursement->approved_by_direccion_id);
+        $this->assertNull($reimbursement->approved_by_cxp_id);
+        $this->assertDatabaseHas('reimbursement_approvals', [
+            'reimbursement_id' => $reimbursement->id,
+            'user_id' => $subdirector->id,
+            'step_name' => 'Subdirección N5',
+            'action' => 'aprobado',
+            'is_bulk' => true,
+        ]);
+    }
+
+    public function test_cxp_cannot_approve_when_subdirection_has_no_audit_entry(): void
+    {
+        $subdirector = User::factory()->create(['role' => 'direccion', 'status' => 'active']);
+        $cxpReviewer = User::factory()->create(['role' => 'accountant', 'status' => 'active']);
+        $requester = User::factory()->create(['role' => 'user', 'status' => 'active']);
+        $company = Company::create([
+            'name' => 'Empresa de prueba ' . uniqid(),
+            'account' => '0000000002',
+        ]);
+        $costCenter = CostCenter::create([
+            'code' => 'CC-' . strtoupper(substr(uniqid(), -6)),
+            'name' => 'Centro de prueba ' . uniqid(),
+            'company_id' => $company->id,
+            'is_active' => true,
+        ]);
+        $subdirectionStep = ApprovalStep::create([
+            'cost_center_id' => $costCenter->id,
+            'user_id' => $subdirector->id,
+            'order' => 4,
+            'name' => 'Aprobador N4',
+        ]);
+        $reimbursement = Reimbursement::create([
+            'cost_center_id' => $costCenter->id,
+            'user_id' => $requester->id,
+            'status' => 'pendiente_revision_cxp',
+            'current_step_id' => null,
+            'total' => 100,
+            'moneda' => 'MXN',
+        ]);
+
+        $this->assertSame($subdirectionStep->id, $reimbursement->firstPendingConfiguredApprovalStep()?->id);
+        $this->assertFalse($reimbursement->canBeApprovedBy($cxpReviewer));
     }
 }
