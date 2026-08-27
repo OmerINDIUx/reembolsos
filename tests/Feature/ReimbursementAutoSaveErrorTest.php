@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Reimbursement;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ReimbursementAutoSaveErrorTest extends TestCase
@@ -84,5 +86,36 @@ class ReimbursementAutoSaveErrorTest extends TestCase
             'total' => 125,
         ]);
         $this->assertSame(1, Reimbursement::where('uuid', $uuid)->count());
+    }
+
+    public function test_failed_auto_save_removes_only_the_new_unpersisted_file(): void
+    {
+        Storage::fake();
+
+        $requester = User::factory()->create(['role' => 'user', 'status' => 'active']);
+        $existingPath = 'reimbursements/xmls/drafts/existing.xml';
+        Storage::put($existingPath, '<existing/>');
+
+        $draft = Reimbursement::create([
+            'user_id' => $requester->id,
+            'created_by_id' => $requester->id,
+            'status' => 'borrador',
+            'type' => 'reembolso',
+            'xml_path' => $existingPath,
+        ]);
+
+        $this->actingAs($requester)->post(route('reimbursements.auto_save'), [
+            'type' => 'reembolso',
+            'cost_center_id' => 999999,
+            'has_invoice' => '1',
+            'items' => [[
+                'draft_id' => $draft->id,
+                'xml_file' => UploadedFile::fake()->createWithContent('replacement.xml', '<replacement/>'),
+            ]],
+        ])->assertUnprocessable();
+
+        Storage::assertExists($existingPath);
+        $this->assertSame([$existingPath], Storage::allFiles('reimbursements/xmls/drafts'));
+        $this->assertSame($existingPath, $draft->fresh()->xml_path);
     }
 }

@@ -5158,6 +5158,8 @@ class ReimbursementController extends Controller
                     ->value('id');
             }
             foreach ($items as $index => $itemData) {
+                $newlyStoredDraftFiles = [];
+
                 try {
                     $id = $itemData['draft_id'] ?? null;
 
@@ -5304,17 +5306,20 @@ class ReimbursementController extends Controller
                         if ($request->file("items.{$index}.xml_file")->getSize() <= $maxSize) {
                             $data['xml_path'] = $request->file("items.{$index}.xml_file")->store('reimbursements/xmls/drafts');
                             $data['original_xml_name'] = $request->file("items.{$index}.xml_file")->getClientOriginalName();
+                            $newlyStoredDraftFiles[] = ['column' => 'xml_path', 'path' => $data['xml_path']];
                         }
                     }
                     if ($request->hasFile("items.{$index}.pdf_file") && $request->file("items.{$index}.pdf_file")->isValid()) {
                         if ($request->file("items.{$index}.pdf_file")->getSize() <= $maxSize) {
                             $data['pdf_path'] = $request->file("items.{$index}.pdf_file")->store('reimbursements/pdfs/drafts');
                             $data['original_pdf_name'] = $request->file("items.{$index}.pdf_file")->getClientOriginalName();
+                            $newlyStoredDraftFiles[] = ['column' => 'pdf_path', 'path' => $data['pdf_path']];
                         }
                     }
                     if ($request->hasFile("items.{$index}.ticket_file") && $request->file("items.{$index}.ticket_file")->isValid()) {
                         if ($request->file("items.{$index}.ticket_file")->getSize() <= $maxSize) {
                             $data['ticket_path'] = $request->file("items.{$index}.ticket_file")->store('reimbursements/tickets/drafts');
+                            $newlyStoredDraftFiles[] = ['column' => 'ticket_path', 'path' => $data['ticket_path']];
                         }
                     }
 
@@ -5322,12 +5327,15 @@ class ReimbursementController extends Controller
                     if ($request->input('type') === 'viaje') {
                         if ($request->hasFile('xml_file') && $request->file('xml_file')->isValid()) {
                             $data['xml_path'] = $request->file('xml_file')->store('reimbursements/xmls/drafts');
+                            $newlyStoredDraftFiles[] = ['column' => 'xml_path', 'path' => $data['xml_path']];
                         }
                         if ($request->hasFile('pdf_file') && $request->file('pdf_file')->isValid()) {
                             $data['pdf_path'] = $request->file('pdf_file')->store('reimbursements/pdfs/drafts');
+                            $newlyStoredDraftFiles[] = ['column' => 'pdf_path', 'path' => $data['pdf_path']];
                         }
                         if ($request->hasFile('ticket_file') && $request->file('ticket_file')->isValid()) {
                             $data['ticket_path'] = $request->file('ticket_file')->store('reimbursements/tickets/drafts');
+                            $newlyStoredDraftFiles[] = ['column' => 'ticket_path', 'path' => $data['ticket_path']];
                         }
                     }
 
@@ -5371,6 +5379,8 @@ class ReimbursementController extends Controller
                     Log::info("Draft saved for item {$index}: ID {$reimbursement->id}");
 
                 } catch (\Throwable $e) {
+                    $this->deleteUnpersistedDraftFiles($newlyStoredDraftFiles);
+
                     $diagnosticId = (string) Str::uuid();
                     $isDatabaseError = property_exists($e, 'errorInfo');
                     $technicalCode = $isDatabaseError
@@ -5450,6 +5460,32 @@ class ReimbursementController extends Controller
                     'reference' => $diagnosticId,
                 ]],
             ], 500);
+        }
+    }
+
+    /**
+     * Delete only files stored by the current attempt that no reimbursement references.
+     */
+    private function deleteUnpersistedDraftFiles(array $storedFiles): void
+    {
+        foreach ($storedFiles as $storedFile) {
+            $column = $storedFile['column'] ?? null;
+            $path = $storedFile['path'] ?? null;
+
+            if (!in_array($column, ['xml_path', 'pdf_path', 'ticket_path'], true) || !is_string($path) || $path === '') {
+                continue;
+            }
+
+            try {
+                if (!Reimbursement::query()->where($column, $path)->exists()) {
+                    Storage::delete($path);
+                }
+            } catch (\Throwable $cleanupError) {
+                Log::warning('Could not safely clean up a newly stored draft file.', [
+                    'path' => $path,
+                    'exception' => get_class($cleanupError),
+                ]);
+            }
         }
     }
 

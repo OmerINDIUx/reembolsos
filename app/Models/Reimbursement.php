@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 use App\Traits\HasTimeFilters;
 
@@ -325,18 +326,29 @@ class Reimbursement extends Model
     /**
      * Get the universally formatted composite Folio (e.g. INDILAB-REE-2026-15-2026-008)
      */
-    public function getTrueFolioAttribute()
+    public function getTrueFolioAttribute(): string
     {
-        $typeAbbr = strtoupper(substr($this->type ?? 'REE', 0, 3));
-        $ccAbbr = $this->costCenter ? ($this->costCenter->abbreviation ?? 'SCC') : 'SCC';
+        $typeAbbr = self::safeFolioSegment(substr(Str::ascii((string) ($this->type ?? 'REE')), 0, 3), 'REE');
+        $ccAbbr = self::safeFolioSegment($this->costCenter?->abbreviation, 'SCC');
         $year = $this->fecha ? $this->fecha->format('Y') : ($this->created_at ? $this->created_at->format('Y') : date('Y'));
+        $year = self::safeFolioSegment($year, date('Y'));
         
         // Extract only the week number if it contains a year (format W-Y)
         $week = $this->week ?? '00';
         if (str_contains($week, '-')) {
             $week = explode('-', $week)[0];
         }
+        $week = self::safeFolioSegment($week, '00');
+        $id = str_pad(self::safeFolioSegment($this->id, '0'), 3, '0', STR_PAD_LEFT);
 
-        return "{$ccAbbr}-{$typeAbbr}-{$year}-{$week}-" . str_pad($this->id, 3, '0', STR_PAD_LEFT);
+        return "{$ccAbbr}-{$typeAbbr}-{$year}-{$week}-{$id}";
+    }
+
+    private static function safeFolioSegment(mixed $value, string $fallback): string
+    {
+        $ascii = Str::upper(Str::ascii((string) $value));
+        $safe = (string) preg_replace('/[^A-Z0-9]+/', '', $ascii);
+
+        return $safe !== '' ? $safe : $fallback;
     }
 }
