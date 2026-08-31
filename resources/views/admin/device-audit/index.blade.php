@@ -66,7 +66,7 @@
 
             <nav class="sticky top-0 z-10 -mx-4 overflow-x-auto border-y border-gray-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95 sm:rounded-2xl sm:border" aria-label="Submenús de seguridad">
                 <div class="flex min-w-max gap-2 text-xs font-black uppercase tracking-wide">
-                    @foreach(['risk' => 'Riesgo primero', 'shared' => 'Cruce de cuentas', 'simultaneous' => 'Sesiones simultáneas', 'new-devices' => 'Equipos nuevos', 'known' => 'Dispositivos conocidos', 'blocks' => 'Bloqueos', 'recent' => 'Accesos recientes'] as $key => $label)
+                    @foreach(['risk' => 'Riesgo primero', 'shared' => 'Cruce de cuentas', 'simultaneous' => 'Sesiones simultáneas', 'new-devices' => 'Equipos nuevos', 'known' => 'Dispositivos conocidos', 'blocks' => 'Bloqueos', 'recent' => 'Accesos recientes', 'deleted-reimbursements' => 'Borrados'] as $key => $label)
                         <a href="{{ route('admin.device-audit.index', ['section' => $key, 'days' => $days, 'search' => $search]) }}" class="rounded-full px-4 py-2 {{ $section === $key ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200' }}">{{ $label }}</a>
                     @endforeach
                 </div>
@@ -310,6 +310,58 @@
                     <button class="rounded-xl bg-gray-900 px-4 py-2 text-sm font-black text-white dark:bg-white dark:text-gray-900">Filtrar</button>
                 </form>
                 @include('admin.device-audit.partials.login-table', ['logins' => $recentLogins, 'pageName' => 'recent_page'])
+            </section>
+            @endif
+
+            @if($section === 'deleted-reimbursements')
+            <section class="overflow-hidden rounded-3xl border border-rose-200 bg-white shadow-sm dark:border-rose-900 dark:bg-gray-800">
+                <div class="flex flex-col gap-3 border-b border-rose-100 bg-rose-50 px-6 py-5 dark:border-rose-900 dark:bg-rose-950/30 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h3 class="font-black text-rose-950 dark:text-rose-100">Reembolsos borrados</h3>
+                        <p class="mt-1 text-sm text-rose-800 dark:text-rose-200">Se conservan para auditoría. Sus archivos permanecen disponibles y sus UUID pueden volver a utilizarse.</p>
+                    </div>
+                    <span class="rounded-full bg-white px-3 py-1 text-sm font-black text-rose-700 shadow-sm dark:bg-gray-900 dark:text-rose-200">{{ $deletedReimbursements->total() }} registro(s)</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-gray-900">
+                            <tr>
+                                <th class="px-5 py-3">Reembolso</th>
+                                <th class="px-4 py-3">Solicitante / centro</th>
+                                <th class="px-4 py-3">UUID</th>
+                                <th class="px-4 py-3">Eliminado por</th>
+                                <th class="px-4 py-3">Fecha de eliminación</th>
+                                <th class="px-4 py-3">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                            @forelse($deletedReimbursements as $reimbursement)
+                                <tr>
+                                    <td class="px-5 py-4">
+                                        <p class="font-black text-gray-900 dark:text-white">{{ $reimbursement->folio ?: 'Reembolso #' . $reimbursement->id }}</p>
+                                        <p class="mt-1 text-xs text-gray-500">Estado anterior: {{ str($reimbursement->status_before_deletion ?: 'borrador')->replace('_', ' ')->title() }} · ${{ number_format((float) $reimbursement->total, 2) }}</p>
+                                    </td>
+                                    <td class="px-4 py-4">
+                                        <p class="font-bold text-gray-800 dark:text-gray-100">{{ $reimbursement->user?->name ?: 'Sin solicitante' }}</p>
+                                        <p class="mt-1 text-xs text-gray-500">{{ $reimbursement->costCenter?->code ?: '—' }} · {{ $reimbursement->costCenter?->name ?: 'Sin centro' }}</p>
+                                    </td>
+                                    <td class="px-4 py-4 font-mono text-xs text-gray-600 dark:text-gray-300">{{ $reimbursement->uuid ?: 'Sin UUID' }}</td>
+                                    <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100">{{ $reimbursement->deletedBy?->name ?: 'No disponible' }}</td>
+                                    <td class="px-4 py-4 text-gray-600 dark:text-gray-300">{{ $reimbursement->deleted_at?->format('d/m/Y H:i') ?: 'No disponible' }}</td>
+                                    <td class="px-4 py-4">
+                                        <form method="POST" action="{{ route('admin.device-audit.deleted-reimbursements.restore', $reimbursement->id) }}" onsubmit="return confirm('¿Recuperar este reembolso? Si el UUID ya fue reutilizado, la recuperación no será posible.');">
+                                            @csrf
+                                            <button class="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black uppercase tracking-wide text-white hover:bg-emerald-700">Recuperar</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="6" class="px-5 py-10 text-center text-gray-500">No hay reembolsos borrados.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+                <div class="border-t border-gray-100 px-5 py-4 dark:border-gray-700">{{ $deletedReimbursements->appends(request()->query())->links() }}</div>
             </section>
             @endif
 

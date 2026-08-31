@@ -25,7 +25,7 @@ class DeviceAuditController extends Controller
     public function index(Request $request): View
     {
         $section = (string) $request->input('section', 'risk');
-        $section = in_array($section, ['risk', 'shared', 'simultaneous', 'new-devices', 'known', 'blocks', 'recent'], true)
+        $section = in_array($section, ['risk', 'shared', 'simultaneous', 'new-devices', 'known', 'blocks', 'recent', 'deleted-reimbursements'], true)
             ? $section
             : 'risk';
         $days = (int) $request->integer('days', 30);
@@ -202,6 +202,20 @@ class DeviceAuditController extends Controller
 
         $blockReasons = AccountBlockReasons::all();
 
+        $deletedReimbursements = Reimbursement::withoutGlobalScope('visible')
+            ->with(['user:id,name,email', 'createdBy:id,name', 'costCenter:id,name,code', 'deletedBy:id,name'])
+            ->where('status', 'eliminado')
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($nested) use ($search) {
+                    $nested->where('folio', 'like', "%{$search}%")
+                        ->orWhere('uuid', 'like', "%{$search}%")
+                        ->orWhereHas('user', fn ($users) => $users->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"))
+                        ->orWhereHas('deletedBy', fn ($users) => $users->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->latest('deleted_at')
+            ->paginate(20, ['*'], 'deleted_reimbursements_page');
+
         $summary = [
             'logins_today' => DeviceLogin::where('logged_in_at', '>=', today())->count(),
             'active_devices' => DeviceLogin::where('last_seen_at', '>=', $since)->distinct()->count('device_hash'),
@@ -237,8 +251,30 @@ class DeviceAuditController extends Controller
             'summary',
             'users',
             'blockEvents',
-            'blockReasons'
+            'blockReasons',
+            'deletedReimbursements'
         ));
+    }
+
+    public function restoreDeletedReimbursement(Request $request, int $reimbursementId): RedirectResponse
+    {
+        $reimbursement = Reimbursement::withoutGlobalScope('visible')
+            ->whereKey($reimbursementId)
+            ->where('status', 'eliminado')
+            ->firstOrFail();
+
+        if (filled($reimbursement->uuid) && Reimbursement::where('uuid', $reimbursement->uuid)->exists()) {
+            return back()->with('error', 'No se puede recuperar este reembolso porque su UUID ya está siendo utilizado por otro registro activo.');
+        }
+
+        $reimbursement->update([
+            'status' => $reimbursement->status_before_deletion ?: 'borrador',
+            'status_before_deletion' => null,
+            'deleted_at' => null,
+            'deleted_by_id' => null,
+        ]);
+
+        return back()->with('success', 'Reembolso recuperado correctamente.');
     }
 
     public function exportUsers(Request $request)

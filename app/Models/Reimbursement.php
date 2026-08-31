@@ -13,6 +13,10 @@ class Reimbursement extends Model
 
     protected static function booted()
     {
+        // Removed reimbursements remain in the database for audit and recovery,
+        // but must stay out of every operational query by default.
+        static::addGlobalScope('visible', fn ($query) => $query->where('status', '!=', 'eliminado'));
+
         static::created(function ($reimbursement) {
             // Sync folio with the composite format once ID is available
             $reimbursement->folio = $reimbursement->true_folio;
@@ -92,6 +96,9 @@ class Reimbursement extends Model
         'approved_by_direccion_at',
         'approved_by_treasury_id',
         'approved_by_treasury_at',
+        'status_before_deletion',
+        'deleted_at',
+        'deleted_by_id',
     ];
 
     protected $casts = [
@@ -111,6 +118,7 @@ class Reimbursement extends Model
         'approved_by_cxp_at' => 'datetime',
         'approved_by_direccion_at' => 'datetime',
         'approved_by_treasury_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     public function directorApprover()
@@ -151,6 +159,11 @@ class Reimbursement extends Model
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by_id')->withTrashed();
+    }
+
+    public function deletedBy()
+    {
+        return $this->belongsTo(User::class, 'deleted_by_id')->withTrashed();
     }
 
     public function payee()

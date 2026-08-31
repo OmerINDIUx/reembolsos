@@ -13,6 +13,17 @@
                         @csrf
                         @method('PUT')
 
+                        @if ($errors->any())
+                            <div class="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200" role="alert">
+                                <p class="font-black uppercase tracking-widest">No se pudo actualizar el centro de costos</p>
+                                <ul class="mt-2 list-disc space-y-1 pl-5">
+                                    @foreach ($errors->all() as $error)
+                                        <li>{{ $error }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             <div>
                                 <label for="name" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Nombre del Centro de Costos *</label>
@@ -187,8 +198,15 @@
                         </div>
 
                         <!-- Dynamic Steps with Alpine.js -->
+                        @php
+                            $approvalStepRows = old('steps', $costCenter->approvalSteps->map(fn($s) => [
+                                'id' => $s->id,
+                                'user_id' => $s->user_id,
+                                'name' => $s->name,
+                            ])->values()->all());
+                        @endphp
                         <div x-data="{ 
-                            steps: {{ $costCenter->approvalSteps->map(fn($s) => ['id' => $s->id, 'user_id' => $s->user_id, 'name' => $s->name])->toJson() }},
+                            steps: @js($approvalStepRows),
                             addStep() {
                                 this.steps.push({ id: null, user_id: '', name: 'Aprobador N' + (this.steps.length + 1) });
                             },
@@ -234,13 +252,13 @@
 
                         <!-- Authorized Requestors with Alpine.js -->
                         @php
-                            $authorizedUsers = $costCenter->authorizedUsers->map(fn($u) => [
+                            $authorizedUsers = old('allowed_users', $costCenter->authorizedUsers->map(fn($u) => [
                                 'user_id' => $u->id,
                                 'can_do_special' => (bool)$u->pivot->can_do_special
-                            ]);
+                            ])->values()->all());
                         @endphp
                         <div x-data="{ 
-                            users: {{ $authorizedUsers->toJson() }},
+                            users: @js($authorizedUsers),
                             addUser() {
                                 this.users.push({ user_id: '', can_do_special: false });
                             },

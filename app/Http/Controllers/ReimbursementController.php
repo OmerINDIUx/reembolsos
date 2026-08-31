@@ -2630,7 +2630,9 @@ class ReimbursementController extends Controller
                     $data['payment_week'] = null;
                 }
             } else {
-                // Direct routing rule: return to the stage that requested the correction.
+                // Return exactly to the stage that requested the correction. A correction
+                // clears current_step_id, so it must be restored on resubmission; otherwise
+                // a "pendiente" reimbursement has no approver that can act on it.
                 $lastCorrection = $reimbursement->approvals()
                     ->where('action', 'requiere_correccion')
                     ->latest()
@@ -2642,18 +2644,24 @@ class ReimbursementController extends Controller
                 } elseif (str_contains($lastCorrectionStep, 'Cuentas por Pagar Pagadores')) {
                     $data['status'] = 'pendiente_pago';
                     $data['payment_week'] = $reimbursement->payment_week ?: $this->currentProcessingWeek();
-                } elseif ($reimbursement->approved_by_direccion_id !== null) {
-                    $data['status'] = 'aprobado_direccion';
-                } elseif ($reimbursement->approved_by_cxp_id !== null) {
-                    $data['status'] = 'aprobado_cxp';
-                } elseif ($reimbursement->approved_by_executive_id !== null) {
-                    $data['status'] = 'aprobado_ejecutivo';
-                } elseif ($reimbursement->approved_by_control_id !== null) {
-                    $data['status'] = 'aprobado_control';
-                } elseif ($reimbursement->approved_by_director_id !== null) {
-                    $data['status'] = 'aprobado_director';
                 } else {
-                    $data['status'] = 'pendiente';
+                    $correctionStep = $reimbursement->costCenter?->approvalSteps()
+                        ->where('name', $lastCorrectionStep)
+                        ->orderBy('order')
+                        ->first();
+
+                    // If an administrator removed or renamed the original step, recover
+                    // to the first outstanding configured step. This keeps the request
+                    // actionable instead of leaving it pending without an assignee.
+                    $correctionStep ??= $reimbursement->firstPendingConfiguredApprovalStep();
+
+                    if ($correctionStep) {
+                        $data['status'] = 'pendiente';
+                        $data['current_step_id'] = $correctionStep->id;
+                    } else {
+                        $data['status'] = 'pendiente_revision_cxp';
+                        $data['current_step_id'] = null;
+                    }
                 }
             }
         } else {
@@ -2936,19 +2944,19 @@ class ReimbursementController extends Controller
         }
 
         $wasDraft = $reimbursement->status === 'borrador';
-        $this->deleteReimbursementWithFiles($reimbursement);
+        $this->archiveReimbursement($reimbursement, $user->id);
 
         if ($wasDraft) {
             return redirect()->route('reimbursements.create')
-                ->with('success', 'Borrador eliminado correctamente.');
+                ->with('success', 'Borrador enviado a borrados. Podrá recuperarse desde Auditoría de dispositivos.');
         }
 
         return redirect()->route('reimbursements.index')
-            ->with('success', 'Reembolso eliminado correctamente.');
+            ->with('success', 'Reembolso enviado a borrados. Podrá recuperarse desde Auditoría de dispositivos.');
     }
 
     /**
-     * Admin-only bulk delete to free uploaded XML UUIDs for a clean re-upload.
+     * Admin-only bulk archival to free uploaded XML UUIDs for a clean re-upload.
      */
     public function bulkDestroy(Request $request)
     {
@@ -2974,36 +2982,29 @@ class ReimbursementController extends Controller
                     continue;
                 }
 
-                $this->deleteReimbursementWithFiles($reimbursement);
+                $this->archiveReimbursement($reimbursement, $user->id);
                 $deleted++;
             }
         });
 
         return redirect()->back()
-            ->with('success', "Se eliminaron {$deleted} reembolso(s). Los XML correspondientes ya pueden volver a subirse.");
+            ->with('success', "Se enviaron {$deleted} reembolso(s) a borrados. Los UUID correspondientes ya pueden volver a subirse.");
     }
 
-    private function deleteReimbursementWithFiles(Reimbursement $reimbursement): void
+    private function archiveReimbursement(Reimbursement $reimbursement, int $deletedById): void
     {
-        $reimbursement->loadMissing(['files', 'children.files', 'children.children']);
+        $reimbursement->loadMissing(['children.children']);
 
         foreach ($reimbursement->children as $child) {
-            $this->deleteReimbursementWithFiles($child);
+            $this->archiveReimbursement($child, $deletedById);
         }
 
-        $paths = collect([
-            $reimbursement->xml_path,
-            $reimbursement->pdf_path,
-            $reimbursement->ticket_path,
-        ])->merge($reimbursement->files->pluck('file_path'))
-            ->filter()
-            ->unique();
-
-        foreach ($paths as $path) {
-            Storage::delete($path);
-        }
-
-        $reimbursement->delete();
+        $reimbursement->update([
+            'status_before_deletion' => $reimbursement->status,
+            'status' => 'eliminado',
+            'deleted_at' => now(),
+            'deleted_by_id' => $deletedById,
+        ]);
     }
 
     /**

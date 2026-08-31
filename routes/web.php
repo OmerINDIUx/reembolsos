@@ -44,6 +44,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/admin/device-audit/reimbursements-dashboard/duplicate-reviews', [DeviceAuditController::class, 'updateDuplicateReview'])
         ->middleware('admin')
         ->name('admin.device-audit.reimbursements-dashboard.duplicate-reviews.update');
+    Route::post('/admin/device-audit/deleted-reimbursements/{reimbursementId}/restore', [DeviceAuditController::class, 'restoreDeletedReimbursement'])
+        ->middleware('admin')
+        ->name('admin.device-audit.deleted-reimbursements.restore');
     Route::post('/admin/device-audit/users/{user}/block', [DeviceAuditController::class, 'block'])
         ->middleware('admin')
         ->name('admin.device-audit.block');
