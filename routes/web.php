@@ -32,6 +32,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/device-audit/users/export', [DeviceAuditController::class, 'exportUsers'])
         ->middleware('admin')
         ->name('admin.device-audit.users.export');
+    Route::get('/admin/device-audit/approvers/export', [DeviceAuditController::class, 'exportApproverMatrix'])
+        ->middleware('admin')
+        ->name('admin.device-audit.approvers.export');
+    Route::get('/admin/device-audit/reimbursements-dashboard', [DeviceAuditController::class, 'reimbursementsDashboard'])
+        ->middleware('admin')
+        ->name('admin.device-audit.reimbursements-dashboard');
     Route::post('/admin/device-audit/users/{user}/block', [DeviceAuditController::class, 'block'])
         ->middleware('admin')
         ->name('admin.device-audit.block');

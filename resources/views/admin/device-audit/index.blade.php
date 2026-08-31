@@ -1,4 +1,4 @@
-<x-app-layout>
+<x-app-layout :hide-navigation="true">
     <x-slot name="header">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -11,7 +11,9 @@
                 </p>
             </div>
 
-            <form method="GET" action="{{ route('admin.device-audit.index') }}" class="flex flex-col gap-2 sm:flex-row">
+            <div class="space-y-3">
+                @include('admin.device-audit.partials.navigation')
+                <form method="GET" action="{{ route('admin.device-audit.index') }}" class="flex flex-col gap-2 sm:flex-row">
                 <select name="days" class="rounded-xl border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
                     @foreach([7, 15, 30, 60, 90] as $option)
                         <option value="{{ $option }}" @selected($days === $option)>Últimos {{ $option }} días</option>
@@ -22,15 +24,13 @@
                 <button class="rounded-xl bg-gray-900 px-5 py-2 text-sm font-black uppercase tracking-wide text-white hover:bg-black">
                     Buscar
                 </button>
-                <a href="{{ route('admin.device-audit.users.export', ['search' => $search]) }}" class="rounded-xl bg-emerald-600 px-5 py-2 text-center text-sm font-black uppercase tracking-wide text-white hover:bg-emerald-700">
-                    Descargar usuarios
-                </a>
                 @if($search !== '')
                     <a href="{{ route('admin.device-audit.index', ['days' => $days]) }}" class="rounded-xl bg-gray-100 px-5 py-2 text-center text-sm font-black uppercase tracking-wide text-gray-700 hover:bg-gray-200">
                         Limpiar
                     </a>
                 @endif
-            </form>
+                </form>
+            </div>
         </div>
     </x-slot>
 
