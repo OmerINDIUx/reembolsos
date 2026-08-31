@@ -38,6 +38,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/device-audit/reimbursements-dashboard', [DeviceAuditController::class, 'reimbursementsDashboard'])
         ->middleware('admin')
         ->name('admin.device-audit.reimbursements-dashboard');
+    Route::get('/admin/device-audit/reimbursements-dashboard/details/{report}', [DeviceAuditController::class, 'reimbursementsDashboardDetails'])
+        ->middleware('admin')
+        ->name('admin.device-audit.reimbursements-dashboard.details');
     Route::post('/admin/device-audit/users/{user}/block', [DeviceAuditController::class, 'block'])
         ->middleware('admin')
         ->name('admin.device-audit.block');

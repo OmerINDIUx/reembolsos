@@ -22,10 +22,18 @@ class DeviceAuditController extends Controller
 {
     public function index(Request $request): View
     {
+        $section = (string) $request->input('section', 'risk');
+        $section = in_array($section, ['risk', 'shared', 'simultaneous', 'new-devices', 'known', 'blocks', 'recent'], true)
+            ? $section
+            : 'risk';
         $days = (int) $request->integer('days', 30);
         $days = in_array($days, [7, 15, 30, 60, 90], true) ? $days : 30;
         $since = now()->subDays($days);
         $search = trim((string) $request->input('search'));
+        $blockSearch = trim((string) $request->input('block_search'));
+        $blockStatus = (string) $request->input('block_status', 'all');
+        $loginSearch = trim((string) $request->input('login_search'));
+        $loginFilter = (string) $request->input('login_filter', 'all');
 
         $sharedDevices = DeviceLogin::query()
             ->select('device_hash')
@@ -150,26 +158,31 @@ class DeviceAuditController extends Controller
             ->paginate(25, ['*'], 'known_page');
 
         $recentLogins = DeviceLogin::with('user:id,name,email')
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($innerQuery) use ($search) {
-                    $innerQuery->where('ip_address', 'like', "%{$search}%")
-                        ->orWhere('device_label', 'like', "%{$search}%")
-                        ->orWhereHas('user', function ($userQuery) use ($search) {
-                            $userQuery->where('name', 'like', "%{$search}%")
-                                ->orWhere('email', 'like', "%{$search}%");
+            ->when($loginSearch !== '', function ($query) use ($loginSearch) {
+                $query->where(function ($innerQuery) use ($loginSearch) {
+                    $innerQuery->where('ip_address', 'like', "%{$loginSearch}%")
+                        ->orWhere('device_label', 'like', "%{$loginSearch}%")
+                        ->orWhereHas('user', function ($userQuery) use ($loginSearch) {
+                            $userQuery->where('name', 'like', "%{$loginSearch}%")
+                                ->orWhere('email', 'like', "%{$loginSearch}%");
                         });
                 });
             })
+            ->when($loginFilter === 'risk', fn ($query) => $query->where('risk_score', '>=', 30))
+            ->when($loginFilter === 'new', fn ($query) => $query->where('is_new_device', true))
+            ->when($loginFilter === 'simultaneous', fn ($query) => $query->where('simultaneous_devices_count', '>', 0))
             ->latest('logged_in_at')
             ->paginate(25, ['*'], 'recent_page');
 
         $users = User::with('blockedByUser:id,name')
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($innerQuery) use ($search) {
-                    $innerQuery->where('name', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%");
+            ->when($blockSearch !== '', function ($query) use ($blockSearch) {
+                $query->where(function ($innerQuery) use ($blockSearch) {
+                    $innerQuery->where('name', 'like', "%{$blockSearch}%")
+                        ->orWhere('email', 'like', "%{$blockSearch}%");
                 });
             })
+            ->when($blockStatus === 'blocked', fn ($query) => $query->whereNotNull('blocked_at'))
+            ->when($blockStatus === 'active', fn ($query) => $query->whereNull('blocked_at'))
             ->orderByRaw('blocked_at IS NULL')
             ->orderBy('name')
             ->paginate(20, ['*'], 'users_page');
@@ -177,7 +190,13 @@ class DeviceAuditController extends Controller
         $blockEvents = AccountBlockEvent::with([
             'user:id,name,email',
             'actor:id,name',
-        ])->latest()->limit(15)->get();
+        ])->when($blockSearch !== '', function ($query) use ($blockSearch) {
+            $query->where(function ($nested) use ($blockSearch) {
+                $nested->whereHas('user', fn ($users) => $users->where('name', 'like', "%{$blockSearch}%")->orWhere('email', 'like', "%{$blockSearch}%"))
+                    ->orWhereHas('actor', fn ($users) => $users->where('name', 'like', "%{$blockSearch}%"));
+            });
+        })->when(in_array($blockStatus, ['blocked', 'unblocked'], true), fn ($query) => $query->where('action', $blockStatus))
+            ->latest()->paginate(15, ['*'], 'block_events_page');
 
         $blockReasons = AccountBlockReasons::all();
 
@@ -204,7 +223,9 @@ class DeviceAuditController extends Controller
 
         return view('admin.device-audit.index', compact(
             'days',
+            'section',
             'search',
+            'blockSearch', 'blockStatus', 'loginSearch', 'loginFilter',
             'sharedDevices',
             'riskUsers',
             'simultaneousLogins',
@@ -286,6 +307,8 @@ class DeviceAuditController extends Controller
     /** Live replacement for dashboard_reembolsos_2.html. */
     public function reimbursementsDashboard(Request $request): View
     {
+        $section = (string) $request->input('section', 'general');
+        $section = in_array($section, ['general', 'centers', 'cxp', 'compliance'], true) ? $section : 'general';
         $range = $request->input('range', '90');
         $range = in_array($range, ['30', '90', '180', '365', 'all'], true) ? $range : '90';
         $companyId = $request->integer('company');
@@ -313,13 +336,23 @@ class DeviceAuditController extends Controller
             'amount' => (float) $items->sum('total'),
         ])->sortByDesc('amount')->values();
 
-        $monthlyTrend = $reimbursements->groupBy(fn ($item) => $item->created_at->format('Y-m'))
-            ->map(fn ($items, $month) => [
-                'month' => $month,
-                'count' => $items->count(),
-                'amount' => (float) $items->sum('total'),
-                'paid' => (float) $items->filter(fn ($item) => $item->approved_by_treasury_at !== null)->sum('total'),
-            ])->sortBy('month')->values();
+        // The original analysis measures registered flow by request date and paid flow by payment date.
+        // Do not assign a payment to the month in which the reimbursement was created.
+        $registeredByMonth = $reimbursements->groupBy(fn ($item) => $item->created_at->format('Y-m'));
+        $paidByMonth = $reimbursements->filter(fn ($item) => $item->approved_by_treasury_at !== null)
+            ->groupBy(fn ($item) => $item->approved_by_treasury_at->format('Y-m'));
+        $monthlyTrend = $registeredByMonth->keys()->merge($paidByMonth->keys())->unique()->sort()->values()
+            ->map(function ($month) use ($registeredByMonth, $paidByMonth) {
+                $registered = $registeredByMonth->get($month, collect());
+                $paidForMonth = $paidByMonth->get($month, collect());
+                return [
+                    'month' => $month,
+                    'count' => $registered->count(),
+                    'amount' => (float) $registered->sum('total'),
+                    'paid_count' => $paidForMonth->count(),
+                    'paid' => (float) $paidForMonth->sum('total'),
+                ];
+            });
 
         $topCostCenters = $reimbursements->groupBy('cost_center_id')->map(function ($items) {
             $center = $items->first()->costCenter;
@@ -454,12 +487,50 @@ class DeviceAuditController extends Controller
             ->orderBy('name')->get();
 
         return view('admin.device-audit.reimbursements-dashboard', compact(
-            'range', 'companyId', 'costCenterId', 'reimbursements', 'totalAmount', 'paid', 'pending',
+            'section', 'range', 'companyId', 'costCenterId', 'reimbursements', 'totalAmount', 'paid', 'pending',
             'statusBreakdown', 'monthlyTrend', 'topCostCenters', 'duplicates', 'approvalMetrics', 'approvalMatrix',
             'analyticsRows', 'stageDurations', 'cxpBacklog', 'unpaid', 'cxpThroughput', 'cxpWorkload', 'complianceRules',
         ) + [
             'companies' => \App\Models\Company::orderBy('name')->get(['id', 'name']),
             'costCenters' => CostCenter::orderBy('name')->get(['id', 'name', 'code', 'company_id']),
+        ]);
+    }
+
+    /** Paginated drill-downs for dashboard summary cards. */
+    public function reimbursementsDashboardDetails(Request $request, string $report): View
+    {
+        abort_unless(in_array($report, ['amounts', 'categories', 'approvers', 'centers'], true), 404);
+        $search = trim((string) $request->input('search'));
+        $companyId = $request->integer('company');
+        $costCenterId = $request->integer('cost_center');
+        $range = $request->input('range', '90');
+        $from = in_array($range, ['30', '90', '180', '365'], true) ? now()->subDays((int) $range)->startOfDay() : null;
+        $titles = ['amounts' => 'Reembolsos por monto', 'categories' => 'Reembolsos por categoría', 'approvers' => 'Aprobadores configurados', 'centers' => 'Centros de costos'];
+
+        if (in_array($report, ['amounts', 'categories'], true)) {
+            $items = Reimbursement::with(['user:id,name', 'costCenter.company'])
+                ->when($from, fn ($query) => $query->where('created_at', '>=', $from))
+                ->when($companyId, fn ($query) => $query->whereHas('costCenter', fn ($centers) => $centers->where('company_id', $companyId)))
+                ->when($costCenterId, fn ($query) => $query->where('cost_center_id', $costCenterId))
+                ->when($search !== '', fn ($query) => $query->where(fn ($q) => $q->where('folio', 'like', "%{$search}%")->orWhere('rfc_emisor', 'like', "%{$search}%")->orWhere('category', 'like', "%{$search}%")->orWhereHas('user', fn ($users) => $users->where('name', 'like', "%{$search}%"))))
+                ->orderBy($report === 'amounts' ? 'total' : 'category', $report === 'amounts' ? 'desc' : 'asc')->paginate(25);
+        } elseif ($report === 'approvers') {
+            $items = ApprovalStep::with(['costCenter.company', 'user:id,name,email'])
+                ->when($companyId, fn ($query) => $query->whereHas('costCenter', fn ($centers) => $centers->where('company_id', $companyId)))
+                ->when($costCenterId, fn ($query) => $query->where('cost_center_id', $costCenterId))
+                ->when($search !== '', fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhereHas('user', fn ($users) => $users->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"))->orWhereHas('costCenter', fn ($centers) => $centers->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))))
+                ->orderBy('cost_center_id')->orderBy('order')->paginate(25);
+        } else {
+            $items = CostCenter::with('company')->withCount('reimbursements')->withSum('reimbursements', 'total')
+                ->when($companyId, fn ($query) => $query->where('company_id', $companyId))
+                ->when($search !== '', fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%")))
+                ->orderBy('name')->paginate(25);
+        }
+
+        return view('admin.device-audit.reimbursements-details', compact('report', 'items', 'search', 'companyId', 'costCenterId', 'range') + [
+            'title' => $titles[$report],
+            'companies' => \App\Models\Company::orderBy('name')->get(['id', 'name']),
+            'costCenters' => CostCenter::orderBy('name')->get(['id', 'name', 'code']),
         ]);
     }
 

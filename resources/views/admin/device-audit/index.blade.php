@@ -14,6 +14,7 @@
             <div class="space-y-3">
                 @include('admin.device-audit.partials.navigation')
                 <form method="GET" action="{{ route('admin.device-audit.index') }}" class="flex flex-col gap-2 sm:flex-row">
+                <input type="hidden" name="section" value="{{ $section }}">
                 <select name="days" class="rounded-xl border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
                     @foreach([7, 15, 30, 60, 90] as $option)
                         <option value="{{ $option }}" @selected($days === $option)>Últimos {{ $option }} días</option>
@@ -25,7 +26,7 @@
                     Buscar
                 </button>
                 @if($search !== '')
-                    <a href="{{ route('admin.device-audit.index', ['days' => $days]) }}" class="rounded-xl bg-gray-100 px-5 py-2 text-center text-sm font-black uppercase tracking-wide text-gray-700 hover:bg-gray-200">
+                    <a href="{{ route('admin.device-audit.index', ['days' => $days, 'section' => $section]) }}" class="rounded-xl bg-gray-100 px-5 py-2 text-center text-sm font-black uppercase tracking-wide text-gray-700 hover:bg-gray-200">
                         Limpiar
                     </a>
                 @endif
@@ -63,17 +64,15 @@
                 @endforeach
             </div>
 
-            <nav class="sticky top-0 z-10 -mx-4 overflow-x-auto border-y border-gray-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95 sm:rounded-2xl sm:border">
+            <nav class="sticky top-0 z-10 -mx-4 overflow-x-auto border-y border-gray-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95 sm:rounded-2xl sm:border" aria-label="Submenús de seguridad">
                 <div class="flex min-w-max gap-2 text-xs font-black uppercase tracking-wide">
-                    <a href="#riesgo" class="rounded-full bg-red-100 px-4 py-2 text-red-800">Riesgo primero</a>
-                    <a href="#dispositivos-compartidos" class="rounded-full bg-orange-100 px-4 py-2 text-orange-800">Cruce de cuentas</a>
-                    <a href="#simultaneas" class="rounded-full bg-amber-100 px-4 py-2 text-amber-800">Sesiones simultáneas</a>
-                    <a href="#equipos-nuevos" class="rounded-full bg-indigo-100 px-4 py-2 text-indigo-800">Equipos nuevos</a>
-                    <a href="#conocidos" class="rounded-full bg-sky-100 px-4 py-2 text-sky-800">Dispositivos conocidos</a>
-                    <a href="#bloqueo" class="rounded-full bg-gray-100 px-4 py-2 text-gray-800">Bloqueos</a>
+                    @foreach(['risk' => 'Riesgo primero', 'shared' => 'Cruce de cuentas', 'simultaneous' => 'Sesiones simultáneas', 'new-devices' => 'Equipos nuevos', 'known' => 'Dispositivos conocidos', 'blocks' => 'Bloqueos', 'recent' => 'Accesos recientes'] as $key => $label)
+                        <a href="{{ route('admin.device-audit.index', ['section' => $key, 'days' => $days, 'search' => $search]) }}" class="rounded-full px-4 py-2 {{ $section === $key ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200' }}">{{ $label }}</a>
+                    @endforeach
                 </div>
             </nav>
 
+            @if($section === 'risk')
             <section id="riesgo" class="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-sm dark:border-red-900 dark:bg-gray-800">
                 <div class="border-b border-red-100 bg-red-50 px-6 py-5 dark:border-red-900 dark:bg-red-950/30">
                     <h3 class="text-lg font-black text-red-950 dark:text-red-200">1. Cuentas con señales de violación</h3>
@@ -144,7 +143,9 @@
                 </div>
                 <div class="border-t border-gray-200 px-6 py-4 dark:border-gray-700">{{ $riskUsers->appends(request()->except('risk_page'))->links() }}</div>
             </section>
+            @endif
 
+            @if($section === 'shared')
             <section id="dispositivos-compartidos" class="overflow-hidden rounded-3xl border border-orange-200 bg-white shadow-sm dark:border-orange-900 dark:bg-gray-800">
                 <div class="border-b border-orange-100 bg-orange-50 px-6 py-5 dark:border-orange-900 dark:bg-orange-950/30">
                     <h3 class="text-lg font-black text-orange-950 dark:text-orange-200">2. Cruce de cuentas: mismo dispositivo con varios usuarios</h3>
@@ -178,7 +179,9 @@
                 </div>
                 <div class="border-t border-gray-200 px-6 py-4 dark:border-gray-700">{{ $sharedDevices->appends(request()->except('shared_page'))->links() }}</div>
             </section>
+            @endif
 
+            @if($section === 'simultaneous')
             <section id="simultaneas" class="overflow-hidden rounded-3xl border border-amber-200 bg-white shadow-sm dark:border-amber-900 dark:bg-gray-800">
                 <div class="border-b border-amber-100 bg-amber-50 px-6 py-5 dark:border-amber-900 dark:bg-amber-950/30">
                     <h3 class="text-lg font-black text-amber-950 dark:text-amber-200">3. Sesiones simultáneas</h3>
@@ -186,7 +189,9 @@
                 </div>
                 @include('admin.device-audit.partials.login-table', ['logins' => $simultaneousLogins, 'pageName' => 'simultaneous_page'])
             </section>
+            @endif
 
+            @if($section === 'new-devices')
             <section id="equipos-nuevos" class="overflow-hidden rounded-3xl border border-indigo-200 bg-white shadow-sm dark:border-indigo-900 dark:bg-gray-800">
                 <div class="border-b border-indigo-100 bg-indigo-50 px-6 py-5 dark:border-indigo-900 dark:bg-indigo-950/30">
                     <h3 class="text-lg font-black text-indigo-950 dark:text-indigo-200">4. Equipos nuevos y segundo factor</h3>
@@ -194,7 +199,9 @@
                 </div>
                 @include('admin.device-audit.partials.login-table', ['logins' => $newDeviceLogins, 'pageName' => 'new_device_page'])
             </section>
+            @endif
 
+            @if($section === 'known')
             <section id="conocidos" class="overflow-hidden rounded-3xl border border-sky-200 bg-white shadow-sm dark:border-sky-900 dark:bg-gray-800">
                 <div class="border-b border-sky-100 bg-sky-50 px-6 py-5 dark:border-sky-900 dark:bg-sky-950/30">
                     <h3 class="text-lg font-black text-sky-950 dark:text-sky-200">5. Dispositivos conocidos por usuario</h3>
@@ -230,12 +237,20 @@
                 </div>
                 <div class="border-t border-gray-200 px-6 py-4 dark:border-gray-700">{{ $knownDevices->appends(request()->except('known_page'))->links() }}</div>
             </section>
+            @endif
 
+            @if($section === 'blocks')
             <section id="bloqueo" class="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div class="border-b border-gray-200 px-6 py-5 dark:border-gray-700">
                     <h3 class="text-lg font-black text-gray-900 dark:text-white">6. Bloqueo manual de cuentas</h3>
                     <p class="text-sm text-gray-500">Búsqueda paginada. No carga todos los usuarios al mismo tiempo.</p>
                 </div>
+                <form method="GET" class="grid gap-3 border-b border-gray-100 bg-gray-50 px-6 py-4 sm:grid-cols-[1fr_190px_auto] dark:border-gray-700 dark:bg-gray-900">
+                    <input type="hidden" name="section" value="blocks"><input type="hidden" name="days" value="{{ $days }}">
+                    <input name="block_search" value="{{ $blockSearch }}" type="search" placeholder="Buscar usuario o correo" class="rounded-xl border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                    <select name="block_status" class="rounded-xl border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="all" @selected($blockStatus === 'all')>Todos los estados</option><option value="active" @selected($blockStatus === 'active')>Cuentas activas</option><option value="blocked" @selected($blockStatus === 'blocked')>Cuentas bloqueadas</option></select>
+                    <button class="rounded-xl bg-gray-900 px-4 py-2 text-sm font-black text-white dark:bg-white dark:text-gray-900">Filtrar</button>
+                </form>
                 <div class="divide-y divide-gray-100 dark:divide-gray-700">
                     @foreach($users as $user)
                         <div class="grid gap-4 p-5 lg:grid-cols-[minmax(260px,1fr)_minmax(360px,1.5fr)] lg:items-center">
@@ -281,14 +296,24 @@
                 </div>
                 <div class="border-t border-gray-200 px-6 py-4 dark:border-gray-700">{{ $users->appends(request()->except('users_page'))->links() }}</div>
             </section>
+            @endif
 
+            @if($section === 'recent')
             <section class="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div class="border-b border-gray-200 px-6 py-5 dark:border-gray-700">
                     <h3 class="text-lg font-black text-gray-900 dark:text-white">Historial reciente de accesos</h3>
                 </div>
+                <form method="GET" class="grid gap-3 border-b border-gray-100 bg-gray-50 px-6 py-4 sm:grid-cols-[1fr_190px_auto] dark:border-gray-700 dark:bg-gray-900">
+                    <input type="hidden" name="section" value="recent"><input type="hidden" name="days" value="{{ $days }}">
+                    <input name="login_search" value="{{ $loginSearch }}" type="search" placeholder="Buscar usuario, IP o dispositivo" class="rounded-xl border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                    <select name="login_filter" class="rounded-xl border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"><option value="all" @selected($loginFilter === 'all')>Todos los accesos</option><option value="risk" @selected($loginFilter === 'risk')>Solo con riesgo</option><option value="new" @selected($loginFilter === 'new')>Equipos nuevos</option><option value="simultaneous" @selected($loginFilter === 'simultaneous')>Sesiones simultáneas</option></select>
+                    <button class="rounded-xl bg-gray-900 px-4 py-2 text-sm font-black text-white dark:bg-white dark:text-gray-900">Filtrar</button>
+                </form>
                 @include('admin.device-audit.partials.login-table', ['logins' => $recentLogins, 'pageName' => 'recent_page'])
             </section>
+            @endif
 
+            @if($section === 'blocks')
             <section class="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div class="border-b border-gray-200 px-6 py-5 dark:border-gray-700">
                     <h3 class="text-lg font-black text-gray-900 dark:text-white">Historial de bloqueos y desbloqueos</h3>
@@ -313,7 +338,9 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="border-t border-gray-200 px-6 py-4 dark:border-gray-700">{{ $blockEvents->appends(request()->except('block_events_page'))->links() }}</div>
             </section>
+            @endif
         </div>
     </div>
 </x-app-layout>
