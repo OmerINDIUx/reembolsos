@@ -2046,6 +2046,13 @@ class ReimbursementController extends Controller
     {
         $user = Auth::user();
 
+        // Repairs records created before resubmissions restored current_step_id.
+        // This is deliberately done before visibility checks so the assigned approver
+        // can immediately see and act on the request after reloading the page.
+        if ($this->repairStuckPendingAssignment($reimbursement)) {
+            $reimbursement->refresh();
+        }
+
         // 1. Admin, AdminView, Subdirección (N4), Dirección General (N5) & Owner always see
         if ($user->hasRole('admin', 'admin_view', 'accountant', 'direccion') || $this->canRequesterManageReimbursement($reimbursement, $user)) {
             return $this->showReimbursementView($reimbursement);
@@ -2130,6 +2137,45 @@ class ReimbursementController extends Controller
         }
 
         return $this->showReimbursementView($reimbursement);
+    }
+
+    /**
+     * Restore an assignee for legacy pending reimbursements that have no current step.
+     *
+     * A pending workflow may never be left without an assigned approval step. When the
+     * original correction step is no longer available, use the first incomplete step;
+     * if no configured approval remains, continue with CXP review.
+     */
+    private function repairStuckPendingAssignment(Reimbursement $reimbursement): bool
+    {
+        if ($reimbursement->status !== 'pendiente' || $reimbursement->current_step_id !== null) {
+            return false;
+        }
+
+        $lastCorrection = $reimbursement->approvals()
+            ->where('action', 'requiere_correccion')
+            ->latest()
+            ->first();
+        $correctionStepName = $lastCorrection?->step_name;
+        $correctionStep = $correctionStepName
+            ? $reimbursement->costCenter?->approvalSteps()
+                ->where('name', $correctionStepName)
+                ->orderBy('order')
+                ->first()
+            : null;
+
+        $correctionStep ??= $reimbursement->firstPendingConfiguredApprovalStep();
+
+        if ($correctionStep) {
+            $reimbursement->update(['current_step_id' => $correctionStep->id]);
+        } else {
+            $reimbursement->update([
+                'status' => 'pendiente_revision_cxp',
+                'current_step_id' => null,
+            ]);
+        }
+
+        return true;
     }
 
     private function showReimbursementView(Reimbursement $reimbursement)
