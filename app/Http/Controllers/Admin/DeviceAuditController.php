@@ -14,6 +14,7 @@ use App\Services\AccountBlockService;
 use App\Support\AccountBlockReasons;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -499,15 +500,42 @@ class DeviceAuditController extends Controller
     /** Paginated drill-downs for dashboard summary cards. */
     public function reimbursementsDashboardDetails(Request $request, string $report): View
     {
-        abort_unless(in_array($report, ['amounts', 'categories', 'approvers', 'centers'], true), 404);
+        abort_unless(in_array($report, ['amounts', 'categories', 'approvers', 'centers', 'duplicates'], true), 404);
         $search = trim((string) $request->input('search'));
         $companyId = $request->integer('company');
         $costCenterId = $request->integer('cost_center');
         $range = $request->input('range', '90');
         $from = in_array($range, ['30', '90', '180', '365'], true) ? now()->subDays((int) $range)->startOfDay() : null;
-        $titles = ['amounts' => 'Reembolsos por monto', 'categories' => 'Reembolsos por categoría', 'approvers' => 'Aprobadores configurados', 'centers' => 'Centros de costos'];
+        $titles = ['amounts' => 'Reembolsos por monto', 'categories' => 'Reembolsos por categoría', 'approvers' => 'Aprobadores configurados', 'centers' => 'Centros de costos', 'duplicates' => 'Comparativa de posibles duplicados'];
 
-        if (in_array($report, ['amounts', 'categories'], true)) {
+        if ($report === 'duplicates') {
+            $candidates = Reimbursement::with(['user:id,name', 'costCenter:id,name,code'])
+                ->when($from, fn ($query) => $query->where('created_at', '>=', $from))
+                ->when($companyId, fn ($query) => $query->whereHas('costCenter', fn ($centers) => $centers->where('company_id', $companyId)))
+                ->when($costCenterId, fn ($query) => $query->where('cost_center_id', $costCenterId))
+                ->whereNotIn('status', ['borrador', 'rechazado'])
+                ->whereNotNull('rfc_emisor')->whereNotNull('total')->whereNotNull('fecha')
+                ->get();
+            $groups = $candidates->groupBy(fn ($item) => implode('|', [$item->rfc_emisor, number_format((float) $item->total, 2, '.', ''), $item->fecha->toDateString()]))
+                ->filter(fn ($group) => $group->count() > 1)
+                ->map(function ($group) {
+                    $first = $group->first();
+                    $uuids = $group->pluck('uuid')->filter()->unique()->values();
+                    return [
+                        'rfc' => $first->rfc_emisor, 'date' => $first->fecha, 'amount' => (float) $first->total,
+                        'count' => $group->count(), 'total_amount' => (float) $group->sum('total'),
+                        'reason' => 'Mismo RFC emisor, mismo importe y misma fecha de comprobante en solicitudes distintas.',
+                        'uuid_note' => $uuids->count() === $group->count() ? 'Los UUID fiscales son distintos; la señal es de compra repetida, no de reenvío del mismo XML.' : 'Hay UUID ausente o repetido; requiere revisión prioritaria del comprobante fiscal.',
+                        'records' => $group->map(fn ($item) => ['id' => $item->id, 'folio' => $item->folio, 'user' => $item->user?->name ?: '—', 'center' => $item->costCenter?->name ?: '—', 'uuid' => $item->uuid ?: 'Sin UUID', 'status' => $item->status])->values(),
+                    ];
+                })->filter(function ($group) use ($search) {
+                    if ($search === '') return true;
+                    return str_contains(strtolower($group['rfc']), strtolower($search))
+                        || $group['records']->contains(fn ($record) => str_contains(strtolower($record['user'] . ' ' . $record['center'] . ' ' . $record['folio']), strtolower($search)));
+                })->sortByDesc('total_amount')->values();
+            $page = LengthAwarePaginator::resolveCurrentPage();
+            $items = new LengthAwarePaginator($groups->forPage($page, 10)->values(), $groups->count(), 10, $page, ['path' => LengthAwarePaginator::resolveCurrentPath(), 'query' => $request->query()]);
+        } elseif (in_array($report, ['amounts', 'categories'], true)) {
             $items = Reimbursement::with(['user:id,name', 'costCenter.company'])
                 ->when($from, fn ($query) => $query->where('created_at', '>=', $from))
                 ->when($companyId, fn ($query) => $query->whereHas('costCenter', fn ($centers) => $centers->where('company_id', $companyId)))
