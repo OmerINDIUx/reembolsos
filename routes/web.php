@@ -41,6 +41,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/device-audit/reimbursements-dashboard/details/{report}', [DeviceAuditController::class, 'reimbursementsDashboardDetails'])
         ->middleware('admin')
         ->name('admin.device-audit.reimbursements-dashboard.details');
+    Route::post('/admin/device-audit/reimbursements-dashboard/duplicate-reviews', [DeviceAuditController::class, 'updateDuplicateReview'])
+        ->middleware('admin')
+        ->name('admin.device-audit.reimbursements-dashboard.duplicate-reviews.update');
     Route::post('/admin/device-audit/users/{user}/block', [DeviceAuditController::class, 'block'])
         ->middleware('admin')
         ->name('admin.device-audit.block');

@@ -9,6 +9,7 @@ use App\Models\ApprovalStep;
 use App\Models\CostCenter;
 use App\Models\Reimbursement;
 use App\Models\ReimbursementApproval;
+use App\Models\DuplicateReviewCase;
 use App\Models\User;
 use App\Services\AccountBlockService;
 use App\Support\AccountBlockReasons;
@@ -522,6 +523,7 @@ class DeviceAuditController extends Controller
                     $first = $group->first();
                     $uuids = $group->pluck('uuid')->filter()->unique()->values();
                     return [
+                        'fingerprint' => hash('sha256', $first->rfc_emisor . '|' . number_format((float) $first->total, 2, '.', '') . '|' . $first->fecha->toDateString()),
                         'rfc' => $first->rfc_emisor, 'date' => $first->fecha, 'amount' => (float) $first->total,
                         'count' => $group->count(), 'total_amount' => (float) $group->sum('total'),
                         'reason' => 'Mismo RFC emisor, mismo importe y misma fecha de comprobante en solicitudes distintas.',
@@ -533,8 +535,17 @@ class DeviceAuditController extends Controller
                     return str_contains(strtolower($group['rfc']), strtolower($search))
                         || $group['records']->contains(fn ($record) => str_contains(strtolower($record['user'] . ' ' . $record['center'] . ' ' . $record['folio']), strtolower($search)));
                 })->sortByDesc('total_amount')->values();
+            $reviews = DuplicateReviewCase::with('reviewedBy:id,name')->whereIn('fingerprint', $groups->pluck('fingerprint'))->get()->keyBy('fingerprint');
+            $groups = $groups->map(function ($group) use ($reviews) {
+                $group['review'] = $reviews->get($group['fingerprint']);
+                return $group;
+            });
             $page = LengthAwarePaginator::resolveCurrentPage();
             $items = new LengthAwarePaginator($groups->forPage($page, 10)->values(), $groups->count(), 10, $page, ['path' => LengthAwarePaginator::resolveCurrentPath(), 'query' => $request->query()]);
+            return view('admin.device-audit.duplicate-details', compact('items', 'search', 'companyId', 'costCenterId', 'range') + [
+                'companies' => \App\Models\Company::orderBy('name')->get(['id', 'name']),
+                'costCenters' => CostCenter::orderBy('name')->get(['id', 'name', 'code']),
+            ]);
         } elseif (in_array($report, ['amounts', 'categories'], true)) {
             $items = Reimbursement::with(['user:id,name', 'costCenter.company'])
                 ->when($from, fn ($query) => $query->where('created_at', '>=', $from))
@@ -560,6 +571,26 @@ class DeviceAuditController extends Controller
             'companies' => \App\Models\Company::orderBy('name')->get(['id', 'name']),
             'costCenters' => CostCenter::orderBy('name')->get(['id', 'name', 'code']),
         ]);
+    }
+
+    public function updateDuplicateReview(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'rfc_emisor' => ['required', 'string', 'max:13'],
+            'amount' => ['required', 'numeric', 'min:0'],
+            'invoice_date' => ['required', 'date'],
+            'status' => ['required', Rule::in(['pending', 'resolved', 'blocked'])],
+            'note' => ['nullable', 'string', 'max:2000'],
+        ]);
+        $amount = number_format((float) $data['amount'], 2, '.', '');
+        $fingerprint = hash('sha256', $data['rfc_emisor'] . '|' . $amount . '|' . $data['invoice_date']);
+
+        DuplicateReviewCase::updateOrCreate(
+            ['fingerprint' => $fingerprint],
+            ['rfc_emisor' => $data['rfc_emisor'], 'amount' => $amount, 'invoice_date' => $data['invoice_date'], 'status' => $data['status'], 'note' => $data['note'] ?: null, 'reviewed_by_id' => $request->user()->id, 'reviewed_at' => now()]
+        );
+
+        return back()->with('success', 'La revisión del posible duplicado fue actualizada.');
     }
 
     public function block(Request $request, User $user, AccountBlockService $service): RedirectResponse
