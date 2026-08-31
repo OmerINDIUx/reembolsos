@@ -926,7 +926,6 @@ class CostCenterController extends Controller
         }
         $request->merge([
             'menfis_email' => filled($request->menfis_email) ? trim($request->menfis_email) : null,
-            'steps' => $this->withMandatorySubdirectionStep($request->input('steps', [])),
         ]);
 
         $request->validate([
@@ -1026,7 +1025,6 @@ class CostCenterController extends Controller
 
         $request->merge([
             'menfis_email' => filled($request->menfis_email) ? trim($request->menfis_email) : null,
-            'steps' => $this->withMandatorySubdirectionStep($request->input('steps', [])),
         ]);
 
         $request->validate([
@@ -1360,39 +1358,4 @@ class CostCenterController extends Controller
         return redirect()->back()->with('success', 'Presupuesto renovado correctamente.');
     }
 
-    /**
-     * Subdirección is a mandatory operational approval before Accounts Payable.
-     */
-    private function withMandatorySubdirectionStep(array $steps): array
-    {
-        $subdirectionUsers = User::with('profile')
-            ->where('status', 'active')
-            ->get()
-            ->filter(fn (User $candidate) => $candidate->isDireccion())
-            ->values();
-
-        $configuredUserIds = collect($steps)
-            ->pluck('user_id')
-            ->filter()
-            ->map(fn ($id) => (int) $id);
-
-        if ($configuredUserIds->intersect($subdirectionUsers->pluck('id'))->isNotEmpty()) {
-            return $steps;
-        }
-
-        if ($subdirectionUsers->count() !== 1) {
-            throw ValidationException::withMessages([
-                'steps' => $subdirectionUsers->isEmpty()
-                    ? 'Debe existir una persona activa con perfil de Subdirección para completar el flujo.'
-                    : 'Selecciona explícitamente a una de las personas con perfil de Subdirección dentro del flujo.',
-            ]);
-        }
-
-        $steps[] = [
-            'user_id' => $subdirectionUsers->first()->id,
-            'name' => 'Subdirección',
-        ];
-
-        return $steps;
-    }
 }
