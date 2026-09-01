@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Permission;
 use App\Models\Profile;
 use Illuminate\Http\Request;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Str;
 
 class ProfileManagementController extends Controller
@@ -24,17 +25,32 @@ class ProfileManagementController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'display_name' => 'required|string|max:255',
+            'display_name' => [
+                'required',
+                'string',
+                'max:255',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (Profile::where('name', Str::slug($value))->exists()) {
+                        $fail('Ya existe un perfil con ese nombre.');
+                    }
+                },
+            ],
             'description' => 'nullable|string',
             'permissions' => 'nullable|array',
             'permissions.*' => 'exists:permissions,id',
         ]);
 
-        $profile = Profile::create([
-            'name' => Str::slug($request->display_name),
-            'display_name' => $request->display_name,
-            'description' => $request->description,
-        ]);
+        try {
+            $profile = Profile::create([
+                'name' => Str::slug($request->display_name),
+                'display_name' => $request->display_name,
+                'description' => $request->description,
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            return back()
+                ->withInput()
+                ->withErrors(['display_name' => 'Ya existe un perfil con ese nombre.']);
+        }
 
         if ($request->has('permissions')) {
             $profile->permissions()->sync($request->permissions);
