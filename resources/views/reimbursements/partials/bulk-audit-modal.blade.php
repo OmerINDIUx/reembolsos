@@ -1,6 +1,6 @@
 @php
     $bulkAdminFlowStatusOptions = [
-        'pendiente' => 'Activo en flujo de operación',
+        'pendiente_autorizacion' => 'Activo en flujo de operación',
         'requiere_correccion' => 'Devuelto para cambio',
         'rechazado' => 'Rechazo definitivo',
     ];
@@ -258,4 +258,3 @@
         </div>
     </div>
 </div>
-

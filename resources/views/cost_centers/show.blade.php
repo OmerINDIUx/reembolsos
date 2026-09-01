@@ -807,7 +807,7 @@
                     'aprobado': { label: 'Pago aprobado', color: '#10b981' },
                     'rechazado': { label: 'Rechazado', color: '#ef4444' },
                     'requiere_correccion': { label: 'Corregir', color: '#f59e0b' },
-                    'pendiente': { label: 'Pendiente', color: '#6366f1' },
+                    'pendiente_autorizacion': { label: 'En autorización', color: '#6366f1' },
                     'borrador': { label: 'Borrador', color: '#9ca3af' }
                 };
 

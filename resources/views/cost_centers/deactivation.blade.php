@@ -57,7 +57,7 @@
                             @php
                                 $statusLabel = match ($reimbursement->status) {
                                     'borrador' => 'Borrador',
-                                    'pendiente' => 'Pendiente',
+                                    'pendiente_autorizacion' => 'En autorización',
                                     'requiere_correccion' => 'Requiere corrección',
                                     'pendiente_revision_cxp' => 'Pendiente de revisión CXP',
                                     'pendiente_pago' => 'Pendiente de pago',

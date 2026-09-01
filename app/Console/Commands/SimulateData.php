@@ -43,7 +43,7 @@ class SimulateData extends Command
         $this->info('Encontrados ' . count($xmlFiles) . ' archivos XML y ' . count($pdfFiles) . ' archivos PDF.');
 
         $categories = ['viaticos', 'comida', 'gasolina', 'mantenimiento', 'hospedaje', 'transporte', 'servicios', 'otros'];
-        $statuses = ['pendiente', 'aprobado', 'pagado', 'rechazado'];
+        $statuses = ['pendiente_autorizacion', 'aprobado', 'pagado', 'rechazado'];
 
         // Create a Travel Event for the trips images
         $tripEvent = TravelEvent::updateOrCreate(

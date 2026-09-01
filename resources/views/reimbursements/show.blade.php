@@ -178,7 +178,7 @@
                                 'aprobado' => 'text-green-700 bg-green-50 ring-green-600/20',
                                 'rechazado' => 'text-red-700 bg-red-50 ring-red-600/10',
                                 'requiere_correccion' => 'text-yellow-800 bg-yellow-50 ring-yellow-600/20',
-                                'pendiente' => 'text-indigo-700 bg-indigo-50 ring-indigo-600/20',
+                                'pendiente_autorizacion' => 'text-indigo-700 bg-indigo-50 ring-indigo-600/20',
                                 'pendiente_revision_cxp' => 'text-sky-700 bg-sky-50 ring-sky-600/20',
                                 'pendiente_pago' => 'text-indigo-700 bg-indigo-50 ring-indigo-600/20',
                                 'borrador' => 'text-gray-600 bg-gray-50 ring-gray-500/10',
@@ -192,7 +192,7 @@
                                 'rechazado' => 'RECHAZADO',
                                 'requiere_correccion' => 'REQUIERE CORRECCIÓN',
                                 'borrador' => 'BORRADOR',
-                                'pendiente' => $reimbursement->currentStep->name ?? 'PENDIENTE',
+                                'pendiente_autorizacion' => $reimbursement->currentStep->name ?? 'EN AUTORIZACIÓN',
                                 default => str_replace('_', ' ', strtoupper($reimbursement->status))
                             };
                         @endphp
@@ -723,7 +723,7 @@
                     
                     @php
                         $adminFlowStatusOptions = [
-                            'pendiente' => 'Activo en flujo de operación',
+                            'pendiente_autorizacion' => 'Activo en flujo de operación',
                             'requiere_correccion' => 'Devuelto para cambio',
                             'rechazado' => 'Rechazo definitivo',
                         ];

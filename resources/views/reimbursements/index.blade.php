@@ -326,7 +326,7 @@
                     @if($exactSearchResult)
                         @php
                             $exactStage = match($exactSearchResult->status) {
-                                'pendiente' => $exactSearchResult->currentStep?->name ?? 'En proceso',
+                                'pendiente_autorizacion' => $exactSearchResult->currentStep?->name ?? 'En autorización',
                                 'pendiente_revision_cxp' => 'CXP Revisadores',
                                 'pendiente_pago' => $exactSearchResult->approved_by_treasury_at ? 'Listo para pago' : 'CXP Pagadores',
                                 'requiere_correccion' => 'Corrección requerida',
@@ -709,21 +709,21 @@
                                                     {{ $r->status === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : '' }}
                                                     {{ $r->status === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : '' }}
                                                     {{ $r->status === 'requiere_correccion' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' : '' }}
-                                                    {{ $r->status === 'pendiente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
+                                                    {{ $r->status === 'pendiente_autorizacion' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : '' }}
                                                     {{ $r->status === 'pendiente_revision_cxp' ? 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300' : '' }}
                                                     {{ $r->status === 'pendiente_pago' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : '' }}
                                                     {{ $r->status === 'borrador' ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' : '' }}
-                                                    {{ !in_array($r->status, ['aprobado', 'rechazado', 'requiere_correccion', 'pendiente', 'pendiente_revision_cxp', 'pendiente_pago', 'borrador']) ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
+                                                    {{ !in_array($r->status, ['aprobado', 'rechazado', 'requiere_correccion', 'pendiente_autorizacion', 'pendiente_revision_cxp', 'pendiente_pago', 'borrador']) ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : '' }}
                                                 ">
                                                     @if($r->status === 'aprobado') Pago aprobado
-                                                    @elseif($r->status === 'pendiente') {{ $r->currentStep->name ?? 'En Proceso' }}
+                                                    @elseif($r->status === 'pendiente_autorizacion') {{ $r->currentStep->name ?? 'En autorización' }}
                                                     @elseif($r->status === 'pendiente_revision_cxp') CXP Revisadores
                                                     @elseif($r->status === 'pendiente_pago') {{ $r->approved_by_treasury_at ? 'Listo para pago' : 'CXP Pagadores' }}
                                                     @elseif($r->status === 'requiere_correccion') Corregir
                                                     @else {{ ucfirst(str_replace('_', ' ', $r->status)) }} @endif
                                                 </span>
                                                 <span class="text-[10px] text-gray-400 font-medium italic">
-                                                    @if($r->status === 'pendiente' && $r->currentStep) 
+                                                    @if($r->status === 'pendiente_autorizacion' && $r->currentStep)
                                                         En: {{ $r->currentStep->user->name ?? 'Por asignar' }}
                                                         @php
                                                             $isSubstituteApproval = false;

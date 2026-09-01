@@ -1,7 +1,7 @@
 <x-app-layout :hide-navigation="true">
     @php
         $statusLabels = [
-            'borrador' => 'Borrador', 'pendiente' => 'En aprobación', 'aprobado_director' => 'En aprobación',
+            'borrador' => 'Borrador', 'pendiente_autorizacion' => 'En autorización', 'aprobado_director' => 'En aprobación',
             'aprobado_ejecutivo' => 'En aprobación', 'requiere_correccion' => 'Requiere corrección',
             'pendiente_revision_cxp' => 'En revisión CxP', 'pendiente_pago' => 'Pendiente de pago',
             'aprobado' => 'Pagado / aprobado', 'rechazado' => 'Rechazado',

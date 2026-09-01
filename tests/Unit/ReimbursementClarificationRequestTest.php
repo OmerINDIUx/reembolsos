@@ -37,7 +37,7 @@ class ReimbursementClarificationRequestTest extends TestCase
         $step = new ApprovalStep(['name' => 'Control de Obra', 'user_id' => $authorizer->id]);
         $step->setRelation('user', $authorizer);
 
-        $reimbursement = new Reimbursement(['status' => 'pendiente']);
+        $reimbursement = new Reimbursement(['status' => 'pendiente_autorizacion']);
         $reimbursement->setRelation('currentStep', $step);
         $reimbursement->setRelation('approvals', new Collection());
 
@@ -50,7 +50,7 @@ class ReimbursementClarificationRequestTest extends TestCase
         $recipient = $this->user(20, 'Autorizador', 'autoriza@example.com');
         $reimbursement = new Reimbursement([
             'folio' => 'TCC-REE-2026-32-315',
-            'status' => 'pendiente',
+            'status' => 'pendiente_autorizacion',
             'type' => 'reembolso',
             'week' => '32-2026',
         ]);

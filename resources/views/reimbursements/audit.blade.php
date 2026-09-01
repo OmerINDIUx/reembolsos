@@ -217,7 +217,7 @@
                                         <option value="aprobado" {{ request('status_audit') == 'aprobado' ? 'selected' : '' }}>Aprobados</option>
                                         <option value="rechazado" {{ request('status_audit') == 'rechazado' ? 'selected' : '' }}>Rechazados/corrección</option>
                                         <option value="requiere_correccion" {{ request('status_audit') == 'requiere_correccion' ? 'selected' : '' }}>En corrección</option>
-                                        <option value="pendiente" {{ request('status_audit') == 'pendiente' ? 'selected' : '' }}>Pendientes</option>
+                                        <option value="pendiente_autorizacion" {{ request('status_audit') == 'pendiente_autorizacion' ? 'selected' : '' }}>En autorización</option>
                                         <option value="pendiente_revision_cxp" {{ request('status_audit') == 'pendiente_revision_cxp' ? 'selected' : '' }}>Revisión CXP</option>
                                         <option value="pendiente_pago" {{ request('status_audit') == 'pendiente_pago' ? 'selected' : '' }}>Pendiente de pago</option>
                                     </select>
@@ -383,7 +383,7 @@
                                             @php
                                                 $isSubstituteApproval = false;
                                                 $currStepUserId = $r->currentStep->user_id ?? null;
-                                                if ($r->status === 'pendiente' && $currStepUserId && $currStepUserId !== Auth::id()) {
+                                                if ($r->status === 'pendiente_autorizacion' && $currStepUserId && $currStepUserId !== Auth::id()) {
                                                     $isSubstituteApproval = Auth::user()->substitutingFor()->where('original_user_id', $currStepUserId)->exists() || Auth::user()->isAdmin();
                                                 }
                                             @endphp
@@ -560,7 +560,7 @@
                                             <option value="aprobado" {{ request('status_audit') == 'aprobado' ? 'selected' : '' }}>Aprobados</option>
                                             <option value="rechazado" {{ request('status_audit') == 'rechazado' ? 'selected' : '' }}>Rechazados/corrección</option>
                                             <option value="requiere_correccion" {{ request('status_audit') == 'requiere_correccion' ? 'selected' : '' }}>En corrección</option>
-                                            <option value="pendiente" {{ request('status_audit') == 'pendiente' ? 'selected' : '' }}>Pendientes</option>
+                                            <option value="pendiente_autorizacion" {{ request('status_audit') == 'pendiente_autorizacion' ? 'selected' : '' }}>En autorización</option>
                                             <option value="pendiente_revision_cxp" {{ request('status_audit') == 'pendiente_revision_cxp' ? 'selected' : '' }}>Revisión CXP</option>
                                             <option value="pendiente_pago" {{ request('status_audit') == 'pendiente_pago' ? 'selected' : '' }}>Pendiente de pago</option>
                                         </select>
@@ -795,7 +795,7 @@
                                             <option value="aprobado" {{ request('status_audit') == 'aprobado' ? 'selected' : '' }}>Aprobados</option>
                                             <option value="rechazado" {{ request('status_audit') == 'rechazado' ? 'selected' : '' }}>Rechazados/corrección</option>
                                             <option value="requiere_correccion" {{ request('status_audit') == 'requiere_correccion' ? 'selected' : '' }}>En corrección</option>
-                                            <option value="pendiente" {{ request('status_audit') == 'pendiente' ? 'selected' : '' }}>Pendientes</option>
+                                            <option value="pendiente_autorizacion" {{ request('status_audit') == 'pendiente_autorizacion' ? 'selected' : '' }}>En autorización</option>
                                             <option value="pendiente_revision_cxp" {{ request('status_audit') == 'pendiente_revision_cxp' ? 'selected' : '' }}>Revisión CXP</option>
                                             <option value="pendiente_pago" {{ request('status_audit') == 'pendiente_pago' ? 'selected' : '' }}>Pendiente de pago</option>
                                         </select>

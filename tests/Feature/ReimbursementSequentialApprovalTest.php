@@ -53,7 +53,7 @@ class ReimbursementSequentialApprovalTest extends TestCase
         $reimbursement = Reimbursement::create([
             'cost_center_id' => $costCenter->id,
             'user_id' => $requester->id,
-            'status' => 'pendiente',
+            'status' => 'pendiente_autorizacion',
             'current_step_id' => $executiveStep->id,
             'total' => 100,
             'moneda' => 'MXN',
@@ -68,7 +68,7 @@ class ReimbursementSequentialApprovalTest extends TestCase
 
         $reimbursement->refresh();
 
-        $this->assertSame('pendiente', $reimbursement->status);
+        $this->assertSame('pendiente_autorizacion', $reimbursement->status);
         $this->assertSame($nextStep->id, $reimbursement->current_step_id);
         $this->assertDatabaseHas('reimbursement_approvals', [
             'reimbursement_id' => $reimbursement->id,
@@ -181,7 +181,7 @@ class ReimbursementSequentialApprovalTest extends TestCase
 
         $reimbursement->refresh();
 
-        $this->assertSame('pendiente', $reimbursement->status);
+        $this->assertSame('pendiente_autorizacion', $reimbursement->status);
         $this->assertSame($approvalStep->id, $reimbursement->current_step_id);
         $this->assertTrue($reimbursement->canBeApprovedBy($approver));
     }

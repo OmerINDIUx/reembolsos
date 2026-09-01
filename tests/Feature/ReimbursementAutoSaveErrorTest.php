@@ -22,7 +22,7 @@ class ReimbursementAutoSaveErrorTest extends TestCase
         $existing = Reimbursement::create([
             'user_id' => $owner->id,
             'created_by_id' => $owner->id,
-            'status' => 'pendiente',
+            'status' => 'pendiente_autorizacion',
             'type' => 'reembolso',
             'title' => 'Reembolso existente',
             'uuid' => $uuid,

@@ -44,7 +44,7 @@ class CostCenterDeactivationTest extends TestCase
         $continued = Reimbursement::create([
             'cost_center_id' => $costCenter->id,
             'user_id' => $requester->id,
-            'status' => 'pendiente',
+            'status' => 'pendiente_autorizacion',
             'current_step_id' => $step->id,
             'total' => 100,
             'moneda' => 'MXN',
@@ -79,7 +79,7 @@ class CostCenterDeactivationTest extends TestCase
             ->assertRedirect(route('cost_centers.index', ['tab' => 'history']));
 
         $this->assertFalse($costCenter->refresh()->is_active);
-        $this->assertSame('pendiente', $continued->refresh()->status);
+        $this->assertSame('pendiente_autorizacion', $continued->refresh()->status);
         $this->assertSame($step->id, $continued->current_step_id);
         $this->assertSame('rechazado', $rejected->refresh()->status);
         $this->assertNull($rejected->current_step_id);
@@ -96,7 +96,7 @@ class CostCenterDeactivationTest extends TestCase
         $costCenter = $this->createCostCenter();
         Reimbursement::create([
             'cost_center_id' => $costCenter->id,
-            'status' => 'pendiente',
+            'status' => 'pendiente_autorizacion',
             'total' => 100,
         ]);
 

@@ -36,7 +36,7 @@ class SeedMixedReimbursements extends Command
         }
 
         $statuses = [
-            'pendiente',
+            'pendiente_autorizacion',
             'pendiente_revision_cxp',
             'pendiente_pago',
             'aprobado',
@@ -66,7 +66,7 @@ class SeedMixedReimbursements extends Command
                 $tip = $type === 'comida' ? round(min($amount * 0.12, 450), 2) : 0;
 
                 $currentStep = null;
-                if ($status === 'pendiente') {
+                if ($status === 'pendiente_autorizacion') {
                     $currentStep = $steps[$index % $steps->count()];
                 }
 
@@ -124,7 +124,7 @@ class SeedMixedReimbursements extends Command
 
     private function applyLegacyApprovalDates(Reimbursement $reimbursement, $steps, string $status, Carbon $createdAt): void
     {
-        if ($status === 'pendiente') return;
+        if ($status === 'pendiente_autorizacion') return;
 
         $approver = $steps->last()?->user_id;
         $reimbursement->approved_by_director_id = $approver;
@@ -153,7 +153,7 @@ class SeedMixedReimbursements extends Command
             'comment' => 'Solicitud demo enviada.',
         ]);
 
-        $completedSteps = $status === 'pendiente'
+        $completedSteps = $status === 'pendiente_autorizacion'
             ? $steps->where('order', '<', $currentStep?->order)
             : $steps;
 

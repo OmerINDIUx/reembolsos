@@ -1715,9 +1715,9 @@
                                 } else if (d.status === 'aprobado') {
                                     statusClasses = 'bg-green-100 text-green-800';
                                     statusLabel = 'PAGO APROBADO';
-                                } else if (d.status === 'pendiente') {
+                                } else if (d.status === 'pendiente_autorizacion') {
                                     statusClasses = 'bg-yellow-100 text-yellow-800';
-                                    statusLabel = 'PENDIENTE';
+                                    statusLabel = 'EN AUTORIZACIÓN';
                                 }
 
                                 Swal.fire({
