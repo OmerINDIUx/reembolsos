@@ -44,7 +44,7 @@ class ReimbursementNotificationContext
     public static function statusLabel($reimbursement): string
     {
         return match ((string) $reimbursement->status) {
-            'pendiente_autorizacion' => 'Pendiente de autorización',
+            'enviado' => 'Enviado para aprobación',
             'pendiente_revision_cxp' => 'Pendiente de revisión de CXP',
             'pendiente_pago' => $reimbursement->approved_by_treasury_at
                 ? 'Disponible para pago'
@@ -61,7 +61,7 @@ class ReimbursementNotificationContext
     public static function actionLabel($reimbursement): string
     {
         return match ((string) $reimbursement->status) {
-            'pendiente_autorizacion' => 'Revisar la solicitud y aprobarla o indicar el motivo de rechazo/corrección.',
+            'enviado' => 'Revisar la solicitud y aprobarla o indicar el motivo de rechazo/corrección.',
             'pendiente_revision_cxp' => 'Validar la documentación, importes y datos fiscales; después aprobar o devolver para corrección.',
             'pendiente_pago' => $reimbursement->approved_by_treasury_at
                 ? 'Generar o confirmar el pago desde el módulo de pagos.'

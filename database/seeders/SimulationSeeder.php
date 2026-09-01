@@ -142,7 +142,7 @@ class SimulationSeeder extends Seeder
         // 6. Create Reimbursements for the last 8 weeks
         $types = ['reembolso', 'fondo_fijo', 'comida', 'viaje'];
         $categories = ['papeleria', 'mantenimiento', 'comida', 'viaticos', 'combustible', 'hotel', 'transporte'];
-        $statuses = ['pendiente_autorizacion', 'aprobado_director', 'aprobado_control', 'aprobado', 'rechazado'];
+        $statuses = ['pendiente', 'aprobado_director', 'aprobado_control', 'aprobado', 'rechazado'];
 
         $now = Carbon::now();
         

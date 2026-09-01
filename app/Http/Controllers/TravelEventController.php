@@ -189,7 +189,7 @@ class TravelEventController extends Controller
         $costCenter = $travelEvent->costCenter;
         $firstStep = $costCenter ? $costCenter->approvalSteps()->orderBy('order', 'asc')->first() : null;
         
-        $initialStatus = $firstStep ? 'pendiente_autorizacion' : 'aprobado';
+        $initialStatus = $firstStep ? 'enviado' : 'aprobado';
         $currentStepId = $firstStep ? $firstStep->id : null;
         
         // Semana de facturación actual

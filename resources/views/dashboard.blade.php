@@ -396,7 +396,7 @@
                                                         {{ !in_array($reimbursement->status, ['aprobado', 'rechazado', 'requiere_correccion']) ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300' : '' }}
                                                     ">
                                                         @if($reimbursement->status === 'aprobado') Pago aprobado 
-                                                        @elseif($reimbursement->status === 'pendiente_autorizacion') {{ $reimbursement->currentStep?->name ?? 'En autorización' }}
+                                                        @elseif($reimbursement->status === 'enviado') {{ $reimbursement->currentStep?->name ?? 'Enviado' }}
                                                         @else {{ str_replace('_', ' ', $reimbursement->status) }} @endif
                                                     </span>
                                                 </td>
@@ -526,7 +526,7 @@
                     'aprobado': { label: 'Pago aprobado', color: '#64b032' },
                     'rechazado': { label: 'Rechazado', color: '#ff3000' },
                     'requiere_correccion': { label: 'Corregir', color: '#ffa608' },
-                    'pendiente_autorizacion': { label: 'En autorización', color: '#0066f9' },
+                    'enviado': { label: 'Enviado', color: '#0066f9' },
                     'aprobado_director': { label: 'N2: Aprob. Dir', color: '#3385fa' },
                     'aprobado_control': { label: 'N3: Aprob. Ctrl', color: '#66a3fb' },
                     'aprobado_ejecutivo': { label: 'Aprob. Ejecut.', color: '#004bb3' },

@@ -25,7 +25,7 @@ class UserController extends Controller
     ];
 
     private const REIMBURSEMENT_STATUS_LABELS = [
-        'pendiente_autorizacion' => 'En proceso',
+        'enviado' => 'Enviado para autorización',
         'requiere_correccion' => 'Requiere corrección',
         'aprobado_director' => 'Aprobado por director',
         'aprobado_control' => 'Aprobado por control de obra',
@@ -50,7 +50,7 @@ class UserController extends Controller
             ->withCount([
                 'fixedFunds as active_fixed_funds_count' => fn ($funds) => $funds->where('is_active', true),
                 'approvalSteps',
-                'reimbursements as active_reimbursements_count' => fn ($reimbursements) => $reimbursements->whereIn('status', ['pendiente_autorizacion', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo']),
+                'reimbursements as active_reimbursements_count' => fn ($reimbursements) => $reimbursements->whereIn('status', ['enviado', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_direccion']),
             ])
             ->orderBy('name');
 
@@ -396,7 +396,7 @@ class UserController extends Controller
         $this->ensureCanManageUser($user, 'inhabilitar');
 
         if ($user->isBlocked()) return redirect()->route('users.index')->with('error', 'Esta cuenta ya se encuentra inhabilitada.');
-        $pendingStatuses = ['pendiente_autorizacion', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo'];
+        $pendingStatuses = ['enviado', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_direccion'];
         $pendingReimbursements = $user->reimbursements()->whereIn('status', $pendingStatuses)->with(['costCenter', 'user', 'payee'])->orderBy('cost_center_id')->orderBy('id')->get();
         $approvalSteps = $user->approvalSteps()->with('costCenter')->orderBy('cost_center_id')->orderBy('order')->get();
         $activeFunds = $user->fixedFunds()->where('is_active', true)->with('costCenter')->orderBy('cost_center_id')->orderBy('id')->get();
@@ -450,7 +450,7 @@ class UserController extends Controller
             return back()->with('error', 'Cuentas por Pagar Pagadores no puede recibir la asignación de un fondo fijo.');
         }
 
-        $pendingStatuses = ['pendiente_autorizacion', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo'];
+        $pendingStatuses = ['enviado', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo', 'aprobado_direccion'];
         $ownedReimbursements = \App\Models\Reimbursement::where('user_id', $user->id)->whereIn('status', $pendingStatuses)->get();
         $approvalSteps = \App\Models\ApprovalStep::where('user_id', $user->id)->get();
         $linkedCostCenterIds = \App\Models\CostCenter::where(function ($query) use ($user) {
@@ -507,7 +507,7 @@ class UserController extends Controller
 
                             $reimbursement->update([
                                 'current_step_id' => $candidate?->id,
-                                'status' => $candidate ? 'pendiente_autorizacion' : 'pendiente_revision_cxp',
+                                'status' => $candidate ? 'enviado' : 'pendiente_revision_cxp',
                             ]);
                         }
                     }
@@ -522,7 +522,7 @@ class UserController extends Controller
                         $candidate = $request->input('pending_approval_action') === 'previous'
                             ? $remaining->where('order', '<', $oldOrder)->sortByDesc('order')->first()
                             : $remaining->where('order', '>', $oldOrder)->sortBy('order')->first();
-                        $reimbursement->update(['current_step_id' => $candidate?->id, 'status' => $candidate ? 'pendiente_autorizacion' : 'pendiente_revision_cxp']);
+                        $reimbursement->update(['current_step_id' => $candidate?->id, 'status' => $candidate ? 'enviado' : 'pendiente_revision_cxp']);
                     }
                 }
 

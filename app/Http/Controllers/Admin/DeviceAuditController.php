@@ -365,7 +365,7 @@ class DeviceAuditController extends Controller
         $reimbursements = $baseQuery->latest('created_at')->get();
         $totalAmount = (float) $reimbursements->sum('total');
         $paid = $reimbursements->filter(fn ($item) => $item->approved_by_treasury_at !== null);
-        $pendingStatuses = ['pendiente_autorizacion', 'aprobado_director', 'aprobado_ejecutivo', 'pendiente_revision_cxp', 'pendiente_pago', 'requiere_correccion'];
+        $pendingStatuses = ['enviado', 'aprobado_director', 'aprobado_ejecutivo', 'pendiente_revision_cxp', 'pendiente_pago', 'requiere_correccion'];
         $pending = $reimbursements->whereIn('status', $pendingStatuses);
 
         $statusBreakdown = $reimbursements->groupBy('status')->map(fn ($items, $status) => [
@@ -399,7 +399,7 @@ class DeviceAuditController extends Controller
                 'code' => $center?->code ?: '—',
                 'count' => $items->count(),
                 'amount' => (float) $items->sum('total'),
-                'pending_amount' => (float) $items->whereIn('status', ['pendiente_autorizacion', 'pendiente_revision_cxp', 'pendiente_pago'])->sum('total'),
+                'pending_amount' => (float) $items->whereIn('status', ['enviado', 'pendiente_revision_cxp', 'pendiente_pago'])->sum('total'),
             ];
         })->sortByDesc('amount')->take(10)->values();
 

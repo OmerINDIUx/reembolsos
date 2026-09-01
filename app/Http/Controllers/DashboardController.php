@@ -124,7 +124,7 @@ class DashboardController extends Controller
             ->keyBy('status');
 
         $allStatuses = [
-            'pendiente_autorizacion' => 'En autorización',
+            'enviado' => 'Enviado',
             'aprobado_director' => 'Aprob. Director (Old)',
             'aprobado_control' => 'Aprob. Control (Old)',
             'aprobado_ejecutivo' => 'Aprob. Ejecut. (Old)',

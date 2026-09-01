@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exceptions\PdfNormalizationException;
 use App\Models\Reimbursement;
 use App\Models\CostCenter;
+use App\Models\ApprovalStep;
 use App\Models\User;
 use App\Notifications\ReimbursementNotification;
 use App\Notifications\ReimbursementClarificationRequested;
@@ -827,7 +828,7 @@ class ReimbursementController extends Controller
         }
 
         $currentStepId = null;
-        $initialStatus = 'pendiente_autorizacion';
+        $initialStatus = 'enviado';
         $approvalData = [];
         $autoNote = "";
         $autoApprovedSteps = collect();
@@ -1084,7 +1085,7 @@ class ReimbursementController extends Controller
                         NotificationBatchService::add($cxp, $cr);
                     }
                 }
-            } elseif ($initialStatus === 'pendiente_autorizacion' && $currentStepId) {
+            } elseif ($initialStatus === 'enviado' && $currentStepId) {
                 $step = \App\Models\ApprovalStep::find($currentStepId);
                 if ($step) {
                     $targetUser = $step->user;
@@ -1793,7 +1794,7 @@ class ReimbursementController extends Controller
 
         // DYNAMIC WORKFLOW
         $currentStepId = null;
-        $initialStatus = 'pendiente_autorizacion';
+        $initialStatus = 'enviado';
         $autoNote = "";
         $approvalData = [];
         $autoApprovedSteps = collect();
@@ -2119,7 +2120,7 @@ class ReimbursementController extends Controller
                         break;
                     }
                 } elseif ($identity->isDireccion()) {
-                    if ($reimbursement->approved_by_cxp_at !== null || !in_array($status, ['pendiente_autorizacion', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo'])) {
+                    if ($reimbursement->approved_by_cxp_at !== null || !in_array($status, ['enviado', 'requiere_correccion', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo'])) {
                         $canSee = true;
                         break;
                     }
@@ -2148,7 +2149,7 @@ class ReimbursementController extends Controller
      */
     private function repairStuckPendingAssignment(Reimbursement $reimbursement): bool
     {
-        if ($reimbursement->status !== 'pendiente_autorizacion' || $reimbursement->current_step_id !== null) {
+        if ($reimbursement->status !== 'enviado' || $reimbursement->current_step_id !== null) {
             return false;
         }
 
@@ -2672,7 +2673,7 @@ class ReimbursementController extends Controller
                     }
                 } else {
                     $data['current_step_id'] = $targetCostCenter->approvalSteps()->orderBy('order')->first()?->id;
-                    $data['status'] = 'pendiente_autorizacion';
+                    $data['status'] = 'enviado';
                     $data['payment_week'] = null;
                 }
             } else {
@@ -2702,7 +2703,7 @@ class ReimbursementController extends Controller
                     $correctionStep ??= $reimbursement->firstPendingConfiguredApprovalStep();
 
                     if ($correctionStep) {
-                        $data['status'] = 'pendiente_autorizacion';
+                        $data['status'] = 'enviado';
                         $data['current_step_id'] = $correctionStep->id;
                     } else {
                         $data['status'] = 'pendiente_revision_cxp';
@@ -2712,7 +2713,7 @@ class ReimbursementController extends Controller
             }
         } else {
             $request->validate([
-                'status' => 'required|in:pendiente_autorizacion,aprobado,rechazado,requiere_correccion',
+                'status' => 'required|in:enviado,aprobado,rechazado,requiere_correccion',
                 'rejection_reason' => 'nullable|string|required_if:status,rechazado|required_if:status,requiere_correccion',
                 'rejection_comment' => 'nullable|string',
             ]);
@@ -2749,6 +2750,7 @@ class ReimbursementController extends Controller
                  }
                  $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
                  $data['status'] = $request->status;
+                 $data['current_step_id'] = null;
             } elseif ($request->status === 'aprobado') {
                 // DYNAMIC APPROVAL LOGIC
                 if ($reimbursement->canBeApprovedBy($user)) {
@@ -2799,7 +2801,7 @@ class ReimbursementController extends Controller
         $currentStatus = $reimbursement->status;
         $owner = $reimbursement->user;
         
-        if ($currentStatus === 'pendiente_autorizacion') {
+        if ($currentStatus === 'enviado' || str_starts_with($currentStatus, 'aprobado_')) {
             // Notificar al siguiente en la lÃƒÂ­nea
             $nextApprover = $reimbursement->currentStep->user ?? null;
             if ($nextApprover) {
@@ -2880,7 +2882,7 @@ class ReimbursementController extends Controller
             'status' => [
                 'required',
                 Rule::in([
-                    'pendiente_autorizacion',
+                    'enviado',
                     'requiere_correccion',
                     'rechazado',
                 ]),
@@ -2922,7 +2924,7 @@ class ReimbursementController extends Controller
             NotificationBatchService::add($owner, $reimbursement);
         }
 
-        if ($reimbursement->status === 'pendiente_autorizacion' && $reimbursement->currentStep?->user && $flowReassigned) {
+        if ($reimbursement->status === 'enviado' && $reimbursement->currentStep?->user && $flowReassigned) {
             NotificationBatchService::add($reimbursement->currentStep->user, $reimbursement);
         }
 
@@ -3871,7 +3873,7 @@ class ReimbursementController extends Controller
             'ids.*' => 'exists:reimbursements,id',
             'action' => 'required|in:aprobado,rechazado,requiere_correccion,editar',
             'rejection_reason' => 'nullable|string|required_if:action,rechazado|required_if:action,requiere_correccion',
-            'status' => ['nullable', Rule::in(['pendiente_autorizacion', 'requiere_correccion', 'rechazado'])],
+            'status' => ['nullable', Rule::in(['enviado', 'requiere_correccion', 'rechazado'])],
             'type' => ['nullable', Rule::in(['reembolso', 'fondo_fijo'])],
             'cost_center_id' => ['nullable', 'integer', Rule::exists('cost_centers', 'id')->where(fn ($query) => $query->where('is_active', true))],
             'admin_comment' => ['nullable', Rule::requiredIf($request->action === 'editar'), 'string', 'max:1000'],
@@ -4960,7 +4962,7 @@ class ReimbursementController extends Controller
 
         $initialStep = $this->hierarchyOverrideInitialStep($steps, $costCenter, $requester);
         if ($initialStep) {
-            return [$initialStep->id, 'pendiente_autorizacion', $autoNote, $approvalData, collect()];
+            return [$initialStep->id, 'enviado', $autoNote, $approvalData, collect()];
         }
 
         $requesterOrder = $steps
@@ -4970,7 +4972,7 @@ class ReimbursementController extends Controller
         if (!$requesterOrder) {
             $firstStep = $steps->first();
 
-            return [$firstStep->id, 'pendiente_autorizacion', $autoNote, $approvalData, collect()];
+            return [$firstStep->id, 'enviado', $autoNote, $approvalData, collect()];
         }
 
         $skippedSteps = $steps->where('order', '<=', $requesterOrder)->values();
@@ -4985,12 +4987,34 @@ class ReimbursementController extends Controller
             return [null, $this->completedWorkflowStatus(), $autoNote, $approvalData, $skippedSteps];
         }
 
-        return [$nextStep->id, 'pendiente_autorizacion', $autoNote, $approvalData, $skippedSteps];
+        return [$nextStep->id, 'enviado', $autoNote, $approvalData, $skippedSteps];
     }
 
     private function completedWorkflowStatus(): string
     {
         return 'pendiente_revision_cxp';
+    }
+
+    /**
+     * Persist the concrete approval reached instead of returning the request to
+     * a generic pending state while the next configured approver has the turn.
+     */
+    private function workflowStatusAfterApproval(?ApprovalStep $step): string
+    {
+        if (!$step) {
+            return 'enviado';
+        }
+
+        $assignedUser = $step->user;
+        $name = Str::lower(Str::ascii((string) $step->name));
+
+        return match (true) {
+            $assignedUser?->isExecutiveDirector() || str_contains($name, 'director ejecutivo') => 'aprobado_ejecutivo',
+            $assignedUser?->isDireccion() || str_contains($name, 'subdireccion') => 'aprobado_direccion',
+            $assignedUser?->isControlObra() || str_contains($name, 'control de obra') => 'aprobado_control',
+            $assignedUser?->isDirector() || str_contains($name, 'director') => 'aprobado_director',
+            default => 'aprobado_paso_' . $step->order,
+        };
     }
 
     private function initialSubmissionComment(int $itemCount): string
@@ -5109,7 +5133,7 @@ class ReimbursementController extends Controller
         } else {
             $reimbursement->update([
                 'current_step_id' => $nextStep->id,
-                'status' => 'pendiente_autorizacion',
+                'status' => $this->workflowStatusAfterApproval($stepAtActionTime),
             ]);
 
             $nextApprover = $nextStep->user ?? null;
@@ -5576,7 +5600,7 @@ class ReimbursementController extends Controller
     {
         return match ($status) {
             'borrador' => 'borrador',
-            'pendiente_autorizacion' => 'pendiente de autorización',
+            'enviado' => 'enviado para autorización',
             'requiere_correccion' => 'requiere corrección',
             'pendiente_revision_cxp' => 'pendiente de revisión por Cuentas por Pagar',
             'aprobado_cxp' => 'aprobado por Cuentas por Pagar',
@@ -6248,7 +6272,7 @@ class ReimbursementController extends Controller
                 $q->orWhereIn('status', ['pendiente_revision_cxp', 'pendiente_pago', 'aprobado']);
             }
             if ($user->isDireccion()) {
-                $q->orWhereNotIn('status', ['pendiente_autorizacion', 'requiere_correccion', 'borrador', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo']);
+                $q->orWhereNotIn('status', ['enviado', 'requiere_correccion', 'borrador', 'aprobado_director', 'aprobado_control', 'aprobado_ejecutivo']);
             }
             if ($user->isTreasury()) {
                 $q->orWhereIn('status', ['pendiente_pago', 'aprobado']);
@@ -6259,7 +6283,7 @@ class ReimbursementController extends Controller
     private function adminFlowStatusLabels(): array
     {
         return [
-            'pendiente_autorizacion' => 'Activo en flujo de operacion',
+            'enviado' => 'Enviado para autorización',
             'requiere_correccion' => 'Devuelto para cambio',
             'rechazado' => 'Rechazo definitivo',
         ];
@@ -6357,7 +6381,7 @@ class ReimbursementController extends Controller
                 : $reimbursement->user_id;
         }
 
-        if ($shouldResetFlow && $newStatus === 'pendiente_autorizacion') {
+        if ($shouldResetFlow && $newStatus === 'enviado') {
             $workflowOwner = $reimbursement->user ?? User::find($reimbursement->user_id);
             if ($workflowOwner) {
                 [$currentStepId, $initialStatus, $autoNote, $approvalData] = $this->buildInitialApprovalState($targetCostCenter, $workflowOwner);

@@ -13,7 +13,7 @@ return new class extends Migration
     public function up(): void
     {
         // Change status column from ENUM to String using raw SQL (avoid doctrine/dbal)
-        DB::statement("ALTER TABLE reimbursements MODIFY COLUMN status VARCHAR(255) DEFAULT 'pendiente_autorizacion'");
+        DB::statement("ALTER TABLE reimbursements MODIFY COLUMN status VARCHAR(255) DEFAULT 'pendiente'");
 
         Schema::table('reimbursements', function (Blueprint $table) {
             // Add Director Approval Info
