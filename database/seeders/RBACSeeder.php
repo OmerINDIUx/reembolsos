@@ -13,7 +13,7 @@ class RBACSeeder extends Seeder
     {
         // Define Modules and Permissions
         $modules = [
-            'dashboard' => ['view_own', 'view_global'],
+            'dashboard' => ['view_own', 'view_global', 'device_audit'],
             'reimbursements' => ['view', 'view_management', 'view_rejections', 'view_payment', 'global_history', 'view_own', 'view_own_history', 'create', 'create_on_behalf', 'create_all_cost_centers', 'edit', 'delete', 'approve', 'bulk_approve', 'export'],
             'users' => ['view', 'create', 'edit', 'delete'],
             'cost_centers' => ['view', 'create', 'edit', 'delete'],
@@ -68,10 +68,14 @@ class RBACSeeder extends Seeder
                 if ($permissionName === 'dashboard.view_global') {
                     $displayName = 'Puede ver panel general';
                 }
+                if ($permissionName === 'dashboard.device_audit') {
+                    $displayName = 'Auditoría de dispositivos';
+                }
                 
                 $description = match ($permissionName) {
                     'dashboard.view_own' => 'Permite acceder al panel con datos personales y registros asignados al usuario.',
                     'dashboard.view_global' => 'Permite ver métricas generales de toda la operación en el panel.',
+                    'dashboard.device_audit' => 'Permite acceder a la auditoría de accesos, dispositivos y seguridad de cuentas.',
                     default => $descriptions[$action] ?? "Permite realizar la acción {$action} en el módulo {$module}.",
                 };
 

@@ -27,31 +27,31 @@ Route::middleware('auth')->group(function () {
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/admin/device-audit', [DeviceAuditController::class, 'index'])
-        ->middleware('admin')
+        ->middleware('permission:dashboard.device_audit')
         ->name('admin.device-audit.index');
     Route::get('/admin/device-audit/users/export', [DeviceAuditController::class, 'exportUsers'])
-        ->middleware('admin')
+        ->middleware('permission:dashboard.device_audit')
         ->name('admin.device-audit.users.export');
     Route::get('/admin/device-audit/approvers/export', [DeviceAuditController::class, 'exportApproverMatrix'])
-        ->middleware('admin')
+        ->middleware('permission:dashboard.device_audit')
         ->name('admin.device-audit.approvers.export');
     Route::get('/admin/device-audit/reimbursements-dashboard', [DeviceAuditController::class, 'reimbursementsDashboard'])
-        ->middleware('admin')
+        ->middleware('permission:dashboard.device_audit')
         ->name('admin.device-audit.reimbursements-dashboard');
     Route::get('/admin/device-audit/reimbursements-dashboard/details/{report}', [DeviceAuditController::class, 'reimbursementsDashboardDetails'])
-        ->middleware('admin')
+        ->middleware('permission:dashboard.device_audit')
         ->name('admin.device-audit.reimbursements-dashboard.details');
     Route::post('/admin/device-audit/reimbursements-dashboard/duplicate-reviews', [DeviceAuditController::class, 'updateDuplicateReview'])
-        ->middleware('admin')
+        ->middleware('permission:dashboard.device_audit')
         ->name('admin.device-audit.reimbursements-dashboard.duplicate-reviews.update');
     Route::post('/admin/device-audit/deleted-reimbursements/{reimbursementId}/restore', [DeviceAuditController::class, 'restoreDeletedReimbursement'])
-        ->middleware('admin')
+        ->middleware('permission:dashboard.device_audit')
         ->name('admin.device-audit.deleted-reimbursements.restore');
     Route::post('/admin/device-audit/users/{user}/block', [DeviceAuditController::class, 'block'])
-        ->middleware('admin')
+        ->middleware('permission:dashboard.device_audit')
         ->name('admin.device-audit.block');
     Route::delete('/admin/device-audit/users/{user}/block', [DeviceAuditController::class, 'unblock'])
-        ->middleware('admin')
+        ->middleware('permission:dashboard.device_audit')
         ->name('admin.device-audit.unblock');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

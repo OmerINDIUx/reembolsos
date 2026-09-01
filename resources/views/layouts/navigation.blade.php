@@ -17,6 +17,11 @@
                             {{ __('Panel') }}
                         </x-nav-link>
                     @endif
+                    @if(Auth::user()->canPerform('dashboard.device_audit'))
+                        <x-nav-link :href="route('admin.device-audit.index')" :active="request()->routeIs('admin.device-audit.*')">
+                            {{ __('Auditoría') }}
+                        </x-nav-link>
+                    @endif
                     <x-nav-link :href="route('reimbursements.index')" :active="request()->routeIs('reimbursements.*')">
                         {{ __('Reembolsos') }}
                     </x-nav-link>
@@ -167,6 +172,11 @@
             @if(Auth::user()->canPerform('dashboard.view_own'))
                 <x-responsive-nav-link :href="route('panel')" :active="request()->routeIs('panel')">
                     {{ __('Panel') }}
+                </x-responsive-nav-link>
+            @endif
+            @if(Auth::user()->canPerform('dashboard.device_audit'))
+                <x-responsive-nav-link :href="route('admin.device-audit.index')" :active="request()->routeIs('admin.device-audit.*')">
+                    {{ __('Auditoría') }}
                 </x-responsive-nav-link>
             @endif
             <x-responsive-nav-link :href="route('reimbursements.index')" :active="request()->routeIs('reimbursements.*')">

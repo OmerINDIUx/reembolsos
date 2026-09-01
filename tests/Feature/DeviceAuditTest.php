@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\DeviceLogin;
+use App\Models\Permission;
+use App\Models\Profile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -29,14 +31,27 @@ class DeviceAuditTest extends TestCase
         $this->assertNotNull($response->getCookie('reembolsos_device'));
     }
 
-    public function test_only_full_administrators_can_view_the_device_audit(): void
+    public function test_users_with_the_device_audit_permission_can_view_the_module(): void
     {
         $user = User::factory()->create(['role' => 'user']);
         $admin = User::factory()->create(['role' => 'admin']);
+        $profile = Profile::create([
+            'name' => 'auditor-de-dispositivos',
+            'display_name' => 'Auditor de dispositivos',
+        ]);
+        $profile->permissions()->sync([
+            Permission::where('name', 'dashboard.device_audit')->firstOrFail()->id,
+        ]);
+        $auditor = User::factory()->create(['profile_id' => $profile->id]);
 
         $this->actingAs($user)
             ->get(route('admin.device-audit.index'))
             ->assertForbidden();
+
+        $this->actingAs($auditor)
+            ->get(route('admin.device-audit.index'))
+            ->assertOk()
+            ->assertSee('Auditoría de accesos y dispositivos');
 
         $this->actingAs($admin)
             ->get(route('admin.device-audit.index'))
