@@ -906,7 +906,7 @@ class ReimbursementController extends Controller
                     }
 
                     // Check for duplicate in DB or current batch
-                    $existing = Reimbursement::where('uuid', $uuid)
+                    $existing = Reimbursement::withoutGlobalScope('visible')->where('uuid', $uuid)
                         ->when($existingDraft, fn ($query) => $query->whereKeyNot($existingDraft->id))
                         ->first();
                     if ($existing && ($existing->status !== 'borrador' || !$this->canRequesterManageReimbursement($existing, $user))) {
@@ -1156,7 +1156,8 @@ class ReimbursementController extends Controller
             // Only ignore the exact draft that is being resumed. Any other
             // reimbursement, including another draft of the same user, must be
             // reported before the client attempts an auto-save.
-            $existingReimbursement = Reimbursement::with(['user', 'createdBy'])
+            $existingReimbursement = Reimbursement::withoutGlobalScope('visible')
+                ->with(['user', 'createdBy'])
                 ->where('uuid', $data['uuid'])
                 ->when($request->draft_id, function($q) use ($request) {
                     return $q->where('id', '!=', $request->draft_id);
@@ -1723,7 +1724,7 @@ class ReimbursementController extends Controller
             ]);
 
             // Duplicity check
-            $duplicate = Reimbursement::where('uuid', $request->uuid)
+            $duplicate = Reimbursement::withoutGlobalScope('visible')->where('uuid', $request->uuid)
                 ->when($existingDraft, fn ($query) => $query->whereKeyNot($existingDraft->id))
                 ->first();
             if ($duplicate && ($duplicate->status !== 'borrador' || !$this->canRequesterManageReimbursement($duplicate, $user))) {
@@ -5266,7 +5267,8 @@ class ReimbursementController extends Controller
                                                     ->first();
 
                         if (!$reimbursement) {
-                            $uuidMatch = Reimbursement::with(['user', 'createdBy'])
+                            $uuidMatch = Reimbursement::withoutGlobalScope('visible')
+                                ->with(['user', 'createdBy'])
                                 ->where('uuid', $itemData['uuid'])
                                 ->first();
 
@@ -5478,7 +5480,10 @@ class ReimbursementController extends Controller
                     ]);
 
                     $existingUuidMatch = $errorType === 'duplicate_key' && !empty($itemData['uuid'])
-                        ? Reimbursement::with(['user', 'createdBy'])->where('uuid', $itemData['uuid'])->first()
+                        ? Reimbursement::withoutGlobalScope('visible')
+                            ->with(['user', 'createdBy'])
+                            ->where('uuid', $itemData['uuid'])
+                            ->first()
                         : null;
 
                     if ($existingUuidMatch) {

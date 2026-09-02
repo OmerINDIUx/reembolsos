@@ -155,7 +155,7 @@ class ReimbursementAutoSaveErrorTest extends TestCase
         ]);
     }
 
-    public function test_xml_upload_reports_the_existing_internal_folio_owner_and_stage_before_auto_save(): void
+    public function test_xml_upload_reports_an_archived_reimbursement_before_auto_save(): void
     {
         $owner = User::factory()->create(['name' => 'Ana Registradora', 'role' => 'user', 'status' => 'active']);
         $requester = User::factory()->create(['role' => 'user', 'status' => 'active']);
@@ -165,7 +165,8 @@ class ReimbursementAutoSaveErrorTest extends TestCase
             'user_id' => $owner->id,
             'created_by_id' => $owner->id,
             'folio' => 'REE-000321',
-            'status' => 'pendiente_revision_cxp',
+            'status' => 'eliminado',
+            'status_before_deletion' => 'pagado',
             'type' => 'reembolso',
             'uuid' => $uuid,
             'total' => 100,
@@ -189,6 +190,6 @@ XML;
             ->assertJsonPath('error', 'duplicate_cfdi')
             ->assertJsonPath('folio', 'REE-000321')
             ->assertJsonPath('registered_by', 'Ana Registradora')
-            ->assertJsonPath('status_label', 'pendiente de revisión por Cuentas por Pagar');
+            ->assertJsonPath('status_label', 'enviado a borrados');
     }
 }
