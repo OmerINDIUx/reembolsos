@@ -906,7 +906,7 @@ class ReimbursementController extends Controller
                     }
 
                     // Check for duplicate in DB or current batch
-                    $existing = Reimbursement::withoutGlobalScope('visible')->where('uuid', $uuid)
+                    $existing = $this->blockingReimbursementUuidQuery($uuid)
                         ->when($existingDraft, fn ($query) => $query->whereKeyNot($existingDraft->id))
                         ->first();
                     if ($existing && ($existing->status !== 'borrador' || !$this->canRequesterManageReimbursement($existing, $user))) {
@@ -1156,7 +1156,7 @@ class ReimbursementController extends Controller
             // Only ignore the exact draft that is being resumed. Any other
             // reimbursement, including another draft of the same user, must be
             // reported before the client attempts an auto-save.
-            $existingReimbursement = Reimbursement::withoutGlobalScope('visible')
+            $existingReimbursement = $this->blockingReimbursementUuidQuery($data['uuid'])
                 ->with(['user', 'createdBy'])
                 ->where('uuid', $data['uuid'])
                 ->when($request->draft_id, function($q) use ($request) {
@@ -1724,7 +1724,7 @@ class ReimbursementController extends Controller
             ]);
 
             // Duplicity check
-            $duplicate = Reimbursement::withoutGlobalScope('visible')->where('uuid', $request->uuid)
+            $duplicate = $this->blockingReimbursementUuidQuery($request->uuid)
                 ->when($existingDraft, fn ($query) => $query->whereKeyNot($existingDraft->id))
                 ->first();
             if ($duplicate && ($duplicate->status !== 'borrador' || !$this->canRequesterManageReimbursement($duplicate, $user))) {
@@ -3046,8 +3046,12 @@ class ReimbursementController extends Controller
             $this->archiveReimbursement($child, $deletedById);
         }
 
+        $wasDraft = $reimbursement->status === 'borrador';
+
         $reimbursement->update([
             'status_before_deletion' => $reimbursement->status,
+            'archived_uuid' => $wasDraft ? $reimbursement->uuid : $reimbursement->archived_uuid,
+            'uuid' => $wasDraft ? null : $reimbursement->uuid,
             'status' => 'eliminado',
             'deleted_at' => now(),
             'deleted_by_id' => $deletedById,
@@ -5267,7 +5271,7 @@ class ReimbursementController extends Controller
                                                     ->first();
 
                         if (!$reimbursement) {
-                            $uuidMatch = Reimbursement::withoutGlobalScope('visible')
+                            $uuidMatch = $this->blockingReimbursementUuidQuery($itemData['uuid'])
                                 ->with(['user', 'createdBy'])
                                 ->where('uuid', $itemData['uuid'])
                                 ->first();
@@ -5480,7 +5484,7 @@ class ReimbursementController extends Controller
                     ]);
 
                     $existingUuidMatch = $errorType === 'duplicate_key' && !empty($itemData['uuid'])
-                        ? Reimbursement::withoutGlobalScope('visible')
+                        ? $this->blockingReimbursementUuidQuery($itemData['uuid'])
                             ->with(['user', 'createdBy'])
                             ->where('uuid', $itemData['uuid'])
                             ->first()
@@ -5638,6 +5642,18 @@ class ReimbursementController extends Controller
             'action' => 'Retira este comprobante de la solicitud o verifica el reembolso existente antes de continuar.',
             'reference' => $diagnosticId,
         ];
+    }
+
+    /**
+     * Returns the record that must block reuse of a CFDI UUID.
+     *
+     * Deleted drafts release their UUID into archived_uuid; deleted submitted
+     * records retain it and must continue blocking reuse.
+     */
+    private function blockingReimbursementUuidQuery(string $uuid)
+    {
+        return Reimbursement::withoutGlobalScope('visible')
+            ->where('uuid', $uuid);
     }
 
     private function reimbursementStatusLabel(?string $status): string

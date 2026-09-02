@@ -345,7 +345,7 @@
                                         <p class="font-bold text-gray-800 dark:text-gray-100">{{ $reimbursement->user?->name ?: 'Sin solicitante' }}</p>
                                         <p class="mt-1 text-xs text-gray-500">{{ $reimbursement->costCenter?->code ?: '—' }} · {{ $reimbursement->costCenter?->name ?: 'Sin centro' }}</p>
                                     </td>
-                                    <td class="px-4 py-4 font-mono text-xs text-gray-600 dark:text-gray-300">{{ $reimbursement->uuid ?: 'Sin UUID' }}</td>
+                                    <td class="px-4 py-4 font-mono text-xs text-gray-600 dark:text-gray-300">{{ $reimbursement->uuid ?: $reimbursement->archived_uuid ?: 'Sin UUID' }}</td>
                                     <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100">{{ $reimbursement->deletedBy?->name ?: 'No disponible' }}</td>
                                     <td class="px-4 py-4 text-gray-600 dark:text-gray-300">{{ $reimbursement->deleted_at?->format('d/m/Y H:i') ?: 'No disponible' }}</td>
                                     <td class="px-4 py-4">

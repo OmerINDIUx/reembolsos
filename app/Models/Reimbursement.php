@@ -38,6 +38,7 @@ class Reimbursement extends Model
         'payment_week',
         'category',
         'uuid',
+        'archived_uuid',
         'rfc_emisor',
         'nombre_emisor',
         'rfc_receptor',

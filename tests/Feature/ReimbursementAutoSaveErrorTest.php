@@ -155,20 +155,21 @@ class ReimbursementAutoSaveErrorTest extends TestCase
         ]);
     }
 
-    public function test_xml_upload_reports_an_archived_reimbursement_before_auto_save(): void
+    public function test_xml_upload_allows_reusing_a_cfdi_from_an_archived_draft(): void
     {
         $owner = User::factory()->create(['name' => 'Ana Registradora', 'role' => 'user', 'status' => 'active']);
         $requester = User::factory()->create(['role' => 'user', 'status' => 'active']);
         $uuid = '11111111-2222-3333-4444-555555555555';
 
-        Reimbursement::create([
+        $archivedDraft = Reimbursement::create([
             'user_id' => $owner->id,
             'created_by_id' => $owner->id,
             'folio' => 'REE-000321',
             'status' => 'eliminado',
-            'status_before_deletion' => 'pagado',
+            'status_before_deletion' => 'borrador',
             'type' => 'reembolso',
-            'uuid' => $uuid,
+            'uuid' => null,
+            'archived_uuid' => $uuid,
             'total' => 100,
             'moneda' => 'MXN',
         ]);
@@ -186,10 +187,13 @@ XML;
             ->post(route('reimbursements.parse'), [
                 'xml_file' => UploadedFile::fake()->createWithContent('duplicado.xml', $xml),
             ])
-            ->assertUnprocessable()
-            ->assertJsonPath('error', 'duplicate_cfdi')
-            ->assertJsonPath('folio', 'REE-000321')
-            ->assertJsonPath('registered_by', 'Ana Registradora')
-            ->assertJsonPath('status_label', 'enviado a borrados');
+            ->assertOk()
+            ->assertJsonPath('uuid', $uuid);
+
+        $this->assertDatabaseHas('reimbursements', [
+            'id' => $archivedDraft->id,
+            'uuid' => null,
+            'archived_uuid' => $uuid,
+        ]);
     }
 }
