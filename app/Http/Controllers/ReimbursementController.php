@@ -3023,7 +3023,7 @@ class ReimbursementController extends Controller
             ->get();
 
         $deleted = 0;
-        DB::transaction(function () use ($reimbursements, &$deleted) {
+        DB::transaction(function () use ($reimbursements, $user, &$deleted) {
             foreach ($reimbursements as $reimbursement) {
                 if (!Reimbursement::whereKey($reimbursement->id)->exists()) {
                     continue;
@@ -3048,14 +3048,21 @@ class ReimbursementController extends Controller
 
         $wasDraft = $reimbursement->status === 'borrador';
 
-        $reimbursement->update([
+        $archiveData = [
             'status_before_deletion' => $reimbursement->status,
-            'archived_uuid' => $wasDraft ? $reimbursement->uuid : $reimbursement->archived_uuid,
-            'uuid' => $wasDraft ? null : $reimbursement->uuid,
             'status' => 'eliminado',
             'deleted_at' => now(),
             'deleted_by_id' => $deletedById,
-        ]);
+        ];
+
+        // Keep deletion working during a rolling deployment. Once the migration
+        // is applied, deleted drafts release the operational UUID to audit.
+        if (\Illuminate\Support\Facades\Schema::hasColumn('reimbursements', 'archived_uuid')) {
+            $archiveData['archived_uuid'] = $wasDraft ? $reimbursement->uuid : $reimbursement->archived_uuid;
+            $archiveData['uuid'] = $wasDraft ? null : $reimbursement->uuid;
+        }
+
+        $reimbursement->update($archiveData);
     }
 
     /**

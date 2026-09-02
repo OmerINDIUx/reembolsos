@@ -17,6 +17,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -209,7 +210,7 @@ class DeviceAuditController extends Controller
                 $query->where(function ($nested) use ($search) {
                     $nested->where('folio', 'like', "%{$search}%")
                         ->orWhere('uuid', 'like', "%{$search}%")
-                        ->orWhere('archived_uuid', 'like', "%{$search}%")
+                        ->when(Schema::hasColumn('reimbursements', 'archived_uuid'), fn ($query) => $query->orWhere('archived_uuid', 'like', "%{$search}%"))
                         ->orWhereHas('user', fn ($users) => $users->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"))
                         ->orWhereHas('deletedBy', fn ($users) => $users->where('name', 'like', "%{$search}%"));
                 });
@@ -264,20 +265,26 @@ class DeviceAuditController extends Controller
             ->where('status', 'eliminado')
             ->firstOrFail();
 
-        $uuidToRestore = $reimbursement->uuid ?: $reimbursement->archived_uuid;
+        $hasArchivedUuid = Schema::hasColumn('reimbursements', 'archived_uuid');
+        $uuidToRestore = $reimbursement->uuid ?: ($hasArchivedUuid ? $reimbursement->archived_uuid : null);
 
         if (filled($uuidToRestore) && Reimbursement::where('uuid', $uuidToRestore)->exists()) {
             return back()->with('error', 'No se puede recuperar este reembolso porque su UUID ya está siendo utilizado por otro registro activo.');
         }
 
-        $reimbursement->update([
-            'uuid' => $uuidToRestore,
-            'archived_uuid' => null,
+        $restoreData = [
             'status' => $reimbursement->status_before_deletion ?: 'borrador',
             'status_before_deletion' => null,
             'deleted_at' => null,
             'deleted_by_id' => null,
-        ]);
+        ];
+
+        if ($hasArchivedUuid) {
+            $restoreData['uuid'] = $uuidToRestore;
+            $restoreData['archived_uuid'] = null;
+        }
+
+        $reimbursement->update($restoreData);
 
         return back()->with('success', 'Reembolso recuperado correctamente.');
     }
