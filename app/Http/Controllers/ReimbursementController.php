@@ -3046,8 +3046,6 @@ class ReimbursementController extends Controller
             $this->archiveReimbursement($child, $deletedById);
         }
 
-        $wasDraft = $reimbursement->status === 'borrador';
-
         $archiveData = [
             'status_before_deletion' => $reimbursement->status,
             'status' => 'eliminado',
@@ -3056,10 +3054,11 @@ class ReimbursementController extends Controller
         ];
 
         // Keep deletion working during a rolling deployment. Once the migration
-        // is applied, deleted drafts release the operational UUID to audit.
+        // is applied, every deleted reimbursement releases its operational UUID
+        // while preserving it for audit.
         if (\Illuminate\Support\Facades\Schema::hasColumn('reimbursements', 'archived_uuid')) {
-            $archiveData['archived_uuid'] = $wasDraft ? $reimbursement->uuid : $reimbursement->archived_uuid;
-            $archiveData['uuid'] = $wasDraft ? null : $reimbursement->uuid;
+            $archiveData['archived_uuid'] = $reimbursement->uuid ?: $reimbursement->archived_uuid;
+            $archiveData['uuid'] = null;
         }
 
         $reimbursement->update($archiveData);
@@ -5654,8 +5653,8 @@ class ReimbursementController extends Controller
     /**
      * Returns the record that must block reuse of a CFDI UUID.
      *
-     * Deleted drafts release their UUID into archived_uuid; deleted submitted
-     * records retain it and must continue blocking reuse.
+     * Deleted reimbursements release their UUID into archived_uuid. The audit
+     * record remains recoverable only while no new active record uses it.
      */
     private function blockingReimbursementUuidQuery(string $uuid)
     {

@@ -13,11 +13,10 @@ return new class extends Migration
             $table->string('archived_uuid', 36)->nullable()->after('uuid');
         });
 
-        // Existing deleted drafts must release their operational UUID too.
+        // Existing deleted reimbursements must release their operational UUID too.
         // The original value stays available to audit in archived_uuid.
         DB::table('reimbursements')
             ->where('status', 'eliminado')
-            ->where('status_before_deletion', 'borrador')
             ->whereNotNull('uuid')
             ->update([
                 'archived_uuid' => DB::raw('uuid'),
