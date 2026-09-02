@@ -15,7 +15,7 @@ class ReimbursementAutoSaveErrorTest extends TestCase
 
     public function test_auto_save_explains_which_cfdi_is_duplicated_and_what_the_user_should_do(): void
     {
-        $owner = User::factory()->create(['role' => 'user', 'status' => 'active']);
+        $owner = User::factory()->create(['name' => 'Persona registradora', 'role' => 'user', 'status' => 'active']);
         $requester = User::factory()->create(['role' => 'user', 'status' => 'active']);
         $uuid = '12345678-1234-1234-1234-123456789012';
 
@@ -44,6 +44,9 @@ class ReimbursementAutoSaveErrorTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('success', false)
             ->assertJsonPath('errors.0.type', 'duplicate_cfdi')
+            ->assertJsonPath('errors.0.folio', $existing->fresh()->folio)
+            ->assertJsonPath('errors.0.registered_by', 'Persona registradora')
+            ->assertJsonPath('errors.0.status_label', 'pendiente de autorización')
             ->assertJsonPath('errors.0.reference', $response->json('errors.0.diagnostic_id'))
             ->assertJsonFragment([
                 'message' => "El gasto #1 no se guardó porque el CFDI con UUID {$uuid} ya está registrado en el reembolso {$existing->fresh()->folio} con estado pendiente de autorización.",

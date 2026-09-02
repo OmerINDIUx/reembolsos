@@ -5266,7 +5266,9 @@ class ReimbursementController extends Controller
                                                     ->first();
 
                         if (!$reimbursement) {
-                            $uuidMatch = Reimbursement::where('uuid', $itemData['uuid'])->first();
+                            $uuidMatch = Reimbursement::with(['user', 'createdBy'])
+                                ->where('uuid', $itemData['uuid'])
+                                ->first();
 
                             if (
                                 $uuidMatch
@@ -5280,23 +5282,17 @@ class ReimbursementController extends Controller
                                 ]);
                             } elseif ($uuidMatch) {
                                 $diagnosticId = (string) Str::uuid();
-                                $statusLabel = $this->reimbursementStatusLabel($uuidMatch->status);
                                 Log::warning('Auto-save rejected an existing CFDI UUID.', [
                                     'diagnostic_id' => $diagnosticId,
                                     'reimbursement_id' => $uuidMatch->id,
                                     'user_id' => $user->id,
                                 ]);
-                                $itemErrors[] = [
-                                    'index' => (int) $index,
-                                    'diagnostic_id' => $diagnosticId,
-                                    'type' => 'duplicate_cfdi',
-                                    'technical_code' => 'duplicate_uuid',
-                                    'message' => "El gasto #" . ($index + 1) . " no se guardó porque el CFDI con UUID {$itemData['uuid']} ya está registrado"
-                                        . ($uuidMatch->folio ? " en el reembolso {$uuidMatch->folio}" : ' en otro reembolso')
-                                        . " con estado {$statusLabel}.",
-                                    'action' => 'Retira este comprobante de la solicitud o verifica el reembolso existente antes de continuar.',
-                                    'reference' => $diagnosticId,
-                                ];
+                                $itemErrors[] = $this->duplicateCfdiDraftError(
+                                    $uuidMatch,
+                                    (string) $itemData['uuid'],
+                                    (int) $index,
+                                    $diagnosticId
+                                );
                                 continue;
                             }
                         }
@@ -5481,6 +5477,20 @@ class ReimbursementController extends Controller
                         'exception' => get_class($e),
                     ]);
 
+                    $existingUuidMatch = $errorType === 'duplicate_key' && !empty($itemData['uuid'])
+                        ? Reimbursement::with(['user', 'createdBy'])->where('uuid', $itemData['uuid'])->first()
+                        : null;
+
+                    if ($existingUuidMatch) {
+                        $itemErrors[] = $this->duplicateCfdiDraftError(
+                            $existingUuidMatch,
+                            (string) $itemData['uuid'],
+                            (int) $index,
+                            $diagnosticId
+                        );
+                        continue;
+                    }
+
                     $itemErrors[] = [
                         'index' => (int) $index,
                         'diagnostic_id' => $diagnosticId,
@@ -5601,15 +5611,47 @@ class ReimbursementController extends Controller
         };
     }
 
+    private function duplicateCfdiDraftError(Reimbursement $reimbursement, string $uuid, int $index, string $diagnosticId): array
+    {
+        $statusLabel = $this->reimbursementStatusLabel($reimbursement->status);
+        $registeredBy = $reimbursement->createdBy?->name
+            ?? $reimbursement->user?->name
+            ?? 'Usuario no disponible';
+
+        return [
+            'index' => $index,
+            'diagnostic_id' => $diagnosticId,
+            'type' => 'duplicate_cfdi',
+            'technical_code' => 'duplicate_uuid',
+            'folio' => $reimbursement->folio,
+            'status' => $reimbursement->status,
+            'status_label' => $statusLabel,
+            'registered_by' => $registeredBy,
+            'message' => "El gasto #" . ($index + 1) . " no se guardó porque el CFDI con UUID {$uuid} ya está registrado"
+                . ($reimbursement->folio ? " en el reembolso {$reimbursement->folio}" : ' en otro reembolso')
+                . " con estado {$statusLabel}.",
+            'action' => 'Retira este comprobante de la solicitud o verifica el reembolso existente antes de continuar.',
+            'reference' => $diagnosticId,
+        ];
+    }
+
     private function reimbursementStatusLabel(?string $status): string
     {
         return match ($status) {
             'borrador' => 'borrador',
             'enviado' => 'enviado para autorización',
+            'pendiente_autorizacion' => 'pendiente de autorización',
             'requiere_correccion' => 'requiere corrección',
+            'aprobado_director' => 'aprobado por Dirección',
+            'aprobado_control' => 'aprobado por Control de Obra',
+            'aprobado_ejecutivo' => 'aprobado por Dirección Ejecutiva',
+            'aprobado_direccion' => 'aprobado por Dirección',
+            'aprobado_tesoreria' => 'aprobado por Tesorería',
             'pendiente_revision_cxp' => 'pendiente de revisión por Cuentas por Pagar',
             'aprobado_cxp' => 'aprobado por Cuentas por Pagar',
             'pendiente_pago' => 'pendiente de pago',
+            'pagado' => 'pagado',
+            'eliminado' => 'enviado a borrados',
             'aprobado' => 'aprobado',
             'rechazado' => 'rechazado',
             default => $status ? str_replace('_', ' ', $status) : 'desconocido',

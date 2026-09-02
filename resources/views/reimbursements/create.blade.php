@@ -2022,6 +2022,24 @@
 
                         this.isSubmitting = false;
                         document.getElementById('loading-overlay').classList.add('hidden');
+
+                        const duplicate = error.responseBody?.errors?.find(detail => detail.type === 'duplicate_cfdi');
+                        if (duplicate) {
+                            Swal.fire({
+                                title: '<span class="text-xl font-black uppercase tracking-tight text-red-600">Comprobante Duplicado</span>',
+                                html: `
+                                    <div class="mt-4 p-6 bg-gray-50 dark:bg-gray-700/50 rounded-2xl border border-gray-100 dark:border-gray-600 text-left">
+                                        <div class="mb-4"><p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Folio interno</p><p class="text-sm font-bold text-gray-900 dark:text-white">${duplicate.folio || 'Sin folio'}</p></div>
+                                        <div class="mb-4"><p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Registrado por</p><p class="text-sm font-bold text-gray-900 dark:text-white">${duplicate.registered_by || 'Usuario no disponible'}</p></div>
+                                        <div><p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Etapa actual</p><p class="text-sm font-bold text-gray-900 dark:text-white">${duplicate.status_label || duplicate.status || 'No disponible'}</p></div>
+                                    </div>`,
+                                icon: 'error',
+                                confirmButtonText: 'ENTENDIDO',
+                                confirmButtonColor: '#ef4444'
+                            });
+                            return;
+                        }
+
                         Swal.fire({
                             icon: 'error',
                             title: 'No se pudo enviar',
