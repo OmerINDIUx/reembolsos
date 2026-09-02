@@ -118,4 +118,74 @@ class ReimbursementAutoSaveErrorTest extends TestCase
         $this->assertSame([$existingPath], Storage::allFiles('reimbursements/xmls/drafts'));
         $this->assertSame($existingPath, $draft->fresh()->xml_path);
     }
+
+    public function test_auto_save_cannot_use_a_processed_reimbursement_as_a_draft(): void
+    {
+        $requester = User::factory()->create(['role' => 'user', 'status' => 'active']);
+        $paid = Reimbursement::create([
+            'user_id' => $requester->id,
+            'created_by_id' => $requester->id,
+            'status' => 'pagado',
+            'type' => 'reembolso',
+            'title' => 'Reembolso pagado',
+            'total' => 500,
+            'moneda' => 'MXN',
+        ]);
+
+        $this->actingAs($requester)
+            ->postJson(route('reimbursements.auto_save'), [
+                'type' => 'reembolso',
+                'has_invoice' => '1',
+                'items' => [[
+                    'draft_id' => $paid->id,
+                    'total' => 1,
+                ]],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false);
+
+        $this->assertDatabaseHas('reimbursements', [
+            'id' => $paid->id,
+            'status' => 'pagado',
+            'total' => 500,
+            'parent_id' => null,
+        ]);
+    }
+
+    public function test_xml_upload_reports_the_existing_internal_folio_owner_and_stage_before_auto_save(): void
+    {
+        $owner = User::factory()->create(['name' => 'Ana Registradora', 'role' => 'user', 'status' => 'active']);
+        $requester = User::factory()->create(['role' => 'user', 'status' => 'active']);
+        $uuid = '11111111-2222-3333-4444-555555555555';
+
+        Reimbursement::create([
+            'user_id' => $owner->id,
+            'created_by_id' => $owner->id,
+            'folio' => 'REE-000321',
+            'status' => 'pendiente_revision_cxp',
+            'type' => 'reembolso',
+            'uuid' => $uuid,
+            'total' => 100,
+            'moneda' => 'MXN',
+        ]);
+
+        $xml = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" Fecha="2026-09-02T10:00:00" SubTotal="100.00" Total="116.00" Moneda="MXN" TipoDeComprobante="I" LugarExpedicion="64000">
+  <cfdi:Emisor Rfc="AAA010101AAA" Nombre="EMISOR" RegimenFiscal="601"/>
+  <cfdi:Receptor Rfc="BBB010101BBB" Nombre="RECEPTOR" UsoCFDI="G03"/>
+  <cfdi:Complemento><tfd:TimbreFiscalDigital UUID="{$uuid}"/></cfdi:Complemento>
+</cfdi:Comprobante>
+XML;
+
+        $this->actingAs($requester)
+            ->post(route('reimbursements.parse'), [
+                'xml_file' => UploadedFile::fake()->createWithContent('duplicado.xml', $xml),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('error', 'duplicate_cfdi')
+            ->assertJsonPath('folio', 'REE-000321')
+            ->assertJsonPath('registered_by', 'Ana Registradora')
+            ->assertJsonPath('status_label', 'pendiente de revisión por Cuentas por Pagar');
+    }
 }

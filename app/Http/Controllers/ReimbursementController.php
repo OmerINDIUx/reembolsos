@@ -1153,23 +1153,13 @@ class ReimbursementController extends Controller
                 return response()->json(['error' => 'No se encontrÃƒÂ³ un UUID vÃƒÂ¡lido en el XML provided.'], 422);
             }
 
-            // Ignore self if draft_id is provided
-            // Also ignore if the duplicate is a DRAFT belonging to the CURRENT user
-            $existingReimbursement = Reimbursement::where('uuid', $data['uuid'])
+            // Only ignore the exact draft that is being resumed. Any other
+            // reimbursement, including another draft of the same user, must be
+            // reported before the client attempts an auto-save.
+            $existingReimbursement = Reimbursement::with(['user', 'createdBy'])
+                ->where('uuid', $data['uuid'])
                 ->when($request->draft_id, function($q) use ($request) {
                     return $q->where('id', '!=', $request->draft_id);
-                })
-                ->where(function($q) use ($user) {
-                    $q->where('status', '!=', 'borrador')
-                      ->orWhere(function ($draftQuery) use ($user) {
-                          $draftQuery->where('user_id', '!=', $user->id)
-                              ->when($this->reimbursementsHaveCreatedByColumn(), function ($draftQuery) use ($user) {
-                                  $draftQuery->where(function ($managedQuery) use ($user) {
-                                      $managedQuery->whereNull('created_by_id')
-                                          ->orWhere('created_by_id', '!=', $user->id);
-                                  });
-                              });
-                      });
                 })
                 ->first();
 
@@ -1180,6 +1170,10 @@ class ReimbursementController extends Controller
                     'uuid' => $data['uuid'],
                     'folio' => $existingReimbursement->folio,
                     'status' => $existingReimbursement->status,
+                    'status_label' => $this->reimbursementStatusLabel($existingReimbursement->status),
+                    'registered_by' => $existingReimbursement->createdBy?->name
+                        ?? $existingReimbursement->user?->name
+                        ?? 'Usuario no disponible',
                 ], 422);
             }
 
@@ -2984,6 +2978,10 @@ class ReimbursementController extends Controller
             abort(403);
         }
 
+        if (!$user->canPerform('reimbursements.delete')) {
+            abort(403, 'No tienes permiso para eliminar reembolsos.');
+        }
+
         $canDeleteOwnDraft = $reimbursement->status === 'borrador'
             && $this->canRequesterManageReimbursement($reimbursement, $user);
 
@@ -3041,9 +3039,9 @@ class ReimbursementController extends Controller
 
     private function archiveReimbursement(Reimbursement $reimbursement, int $deletedById): void
     {
-        $reimbursement->loadMissing(['children.children']);
-
-        foreach ($reimbursement->children as $child) {
+        // Only draft descendants may be archived with a draft. This protects
+        // processed records that may have been incorrectly linked in the past.
+        foreach ($reimbursement->children()->where('status', 'borrador')->get() as $child) {
             $this->archiveReimbursement($child, $deletedById);
         }
 
@@ -5251,8 +5249,15 @@ class ReimbursementController extends Controller
                     // Find existing to check status and preserve data
                     $reimbursement = null;
                     if ($id) {
-                        $reimbursement = Reimbursement::whereIn('user_id', array_unique([$user->id, $targetUserId]))->find($id);
-                    } 
+                        $reimbursement = Reimbursement::query()
+                            ->whereKey($id)
+                            ->where('status', 'borrador')
+                            ->first();
+
+                        if (!$reimbursement || !$this->canRequesterManageReimbursement($reimbursement, $user)) {
+                            throw new \InvalidArgumentException('El borrador seleccionado no existe, ya fue enviado o no te pertenece.');
+                        }
+                    }
                     
                     if (!$reimbursement && isset($itemData['uuid'])) {
                         $reimbursement = Reimbursement::whereIn('user_id', array_unique([$user->id, $targetUserId]))

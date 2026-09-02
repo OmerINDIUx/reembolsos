@@ -1704,7 +1704,7 @@
                         if (!ok || d.error) { 
                             if (d.error === 'duplicate_cfdi') {
                                 let statusClasses = 'bg-gray-100 text-gray-800';
-                                let statusLabel = d.status.toUpperCase().replace('_', ' ');
+                                let statusLabel = d.status_label || d.status.toUpperCase().replace('_', ' ');
                                 
                                 if (d.status === 'requiere_correccion') {
                                     statusClasses = 'bg-orange-100 text-orange-800';
@@ -1731,6 +1731,10 @@
                                             <div class="mb-4">
                                                 <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Folio Interno</p>
                                                 <p class="text-sm font-bold text-gray-900 dark:text-white">${d.folio || 'Sin Folio'}</p>
+                                            </div>
+                                            <div class="mb-4">
+                                                <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Registrado por</p>
+                                                <p class="text-sm font-bold text-gray-900 dark:text-white">${d.registered_by || 'Usuario no disponible'}</p>
                                             </div>
                                             <div>
                                                 <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Estatus Actual</p>
