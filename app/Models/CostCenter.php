@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use App\Traits\RecordsAuditTrail;
 
 class CostCenter extends Model
 {
-    use HasFactory;
+    use HasFactory, RecordsAuditTrail;
 
     protected $fillable = [
         'code',

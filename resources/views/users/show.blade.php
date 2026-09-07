@@ -420,6 +420,10 @@
         </div>
     </div>
 
+    <div class="max-w-7xl mx-auto px-4 pb-12 sm:px-6 lg:px-8">
+        <x-audit-trail :audit-logs="$auditLogs" />
+    </div>
+
     @push('scripts')
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>

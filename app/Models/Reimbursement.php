@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 use App\Traits\HasTimeFilters;
+use App\Traits\RecordsAuditTrail;
 
 class Reimbursement extends Model
 {
-    use HasTimeFilters;
+    use HasTimeFilters, RecordsAuditTrail;
 
     protected static function booted()
     {

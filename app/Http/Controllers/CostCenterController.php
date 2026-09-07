@@ -226,6 +226,26 @@ class CostCenterController extends Controller
      */
     public function show(Request $request, CostCenter $costCenter)
     {
+        $costCenter->recordViewAudit();
+        $auditQuery = $costCenter->auditLogs()->with('actor:id,name,email')->latest();
+        if ($request->filled('audit_search')) {
+            $auditQuery->whereHas('actor', fn ($query) => $query
+                ->where('name', 'like', '%' . $request->audit_search . '%')
+                ->orWhere('email', 'like', '%' . $request->audit_search . '%'));
+        }
+        if ($request->filled('audit_action')) {
+            $auditQuery->where('action', $request->audit_action);
+        }
+        if ($request->filled('audit_from')) {
+            $auditQuery->whereDate('created_at', '>=', $request->audit_from);
+        }
+        if ($request->filled('audit_to')) {
+            $auditQuery->whereDate('created_at', '<=', $request->audit_to);
+        }
+        $auditLogs = Auth::user()->isAdmin()
+            ? $auditQuery->paginate(15, ['*'], 'audit_page')->withQueryString()
+            : collect();
+
         if (!$request->filled('period_type')) {
             $request->merge([
                 'period_type' => 'month',
@@ -323,7 +343,7 @@ class CostCenterController extends Controller
         $fixedFundLedgerTotals = $fixedFundStatement['fixedFundLedgerTotals'];
         $budgetRenewalCount = $fixedFundStatement['budgetRenewalCount'];
 
-        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements', 'budgetRenewals', 'fundSummaries', 'fixedFundLedger', 'fixedFundLedgerTotals', 'budgetRenewalCount', 'periods', 'approverEfficiency', 'delegatedOperations'));
+        return view('cost_centers.show', compact('costCenter', 'stats', 'statusBreakdown', 'stepBreakdown', 'categoryBreakdown', 'monthlyTrend', 'topSpenders', 'recentReimbursements', 'budgetRenewals', 'fundSummaries', 'fixedFundLedger', 'fixedFundLedgerTotals', 'budgetRenewalCount', 'periods', 'approverEfficiency', 'delegatedOperations', 'auditLogs'));
     }
 
     public function activity(Request $request, CostCenter $costCenter)
@@ -1062,6 +1082,56 @@ class CostCenterController extends Controller
 
         $this->ensureFixedFundUsersCanReceive($request->input('fixed_funds', []));
 
+        $previousFunds = $costCenter->fixedFunds()->where('is_active', true)->get(['name', 'user_id', 'budget']);
+        $previousAuthorizedUsers = $costCenter->authorizedUsers()->get(['users.id', 'users.name']);
+        $auditUserIds = collect($request->input('steps', []))->pluck('user_id')
+            ->merge(collect($request->input('fixed_funds', []))->pluck('user_id'))
+            ->merge(collect($request->input('allowed_users', []))->pluck('user_id'))
+            ->merge($previousFunds->pluck('user_id'))
+            ->merge($previousAuthorizedUsers->pluck('id'))
+            ->merge($costCenter->approvalSteps()->pluck('user_id'))
+            ->filter()
+            ->unique();
+        $approverNames = User::withTrashed()->whereIn('id', $auditUserIds)->pluck('name', 'id');
+        $previousApprovers = $costCenter->approvalSteps()
+            ->orderBy('order')
+            ->with('user:id,name')
+            ->get()
+            ->map(fn ($step) => trim($step->name . ': ' . ($step->user?->name ?? 'Sin asignar')))
+            ->implode(' | ');
+        $requestedApprovers = collect($request->input('steps', []))
+            ->map(fn ($step) => trim(($step['name'] ?? 'Aprobador') . ': ' . ($approverNames[$step['user_id']] ?? 'Sin asignar')))
+            ->implode(' | ');
+        $auditChanges = $previousApprovers !== $requestedApprovers
+            ? ['approvers' => ['from' => $previousApprovers, 'to' => $requestedApprovers]]
+            : [];
+
+        $formatFund = function ($fund) use ($approverNames): string {
+            $name = is_array($fund) ? ($fund['name'] ?? 'Fondo fijo') : ($fund->name ?? 'Fondo fijo');
+            $userId = is_array($fund) ? ($fund['user_id'] ?? null) : $fund->user_id;
+            $budget = is_array($fund) ? ($fund['budget'] ?? 0) : $fund->budget;
+
+            return trim($name . ': ' . ($approverNames[$userId] ?? 'Sin asignar')
+                . ' ($' . number_format((float) $budget, 2) . ')');
+        };
+        $previousFundSummary = $previousFunds->map(fn ($fund) => $formatFund($fund))->sort()->implode(' | ');
+        $requestedFundSummary = collect($request->input('fixed_funds', []))->map(fn ($fund) => $formatFund($fund))->sort()->implode(' | ');
+        if ($previousFundSummary !== $requestedFundSummary) {
+            $auditChanges['fixed_funds'] = ['from' => $previousFundSummary, 'to' => $requestedFundSummary];
+        }
+
+        $previousAuthorizedSummary = $previousAuthorizedUsers
+            ->map(fn ($user) => $user->name . ($user->pivot->can_do_special ? ' (permisos especiales)' : ''))
+            ->sort()
+            ->implode(' | ');
+        $requestedAuthorizedSummary = collect($request->input('allowed_users', []))
+            ->map(fn ($user) => ($approverNames[$user['user_id']] ?? 'Sin asignar') . (!empty($user['can_do_special']) ? ' (permisos especiales)' : ''))
+            ->sort()
+            ->implode(' | ');
+        if ($previousAuthorizedSummary !== $requestedAuthorizedSummary) {
+            $auditChanges['authorized_users'] = ['from' => $previousAuthorizedSummary, 'to' => $requestedAuthorizedSummary];
+        }
+
         DB::transaction(function() use ($request, $costCenter) {
             // 1. Capture the current approval chain before any deletion can null current_step_id.
             $existingSteps = $costCenter->approvalSteps()
@@ -1086,15 +1156,19 @@ class CostCenterController extends Controller
             $fixedFunds = $request->input('fixed_funds', []);
 
             // 2. Update CC Basic Info
-            $costCenter->update([
+            $updates = [
                 'name' => $request->name,
                 'company_id' => $request->company_id,
                 'code' => strtoupper(\Illuminate\Support\Str::slug($request->name)),
                 'description' => $request->description,
                 'menfis_email' => $request->menfis_email,
-                'budget' => collect($fixedFunds)->sum('budget'),
                 'beneficiary_id' => $fixedFunds[0]['user_id'] ?? null,
-            ]);
+            ];
+            $calculatedBudget = (float) collect($fixedFunds)->sum('budget');
+            if ((float) $costCenter->budget !== $calculatedBudget) {
+                $updates['budget'] = $calculatedBudget;
+            }
+            $costCenter->update($updates);
 
             $this->syncFixedFunds($costCenter, $fixedFunds, $request->input('fund_transfers', []));
 
@@ -1199,6 +1273,10 @@ class CostCenterController extends Controller
                 $costCenter->authorizedUsers()->sync([]);
             }
         });
+
+        if ($auditChanges !== []) {
+            $costCenter->recordAuditActivity('configuración actualizada', $auditChanges);
+        }
 
         return redirect()->route('cost_centers.index')->with('success', 'Centro de Costos actualizado con ' . count($request->steps) . ' niveles de aprobación.');
     }

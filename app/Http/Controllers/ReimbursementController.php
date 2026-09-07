@@ -2195,6 +2195,27 @@ class ReimbursementController extends Controller
 
     private function showReimbursementView(Reimbursement $reimbursement)
     {
+        $reimbursement->recordViewAudit();
+        $request = request();
+        $auditQuery = $reimbursement->auditLogs()->with('actor:id,name,email')->latest();
+        if ($request->filled('audit_search')) {
+            $auditQuery->whereHas('actor', fn ($query) => $query
+                ->where('name', 'like', '%' . $request->audit_search . '%')
+                ->orWhere('email', 'like', '%' . $request->audit_search . '%'));
+        }
+        if ($request->filled('audit_action')) {
+            $auditQuery->where('action', $request->audit_action);
+        }
+        if ($request->filled('audit_from')) {
+            $auditQuery->whereDate('created_at', '>=', $request->audit_from);
+        }
+        if ($request->filled('audit_to')) {
+            $auditQuery->whereDate('created_at', '<=', $request->audit_to);
+        }
+        $auditLogs = Auth::user()->isAdmin()
+            ? $auditQuery->paginate(15, ['*'], 'audit_page')->withQueryString()
+            : collect();
+
         $reimbursement->load([
             'files',
             'children',
@@ -2250,7 +2271,8 @@ class ReimbursementController extends Controller
             'isClarificationRequester',
             'clarificationOnCooldown',
             'nextClarificationAt',
-            'canRequestClarification'
+            'canRequestClarification',
+            'auditLogs'
         ));
     }
 
@@ -4300,11 +4322,13 @@ class ReimbursementController extends Controller
             if (!$reimbursement->xml_path || !Storage::exists($reimbursement->xml_path)) {
                 abort(404, 'Archivo XML no encontrado.');
             }
+            $reimbursement->recordAuditActivity('descargó documento: XML');
             return Storage::download($reimbursement->xml_path, 'factura-' . ($reimbursement->folio ?? 'archivo') . '.xml');
         } elseif ($type === 'pdf') {
             if (!$reimbursement->pdf_path || !Storage::exists($reimbursement->pdf_path)) {
                 abort(404, 'Archivo no encontrado.');
             }
+            $reimbursement->recordAuditActivity('descargó documento: PDF');
             
             $extension = pathinfo($reimbursement->pdf_path, PATHINFO_EXTENSION);
             if ($extension === 'bin') {
@@ -4321,6 +4345,7 @@ class ReimbursementController extends Controller
             if (!$reimbursement->ticket_path || !Storage::exists($reimbursement->ticket_path)) {
                 abort(404, 'Ticket / Prueba no encontrado.');
             }
+            $reimbursement->recordAuditActivity('descargó documento: TICKET');
             
             $extension = pathinfo($reimbursement->ticket_path, PATHINFO_EXTENSION);
             $cleanName = 'ticket-' . ($reimbursement->folio ?? 'prueba') . '.' . $extension;
@@ -4336,6 +4361,7 @@ class ReimbursementController extends Controller
             if (!$reimbursement->xml_path || !Storage::exists($reimbursement->xml_path)) {
                 abort(404, 'Archivo XML no encontrado.');
             }
+            $reimbursement->recordAuditActivity('abrió documento: XML');
             return response()->file(Storage::path($reimbursement->xml_path), [
                 'Content-Type' => 'text/xml',
                 'Content-Disposition' => 'inline; filename="' . basename($reimbursement->xml_path) . '"'
@@ -4344,6 +4370,7 @@ class ReimbursementController extends Controller
             if (!$reimbursement->pdf_path || !Storage::exists($reimbursement->pdf_path)) {
                 abort(404, 'Archivo no encontrado.');
             }
+            $reimbursement->recordAuditActivity('abrió documento: PDF');
             
             $path = Storage::path($reimbursement->pdf_path);
             $mimeType = Storage::mimeType($reimbursement->pdf_path);
@@ -4356,6 +4383,7 @@ class ReimbursementController extends Controller
             if (!$reimbursement->ticket_path || !Storage::exists($reimbursement->ticket_path)) {
                 abort(404, 'Ticket / Prueba no encontrado.');
             }
+            $reimbursement->recordAuditActivity('abrió documento: TICKET');
             
             $path = Storage::path($reimbursement->ticket_path);
             $mimeType = Storage::mimeType($reimbursement->ticket_path);

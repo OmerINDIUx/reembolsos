@@ -146,6 +146,26 @@ class UserController extends Controller
      */
     public function show(Request $request, User $user)
     {
+        $user->recordViewAudit();
+        $auditQuery = $user->auditLogs()->with('actor:id,name,email')->latest();
+        if ($request->filled('audit_search')) {
+            $auditQuery->whereHas('actor', fn ($query) => $query
+                ->where('name', 'like', '%' . $request->audit_search . '%')
+                ->orWhere('email', 'like', '%' . $request->audit_search . '%'));
+        }
+        if ($request->filled('audit_action')) {
+            $auditQuery->where('action', $request->audit_action);
+        }
+        if ($request->filled('audit_from')) {
+            $auditQuery->whereDate('created_at', '>=', $request->audit_from);
+        }
+        if ($request->filled('audit_to')) {
+            $auditQuery->whereDate('created_at', '<=', $request->audit_to);
+        }
+        $auditLogs = Auth::user()->isAdmin()
+            ? $auditQuery->paginate(15, ['*'], 'audit_page')->withQueryString()
+            : collect();
+
         $periods = \App\Models\Reimbursement::getAvailableTimePeriods();
         $user->load(['director', 'subordinates', 'costCenters', 'substitutes.user']);
 
@@ -283,7 +303,7 @@ class UserController extends Controller
         // 7. Substitutes
         $allUsers = User::where('id', '!=', $user->id)->orderBy('name')->get();
 
-        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'reimbursementsHistory', 'historyStatusOptions', 'historyStatus', 'pendingApprovalsCount', 'periods', 'allUsers', 'costCenterAssignments'));
+        return view('users.show', compact('user', 'stats', 'categoryBreakdown', 'statusBreakdown', 'monthlyTrend', 'reimbursementsHistory', 'historyStatusOptions', 'historyStatus', 'pendingApprovalsCount', 'periods', 'allUsers', 'costCenterAssignments', 'auditLogs'));
     }
 
     /**
