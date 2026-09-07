@@ -22,6 +22,7 @@ class ReimbursementApproval extends Model
 
     protected $fillable = [
         'reimbursement_id',
+        'approval_step_id',
         'user_id',
         'step_name',
         'action',
@@ -33,6 +34,11 @@ class ReimbursementApproval extends Model
     public function reimbursement()
     {
         return $this->belongsTo(Reimbursement::class);
+    }
+
+    public function approvalStep()
+    {
+        return $this->belongsTo(ApprovalStep::class);
     }
 
     public function user()

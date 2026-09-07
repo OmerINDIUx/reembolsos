@@ -240,9 +240,9 @@ class Reimbursement extends Model
     /**
      * Return the immutable audit entry that completed a configured approval step.
      */
-    public function approvedLogForStep(?string $stepName): ?ReimbursementApproval
+    public function approvedLogForStep(ApprovalStep|string|null $step): ?ReimbursementApproval
     {
-        if (!$stepName) {
+        if (!$step) {
             return null;
         }
 
@@ -250,10 +250,56 @@ class Reimbursement extends Model
             ? $this->approvals
             : $this->approvals()->with(['user', 'substitutedUser'])->get();
 
-        return $approvals
-            ->where('step_name', $stepName)
+        if ($step instanceof ApprovalStep) {
+            return $this->approvedLogsForConfiguredSteps()->get($step->id);
+        }
+
+        // Compatibility for callers that only have a historical step name. New
+        // workflow code must pass the ApprovalStep so duplicate names cannot
+        // make one decision appear in more than one stage.
+        return $approvals->where('step_name', $step)->where('action', 'aprobado')->last();
+    }
+
+    /**
+     * Map each configured step to its one, concrete approval audit entry.
+     *
+     * Approval-step IDs are authoritative. Older history did not store an ID,
+     * so those entries are consumed once, in the configured order, as a safe
+     * compatibility fallback. This prevents one legacy approval from being
+     * displayed as the completion of multiple same-named steps.
+     */
+    public function approvedLogsForConfiguredSteps(): \Illuminate\Support\Collection
+    {
+        $this->loadMissing(['costCenter.approvalSteps', 'approvals']);
+
+        if (!$this->costCenter) {
+            return collect();
+        }
+
+        $approved = $this->approvals
             ->where('action', 'aprobado')
-            ->last();
+            ->values();
+        $byStepId = $approved
+            ->filter(fn (ReimbursementApproval $approval) => $approval->approval_step_id !== null)
+            ->keyBy('approval_step_id');
+        $legacyByName = $approved
+            ->filter(fn (ReimbursementApproval $approval) => $approval->approval_step_id === null)
+            ->groupBy('step_name')
+            ->map(fn ($entries) => $entries->values());
+        $logs = collect();
+
+        foreach ($this->costCenter->approvalSteps->sortBy('order') as $step) {
+            $approval = $byStepId->get($step->id);
+            if (!$approval && $legacyByName->has($step->name)) {
+                $approval = $legacyByName->get($step->name)->shift();
+            }
+
+            if ($approval) {
+                $logs->put($step->id, $approval);
+            }
+        }
+
+        return $logs;
     }
 
     /**
@@ -267,12 +313,11 @@ class Reimbursement extends Model
             return null;
         }
 
-        $approvedStepNames = $this->approvals
-            ->where('action', 'aprobado')
-            ->pluck('step_name');
+        $approvedStepIds = $this->approvedLogsForConfiguredSteps()->keys();
 
         return $this->costCenter->approvalSteps
-            ->first(fn (ApprovalStep $step) => !$approvedStepNames->contains($step->name));
+            ->sortBy('order')
+            ->first(fn (ApprovalStep $step) => !$approvedStepIds->contains($step->id));
     }
 
     public function configuredApprovalFlowIsComplete(): bool

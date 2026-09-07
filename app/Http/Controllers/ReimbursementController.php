@@ -2144,8 +2144,24 @@ class ReimbursementController extends Controller
      */
     private function repairStuckPendingAssignment(Reimbursement $reimbursement): bool
     {
-        if ($reimbursement->status !== 'enviado' || $reimbursement->current_step_id !== null) {
+        if (!in_array($reimbursement->status, ['enviado', 'pendiente_revision_cxp'], true) || $reimbursement->current_step_id !== null) {
             return false;
+        }
+
+        // A legacy entry may have sent the request to CXP by matching a step
+        // name. If configured steps share that name, the audit mapping can
+        // reveal an outstanding concrete step; restore it before anyone in CXP
+        // can act on an incomplete workflow.
+        if ($reimbursement->status === 'pendiente_revision_cxp') {
+            $pendingStep = $reimbursement->firstPendingConfiguredApprovalStep();
+            if ($pendingStep) {
+                $reimbursement->update([
+                    'status' => 'enviado',
+                    'current_step_id' => $pendingStep->id,
+                ]);
+
+                return true;
+            }
         }
 
         $lastCorrection = $reimbursement->approvals()
@@ -2153,7 +2169,10 @@ class ReimbursementController extends Controller
             ->latest()
             ->first();
         $correctionStepName = $lastCorrection?->step_name;
-        $correctionStep = $correctionStepName
+        $correctionStep = $lastCorrection?->approval_step_id
+            ? $reimbursement->costCenter?->approvalSteps()->whereKey($lastCorrection->approval_step_id)->first()
+            : null;
+        $correctionStep ??= $correctionStepName
             ? $reimbursement->costCenter?->approvalSteps()
                 ->where('name', $correctionStepName)
                 ->orderBy('order')
@@ -2687,7 +2706,10 @@ class ReimbursementController extends Controller
                     $data['status'] = 'pendiente_pago';
                     $data['payment_week'] = $reimbursement->payment_week ?: $this->currentProcessingWeek();
                 } else {
-                    $correctionStep = $reimbursement->costCenter?->approvalSteps()
+                    $correctionStep = $lastCorrection->approval_step_id
+                        ? $reimbursement->costCenter?->approvalSteps()->whereKey($lastCorrection->approval_step_id)->first()
+                        : null;
+                    $correctionStep ??= $reimbursement->costCenter?->approvalSteps()
                         ->where('name', $lastCorrectionStep)
                         ->orderBy('order')
                         ->first();
@@ -2776,6 +2798,7 @@ class ReimbursementController extends Controller
             }
 
             $reimbursement->approvals()->create([
+                'approval_step_id' => $stepForAudit?->id,
                 'user_id' => $user->id,
                 'step_name' => $stepForAudit->name ?? match ($originalStatus) {
                     'pendiente_revision_cxp' => 'Cuentas por Pagar Revisadores',
@@ -3997,6 +4020,7 @@ class ReimbursementController extends Controller
                 
                 if (in_array($request->action, ['rechazado', 'requiere_correccion'], true)) {
                     $reimbursement->approvals()->create([
+                        'approval_step_id' => $currentStep?->id,
                         'user_id' => $user->id,
                         'step_name' => $currentStepName,
                         'action' => $request->action,
@@ -5058,6 +5082,7 @@ class ReimbursementController extends Controller
 
         foreach ($autoApprovedSteps as $step) {
             $reimbursement->approvals()->create([
+                'approval_step_id' => $step->id,
                 'user_id' => $user->id,
                 'step_name' => $step->name ?? "Nivel {$step->order}",
                 'action' => 'aprobado',
@@ -5082,6 +5107,7 @@ class ReimbursementController extends Controller
         }
 
         $reimbursement->approvals()->create([
+            'approval_step_id' => $stepAtActionTime?->id,
             'user_id' => $user->id,
             'step_name' => $stepAtActionTime->name ?? match ($reimbursement->status) {
                 'pendiente_revision_cxp' => 'Cuentas por Pagar Revisadores',

@@ -805,11 +805,12 @@
                                 $firstPendingConfiguredStep = $reimbursement->costCenter
                                     ? $reimbursement->firstPendingConfiguredApprovalStep()
                                     : null;
+                                $approvalLogsByStep = $reimbursement->approvedLogsForConfiguredSteps();
                             @endphp
                             @if($reimbursement->costCenter)
                                 @foreach($reimbursement->costCenter->approvalSteps as $step)
                                 @php
-                                    $approvalLog = $reimbursement->approvedLogForStep($step->name);
+                                    $approvalLog = $approvalLogsByStep->get($step->id);
                                     $isCompleted = $approvalLog !== null;
                                     $isCurrent = (
                                         $reimbursement->current_step_id === $step->id
@@ -830,6 +831,9 @@
                                     <div class="pt-1 w-full">
                                         <p class="text-sm font-semibold {{ $isCompleted ? 'text-gray-900 dark:text-white' : ($isCurrent ? 'text-indigo-700 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500') }}">{{ $step->name }}</p>
                                         <p class="text-[10px] text-gray-500 dark:text-gray-400">{{ $displayedApprover }}</p>
+                                        @if($approvalLog?->substituted_user_id)
+                                            <p class="text-[9px] font-semibold text-indigo-600 dark:text-indigo-400">Aprobó a nombre de {{ $approvalLog->substitutedUser?->name ?? 'Usuario no disponible' }}</p>
+                                        @endif
                                         
                                         @if($approvalLog)
                                             <p class="text-[9px] text-gray-400 mt-0.5">{{ $approvalLog->created_at->timezone('America/Mexico_City')->format('d/m/Y H:i') }}</p>
