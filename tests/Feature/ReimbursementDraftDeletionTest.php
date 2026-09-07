@@ -74,7 +74,7 @@ class ReimbursementDraftDeletionTest extends TestCase
         ]);
     }
 
-    public function test_user_without_delete_permission_cannot_delete_an_own_draft(): void
+    public function test_user_without_delete_permission_can_delete_an_own_draft(): void
     {
         $user = User::factory()->create(['role' => 'user', 'status' => 'active']);
         $draft = Reimbursement::create([
@@ -89,12 +89,12 @@ class ReimbursementDraftDeletionTest extends TestCase
 
         $this->actingAs($user)
             ->delete(route('reimbursements.destroy', $draft))
-            ->assertForbidden();
+            ->assertRedirect(route('reimbursements.create'));
 
         $this->assertDatabaseHas('reimbursements', [
             'id' => $draft->id,
-            'status' => 'borrador',
-            'deleted_at' => null,
+            'status' => 'eliminado',
+            'deleted_by_id' => $user->id,
         ]);
     }
 

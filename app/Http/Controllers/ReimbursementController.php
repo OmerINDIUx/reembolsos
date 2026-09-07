@@ -2979,12 +2979,14 @@ class ReimbursementController extends Controller
             abort(403);
         }
 
-        if (!$user->canPerform('reimbursements.delete')) {
-            abort(403, 'No tienes permiso para eliminar reembolsos.');
-        }
-
         $canDeleteOwnDraft = $reimbursement->status === 'borrador'
             && $this->canRequesterManageReimbursement($reimbursement, $user);
+
+        // Every requester can discard a draft they manage. The delete permission
+        // remains required for deleting any other reimbursement.
+        if (!$canDeleteOwnDraft && !$user->canPerform('reimbursements.delete')) {
+            abort(403, 'No tienes permiso para eliminar reembolsos.');
+        }
 
         if (!$user->isAdmin() && !$canDeleteOwnDraft) {
             abort(403, 'Solo puedes eliminar tus propios borradores.');
