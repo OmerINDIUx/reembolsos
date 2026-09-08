@@ -137,6 +137,59 @@ class ReimbursementSequentialApprovalTest extends TestCase
         $this->assertFalse($reimbursement->canBeApprovedBy($cxpReviewer));
     }
 
+    public function test_a_legacy_executive_approval_without_a_current_step_is_recovered_for_n4(): void
+    {
+        $executive = User::factory()->create(['role' => 'director_ejecutivo', 'status' => 'active']);
+        $n4 = User::factory()->create(['role' => 'direccion', 'status' => 'active']);
+        $requester = User::factory()->create(['role' => 'user', 'status' => 'active']);
+        $company = Company::create([
+            'name' => 'Empresa de prueba ' . uniqid(),
+            'account' => '0000000004',
+        ]);
+        $costCenter = CostCenter::create([
+            'code' => 'CC-' . strtoupper(substr(uniqid(), -6)),
+            'name' => 'Centro de prueba ' . uniqid(),
+            'company_id' => $company->id,
+            'is_active' => true,
+        ]);
+        $executiveStep = ApprovalStep::create([
+            'cost_center_id' => $costCenter->id,
+            'user_id' => $executive->id,
+            'order' => 3,
+            'name' => 'Director Ejecutivo N3',
+        ]);
+        $n4Step = ApprovalStep::create([
+            'cost_center_id' => $costCenter->id,
+            'user_id' => $n4->id,
+            'order' => 4,
+            'name' => 'Aprobador N4',
+        ]);
+        $reimbursement = Reimbursement::create([
+            'cost_center_id' => $costCenter->id,
+            'user_id' => $requester->id,
+            'status' => 'aprobado_ejecutivo',
+            'current_step_id' => null,
+            'total' => 100,
+            'moneda' => 'MXN',
+        ]);
+        $reimbursement->approvals()->create([
+            'approval_step_id' => $executiveStep->id,
+            'user_id' => $executive->id,
+            'step_name' => $executiveStep->name,
+            'action' => 'aprobado',
+        ]);
+
+        $this->actingAs($n4)
+            ->get(route('reimbursements.show', $reimbursement))
+            ->assertOk();
+
+        $reimbursement->refresh();
+
+        $this->assertSame('enviado', $reimbursement->status);
+        $this->assertSame($n4Step->id, $reimbursement->current_step_id);
+        $this->assertTrue($reimbursement->canBeApprovedBy($n4));
+    }
+
     public function test_resubmission_returns_to_the_approver_who_requested_the_correction(): void
     {
         $requester = User::factory()->create(['role' => 'user', 'status' => 'active']);

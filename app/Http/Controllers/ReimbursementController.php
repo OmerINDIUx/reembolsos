@@ -2144,7 +2144,14 @@ class ReimbursementController extends Controller
      */
     private function repairStuckPendingAssignment(Reimbursement $reimbursement): bool
     {
-        if (!in_array($reimbursement->status, ['enviado', 'pendiente_revision_cxp'], true) || $reimbursement->current_step_id !== null) {
+        if (!in_array($reimbursement->status, [
+            'enviado',
+            'aprobado_director',
+            'aprobado_control',
+            'aprobado_ejecutivo',
+            'aprobado_direccion',
+            'pendiente_revision_cxp',
+        ], true) || $reimbursement->current_step_id !== null) {
             return false;
         }
 
