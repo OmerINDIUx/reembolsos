@@ -197,7 +197,7 @@ class AuthenticatedSessionController extends Controller
 
         $identityEmail = strtolower(trim((string) ($identity['mail'] ?? $identity['userPrincipalName'] ?? '')));
         if (! filter_var($identityEmail, FILTER_VALIDATE_EMAIL) || ! $this->isAuthorizedMicrosoftEmail($identityEmail)) {
-            return redirect()->route('login')->withErrors(['email' => 'Microsoft solo está autorizado para cuentas @grupoindi.com.']);
+            return redirect()->route('login')->withErrors(['email' => 'Microsoft solo está autorizado para cuentas @grupoindi.com y @construlerma.com.']);
         }
 
         try {

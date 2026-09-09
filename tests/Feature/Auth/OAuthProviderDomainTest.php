@@ -2,19 +2,21 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Services\MicrosoftUserProvisioner;
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
 use Tests\TestCase;
 
 class OAuthProviderDomainTest extends TestCase
 {
-    public function test_microsoft_rejects_a_construlerma_account(): void
+    public function test_microsoft_authenticates_a_construlerma_account(): void
     {
         config()->set('services.microsoft', [
             'client_id' => 'microsoft-client',
             'client_secret' => 'microsoft-secret',
             'tenant' => 'common',
             'redirect' => 'http://localhost/auth/microsoft/callback',
-            'allowed_domains' => ['grupoindi.com'],
+            'allowed_domains' => ['grupoindi.com', 'construlerma.com'],
         ]);
 
         Http::fake([
@@ -26,14 +28,17 @@ class OAuthProviderDomainTest extends TestCase
             ]),
         ]);
 
+        $this->mock(MicrosoftUserProvisioner::class, function ($mock): void {
+            $mock->shouldReceive('provision')
+                ->once()
+                ->andThrow(new RuntimeException('El registro fue alcanzado.'));
+        });
+
         $response = $this->withSession(['microsoft_oauth_state' => 'valid-state'])
             ->get('/auth/microsoft/callback?state=valid-state&code=code');
 
         $response->assertRedirect(route('login'));
-        $response->assertSessionHasErrors([
-            'email' => 'Microsoft solo está autorizado para cuentas @grupoindi.com.',
-        ]);
-        $this->assertGuest();
+        $response->assertSessionHasErrors(['email' => 'El registro fue alcanzado.']);
     }
 
     public function test_google_rejects_a_grupoindi_account(): void
