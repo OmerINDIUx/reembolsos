@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Profile;
+use App\Models\Permission;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -36,7 +37,7 @@ class GoogleUserProvisioner
             $name = trim((string) ($identity['name'] ?? $email));
 
             if (! $user) {
-                $profile = Profile::firstOrCreate(['name' => 'user'], ['display_name' => 'Usuario General']);
+                $profile = $this->defaultUserProfile();
 
                 try {
                     return User::create([
@@ -67,6 +68,10 @@ class GoogleUserProvisioner
                 return $user;
             }
 
+            if ($user->profile?->name === 'user') {
+                $this->ensureDashboardAccess($user->profile);
+            }
+
             $isFirstGoogleLogin = blank($user->google_id);
 
             $user->forceFill([
@@ -82,5 +87,28 @@ class GoogleUserProvisioner
 
             return $user->fresh();
         });
+    }
+
+    private function defaultUserProfile(): Profile
+    {
+        $profile = Profile::firstOrCreate(['name' => 'user'], ['display_name' => 'Usuario General']);
+
+        $this->ensureDashboardAccess($profile);
+
+        return $profile;
+    }
+
+    private function ensureDashboardAccess(Profile $profile): void
+    {
+        $dashboardPermission = Permission::firstOrCreate(
+            ['name' => 'dashboard.view_own'],
+            [
+                'display_name' => 'Puede ver panel propio',
+                'module' => 'dashboard',
+                'description' => 'Permite acceder al panel con datos personales y registros asignados al usuario.',
+            ],
+        );
+
+        $profile->permissions()->syncWithoutDetaching([$dashboardPermission->id]);
     }
 }
