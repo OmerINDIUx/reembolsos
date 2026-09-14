@@ -4013,7 +4013,8 @@ class ReimbursementController extends Controller
                      }
                 }
                 $substituteText = $isSubstitute ? " (en sustitución de " . $substitutedName . ")" : "";
-                $currentStepName = $reimbursement->currentStep?->name ?? 'Auditoria';
+                $currentStep = $reimbursement->currentStep;
+                $currentStepName = $currentStep?->name ?? 'Auditoria';
 
                 if (in_array($request->action, ['rechazado', 'requiere_correccion'], true)) {
                      $currentObs = $reimbursement->observaciones;
@@ -4028,7 +4029,6 @@ class ReimbursementController extends Controller
                      $currentObs = $reimbursement->observaciones;
                      $newObs = "[MASIVO] APROBADO masivamente por " . $user->name . $substituteText . " el " . now()->format('d/m/Y H:i');
                      $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
-                    $currentStep = $reimbursement->currentStep;
                     if ($currentStep) {
                         $this->mapApprovalData($currentStep, $user->id, $data);
                     }

@@ -14,6 +14,72 @@ class ReimbursementSequentialApprovalTest extends TestCase
 {
     use RefreshDatabase;
 
+    #[\PHPUnit\Framework\Attributes\DataProvider('bulkReturnActions')]
+    public function test_bulk_return_preserves_each_reimbursements_original_step(string $action): void
+    {
+        $approver = User::factory()->create(['role' => 'director', 'status' => 'active']);
+        $requester = User::factory()->create(['role' => 'user', 'status' => 'active']);
+        $company = Company::create(['name' => 'Empresa de prueba', 'account' => '0000000005']);
+        $costCenter = CostCenter::create([
+            'code' => 'CC-BULK',
+            'name' => 'Centro de prueba',
+            'company_id' => $company->id,
+            'is_active' => true,
+        ]);
+        $reimbursements = [];
+        foreach ([1, 2] as $order) {
+            $step = ApprovalStep::create([
+                'cost_center_id' => $costCenter->id,
+                'user_id' => $approver->id,
+                'order' => $order,
+                'name' => 'Aprobador ' . $order,
+            ]);
+            $reimbursement = Reimbursement::create([
+                'cost_center_id' => $costCenter->id,
+                'user_id' => $requester->id,
+                'status' => 'enviado',
+                'current_step_id' => $step->id,
+                'total' => 100,
+                'moneda' => 'MXN',
+            ]);
+            $reimbursements[] = [$reimbursement, $step];
+        }
+
+        $this->actingAs($approver)
+            ->post(route('reimbursements.bulk_audit_action'), [
+                'ids' => array_map(fn ($entry) => $entry[0]->id, $reimbursements),
+                'action' => $action,
+                'rejection_reason' => 'Revisar comprobante.',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', 'Se procesaron 2 trámites con éxito.');
+
+        foreach ($reimbursements as [$reimbursement, $step]) {
+            $reimbursement->refresh();
+            $this->assertSame($action, $reimbursement->status);
+            $this->assertNull($reimbursement->current_step_id);
+            $this->assertSame(1, $reimbursement->approvals()->count());
+            $this->assertDatabaseHas('reimbursement_approvals', [
+                'reimbursement_id' => $reimbursement->id,
+                'approval_step_id' => $step->id,
+                'step_name' => $step->name,
+                'user_id' => $approver->id,
+                'action' => $action,
+                'comment' => 'Revisar comprobante.',
+                'is_bulk' => true,
+            ]);
+        }
+    }
+
+    public static function bulkReturnActions(): array
+    {
+        return [
+            'rejection' => ['rechazado'],
+            'correction' => ['requiere_correccion'],
+        ];
+    }
+
     public function test_bulk_executive_approval_stops_at_the_subdirection_step_assigned_to_another_user(): void
     {
         $executive = User::factory()->create([
