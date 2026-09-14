@@ -1,6 +1,6 @@
 @php
     $flowHasErrors = $errors->getBag('adminFlow')->any();
-    $flowStatus = $flowHasErrors ? old('status') : (array_key_exists($reimbursement->status, $adminFlowStatusOptions) ? $reimbursement->status : 'enviado');
+    $flowStatus = $flowHasErrors ? old('status') : '';
 @endphp
 <div x-data="{
         open: @js($flowHasErrors), submitting: false, choosing: false, query: '', trigger: null,
@@ -54,7 +54,8 @@
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div>
                             <label for="flow-status" class="mb-1.5 block text-sm font-semibold text-gray-700 dark:text-gray-200">Estado al guardar</label>
-                            <select id="flow-status" x-ref="status" name="status" x-model="status" required class="w-full rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                            <select id="flow-status" x-ref="status" name="status" x-model="status" class="w-full rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                                <option value="">Conservar estado y etapa actuales</option>
                                 @foreach($adminFlowStatusOptions as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
                             </select>
                         </div>
@@ -97,7 +98,8 @@
                     </div>
                     <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-sm text-indigo-900 dark:border-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-200" aria-live="polite">
                         <p class="font-semibold">Qué ocurrirá al guardar</p>
-                        <p class="mt-1 leading-relaxed" x-show="status === 'enviado'">Si cambias el estado, tipo o centro, se reiniciará la autorización con el flujo del centro seleccionado, respetando la jerarquía del solicitante. Si ya está enviado y falta su etapa, se restaurará el flujo.</p>
+                        <p class="mt-1 leading-relaxed" x-show="!status">Se conservarán el estado, la etapa pendiente y las aprobaciones existentes. Si cambias de centro, debe existir una etapa equivalente.</p>
+                        <p class="mt-1 leading-relaxed" x-show="status === 'enviado'">La solicitud continuará desde su etapa pendiente, conservando las aprobaciones existentes. No volverá al inicio.</p>
                         <p class="mt-1 leading-relaxed" x-show="status === 'requiere_correccion'">La solicitud quedará pendiente de corrección del solicitante. No avanzará en aprobación hasta que vuelva a enviarla.</p>
                         <p class="mt-1 leading-relaxed" x-show="status === 'rechazado'">La solicitud quedará rechazada y fuera del flujo de aprobación.</p>
                         <p class="mt-2 leading-relaxed" x-show="type === 'fondo_fijo'">Se asignará un fondo fijo activo del centro y su responsable como destinatario del pago.</p>
