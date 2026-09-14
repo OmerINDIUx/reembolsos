@@ -983,8 +983,8 @@
 
             syncBulkEditDefaults() {
                 if (this.selectedAction !== 'editar') return;
-                this.bulkEditStatus = this.uniformStatus;
-                this.bulkEditType = this.uniformType;
+                this.bulkEditStatus = ['enviado', 'requiere_correccion', 'rechazado'].includes(this.uniformStatus) ? this.uniformStatus : '';
+                this.bulkEditType = ['reembolso', 'fondo_fijo'].includes(this.uniformType) ? this.uniformType : '';
                 this.bulkEditCostCenterId = this.uniformCostCenterId;
             },
             
@@ -1235,8 +1235,8 @@
 
                 syncBulkEditDefaults() {
                     if (this.selectedAction !== 'editar') return;
-                    this.bulkEditStatus = this.uniformStatus;
-                    this.bulkEditType = this.uniformType;
+                    this.bulkEditStatus = ['enviado', 'requiere_correccion', 'rechazado'].includes(this.uniformStatus) ? this.uniformStatus : '';
+                    this.bulkEditType = ['reembolso', 'fondo_fijo'].includes(this.uniformType) ? this.uniformType : '';
                     this.bulkEditCostCenterId = this.uniformCostCenterId;
                 },
                 

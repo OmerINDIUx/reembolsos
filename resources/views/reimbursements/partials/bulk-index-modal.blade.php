@@ -1,6 +1,6 @@
 @php
     $bulkAdminFlowStatusOptions = [
-        'pendiente_autorizacion' => 'Activo en flujo de operación',
+        'enviado' => 'Enviado para autorización',
         'requiere_correccion' => 'Devuelto para cambio',
         'rechazado' => 'Rechazo definitivo',
     ];

@@ -2925,7 +2925,7 @@ class ReimbursementController extends Controller
             abort(403, 'No tienes permiso para editar el flujo de reembolsos.');
         }
 
-        $validated = $request->validate([
+        $validated = $request->validateWithBag('adminFlow', [
             'status' => [
                 'required',
                 Rule::in([
@@ -2942,7 +2942,7 @@ class ReimbursementController extends Controller
         [$data, $changeLines, $errorMessage] = $this->prepareAdminFlowAdjustment($reimbursement, $user, $validated);
 
         if ($errorMessage) {
-            return back()->withInput()->with('error', $errorMessage);
+            return back()->withInput()->withErrors(['flow' => $errorMessage], 'adminFlow');
         }
 
         if (empty($changeLines)) {
@@ -3977,6 +3977,7 @@ class ReimbursementController extends Controller
                 }
 
                 $oldStatus = $reimbursement->status;
+                $oldCurrentStepId = $reimbursement->current_step_id;
                 $reimbursement->update($data);
 
                 $reimbursement->approvals()->create([
@@ -3990,6 +3991,12 @@ class ReimbursementController extends Controller
                 $owner = $reimbursement->user;
                 if ($owner && $oldStatus !== $data['status']) {
                     NotificationBatchService::add($owner, $reimbursement);
+                }
+                $reimbursement->unsetRelation('currentStep');
+                if ($reimbursement->status === 'enviado'
+                    && (int) $oldCurrentStepId !== (int) $reimbursement->current_step_id
+                    && $reimbursement->currentStep?->user) {
+                    NotificationBatchService::add($reimbursement->currentStep->user, $reimbursement);
                 }
             } else {
                 // Authorization check: Admin or the user assigned to the current step
@@ -6496,6 +6503,14 @@ class ReimbursementController extends Controller
         ];
 
         $shouldResetFlow = $newStatus !== $oldStatus || $newType !== $oldType || (int) $targetCostCenter->id !== (int) $oldCostCenterId;
+        $repairMissingStep = $newStatus === 'enviado' && !$reimbursement->current_step_id;
+        $shouldResetFlow = $shouldResetFlow || $repairMissingStep;
+
+        // A reset of an active workflow must also rebuild its pending approval.
+        if ($shouldResetFlow && !in_array($newStatus, ['requiere_correccion', 'rechazado', 'borrador'], true)) {
+            $newStatus = 'enviado';
+            $data['status'] = $newStatus;
+        }
 
         if ($shouldResetFlow) {
             $data = array_merge($data, $this->adminFlowResetState());
@@ -6530,7 +6545,7 @@ class ReimbursementController extends Controller
                     $data['observaciones'] = trim(($reimbursement->observaciones ? $reimbursement->observaciones . "\n" : '') . $autoNote);
                 }
             } else {
-                $data['current_step_id'] = $targetCostCenter->approvalSteps()->orderBy('order')->first()?->id;
+                return [[], [], 'No se encontró el solicitante para reiniciar el flujo de aprobación.'];
             }
         } elseif ($shouldResetFlow && in_array($newStatus, ['requiere_correccion', 'rechazado'], true)) {
             $data['current_step_id'] = null;
@@ -6540,6 +6555,9 @@ class ReimbursementController extends Controller
         $typeLabels = $this->adminFlowTypeLabels();
 
         $changeLines = [];
+        if ($repairMissingStep) {
+            $changeLines[] = 'restauración del flujo de aprobación';
+        }
         if ($oldStatus !== $newStatus) {
             $changeLines[] = 'estado de ' . ($statusLabels[$oldStatus] ?? $oldStatus) . ' a ' . $statusLabels[$newStatus];
         }
