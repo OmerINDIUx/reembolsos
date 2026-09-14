@@ -287,16 +287,34 @@ class Reimbursement extends Model
             ->filter(fn (ReimbursementApproval $approval) => $approval->approval_step_id === null)
             ->groupBy('step_name')
             ->map(fn ($entries) => $entries->values());
+        // A center reassignment preserves the original audit entry. Match it to
+        // the equivalent level instead of requiring the completed work again.
+        $currentStepIds = $this->costCenter->approvalSteps->pluck('id');
+        $transferred = $approved->filter(fn (ReimbursementApproval $approval) =>
+            $approval->approval_step_id !== null && !$currentStepIds->contains($approval->approval_step_id)
+        );
+        $transferred->loadMissing('approvalStep');
         $logs = collect();
+        $usedIds = [];
 
         foreach ($this->costCenter->approvalSteps->sortBy('order') as $step) {
             $approval = $byStepId->get($step->id);
+            if (!$approval) {
+                $approval = $transferred->first(fn (ReimbursementApproval $entry) =>
+                    !in_array($entry->id, $usedIds, true)
+                    && $entry->approvalStep
+                    && (int) $entry->approvalStep->cost_center_id !== (int) $this->cost_center_id
+                    && $entry->approvalStep->name === $step->name
+                    && (int) $entry->approvalStep->order === (int) $step->order
+                );
+            }
             if (!$approval && $legacyByName->has($step->name)) {
                 $approval = $legacyByName->get($step->name)->shift();
             }
 
             if ($approval) {
                 $logs->put($step->id, $approval);
+                $usedIds[] = $approval->id;
             }
         }
 
@@ -328,25 +346,53 @@ class Reimbursement extends Model
 
     public function scopeWithCompletedConfiguredApprovalFlow($query)
     {
-        return $query->whereNotExists(function ($steps) {
-            $steps->selectRaw('1')
-                ->from('approval_steps')
-                ->whereColumn('approval_steps.cost_center_id', 'reimbursements.cost_center_id')
-                ->whereNotExists(function ($approvals) {
-                    $approvals->selectRaw('1')
-                        ->from('reimbursement_approvals')
-                        ->whereColumn('reimbursement_approvals.reimbursement_id', 'reimbursements.id')
-                        ->whereColumn('reimbursement_approvals.step_name', 'approval_steps.name')
-                        ->where('reimbursement_approvals.action', 'aprobado');
+        $explicitApproval = static function ($approvalQuery, string $stepAlias): void {
+            $approvalQuery->selectRaw('1')
+                ->from('reimbursement_approvals as history')
+                ->leftJoin('approval_steps as original_step', 'original_step.id', '=', 'history.approval_step_id')
+                ->whereColumn('history.reimbursement_id', 'reimbursements.id')
+                ->where('history.action', 'aprobado')
+                ->where(function ($match) use ($stepAlias) {
+                    $match->whereColumn('history.approval_step_id', "$stepAlias.id")
+                        ->orWhere(function ($transferred) use ($stepAlias) {
+                            $transferred->whereColumn('original_step.cost_center_id', '!=', "$stepAlias.cost_center_id")
+                                ->whereColumn('original_step.name', "$stepAlias.name")
+                                ->whereColumn('original_step.order', "$stepAlias.order");
+                        });
                 });
+        };
+
+        return $query->whereNotExists(function ($steps) use ($explicitApproval) {
+            $legacyCount = \Illuminate\Support\Facades\DB::table('reimbursement_approvals as legacy')
+                ->selectRaw('COUNT(*)')->whereColumn('legacy.reimbursement_id', 'reimbursements.id')
+                ->where('legacy.action', 'aprobado')->whereNull('legacy.approval_step_id')
+                ->whereColumn('legacy.step_name', 'approval_steps.name');
+            $unmatchedCount = \Illuminate\Support\Facades\DB::table('approval_steps as previous_steps')
+                ->selectRaw('COUNT(*)')->whereColumn('previous_steps.cost_center_id', 'approval_steps.cost_center_id')
+                ->whereColumn('previous_steps.name', 'approval_steps.name')
+                ->whereColumn('previous_steps.order', '<=', 'approval_steps.order')
+                ->whereNotExists(fn ($history) => $explicitApproval($history, 'previous_steps'));
+
+            $steps->selectRaw('1')->from('approval_steps')
+                ->whereColumn('approval_steps.cost_center_id', 'reimbursements.cost_center_id')
+                ->whereNotExists(fn ($history) => $explicitApproval($history, 'approval_steps'))
+                ->whereRaw('(' . $legacyCount->toSql() . ') < (' . $unmatchedCount->toSql() . ')',
+                    array_merge($legacyCount->getBindings(), $unmatchedCount->getBindings()));
         });
     }
-
     /**
      * Check if a specific user is authorized to approve the current step.
      */
     public function canBeApprovedBy(User $user)
     {
+        if ($user->isAdminView() || in_array($this->status, [
+            'borrador', 'requiere_correccion', 'rechazado', 'pagado', 'aprobado', 'en_evento', 'eliminado',
+        ], true)) {
+            return false;
+        }
+        if ($this->status === 'pendiente_pago' && $this->approved_by_treasury_at !== null) {
+            return false;
+        }
         $allIdentities = collect([$user])->concat($user->substitutingFor()->with('originalUser')->get()->pluck('originalUser')->filter());
 
         // Pagadores jamás pueden autorizar un trámite que no haya sido revisado por CXP.

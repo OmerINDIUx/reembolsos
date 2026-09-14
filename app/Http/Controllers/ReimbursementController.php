@@ -711,6 +711,7 @@ class ReimbursementController extends Controller
      */
     public function bulkStore(Request $request)
     {
+        $request->validate(['items' => 'required|array|min:1', 'items.*' => 'required|array']);
         $hasInvoice = $request->input('has_invoice', '1') == '1';
         $submissionComment = $this->initialSubmissionComment(count($request->input('items', [])));
         Log::info("BULK_STORE_START: User=" . Auth::id() . " Mode=" . ($hasInvoice ? 'Invoice' : 'Manual'));
@@ -852,9 +853,14 @@ class ReimbursementController extends Controller
 
         foreach ($request->items as $index => $item) {
             try {
-                $travelEventId = $item['travel_event_id'] ?? $request->travel_event_id;
-                // Fallback to the resolved cost center from the global request if not specific in item
-                $itemCostCenterId = $item['cost_center_id'] ?? ($request->cost_center_id ?: ($travelEventId ? \App\Models\TravelEvent::where('id', $travelEventId)->value('cost_center_id') : null));
+                // The selected center/event owns the workflow for the whole form.
+                // A per-item override must not attach that workflow to another center.
+                $travelEventId = $request->travel_event_id;
+                $itemCostCenterId = $costCenterId;
+                if ((isset($item['cost_center_id']) && (int) $item['cost_center_id'] !== (int) $costCenterId)
+                    || (isset($item['travel_event_id']) && (int) $item['travel_event_id'] !== (int) $travelEventId)) {
+                    throw new \Exception('El centro o evento del gasto no coincide con el seleccionado en el formulario.');
+                }
 
                 // Permissions and Limits Check
                 if (!$this->canCreateReimbursement($user, $type, $itemCostCenterId, $travelEventId)) {
@@ -873,7 +879,11 @@ class ReimbursementController extends Controller
                 if ($draftId) {
                     $existingDraft = Reimbursement::where('id', $draftId)
                         ->whereIn('user_id', array_unique([$user->id, $targetUserId]))
+                        ->where('status', 'borrador')
                         ->first();
+                    if (!$existingDraft) {
+                        throw new \Exception('El borrador ya fue enviado o no te pertenece. Actualiza el listado antes de continuar.');
+                    }
                 }
 
                 if ($hasInvoice) {
@@ -2537,7 +2547,17 @@ class ReimbursementController extends Controller
      */
     public function update(Request $request, Reimbursement $reimbursement)
     {
+        return DB::transaction(function () use ($request, $reimbursement) {
+            $locked = Reimbursement::query()->lockForUpdate()->findOrFail($reimbursement->id);
+
+            return $this->updateLockedReimbursement($request, $locked);
+        });
+    }
+
+    private function updateLockedReimbursement(Request $request, Reimbursement $reimbursement)
+    {
         set_time_limit(120); // Increase time limit for slow PDF parsing
+        $replacedFiles = [];
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
@@ -2609,7 +2629,7 @@ class ReimbursementController extends Controller
                 $data['cost_center_id'] = $targetCostCenterId;
                 $data['travel_event_id'] = null;
                 $data['fixed_fund_id'] = null;
-                $data = array_merge($data, $this->adminFlowResetState());
+
             }
 
             // Persist propina for any meal reimbursement, with or without XML.
@@ -2652,12 +2672,12 @@ class ReimbursementController extends Controller
             }
 
             if ($request->hasFile('ticket_file')) {
-                if ($reimbursement->ticket_path) Storage::delete($reimbursement->ticket_path);
+                if ($reimbursement->ticket_path) $replacedFiles[] = $reimbursement->ticket_path;
                 $data['ticket_path'] = $request->file('ticket_file')->store('tickets');
             }
 
             if ($request->hasFile('pdf_file')) {
-                if ($reimbursement->pdf_path) Storage::delete($reimbursement->pdf_path);
+                if ($reimbursement->pdf_path) $replacedFiles[] = $reimbursement->pdf_path;
                 $data['pdf_path'] = $request->file('pdf_file')->store('pdfs');
                 $data['original_pdf_name'] = $request->file('pdf_file')->getClientOriginalName();
                 
@@ -2704,30 +2724,25 @@ class ReimbursementController extends Controller
             $data['observaciones'] = $currentObs ? ($currentObs . "\n" . $newObs) : $newObs;
 
             if ($costCenterChanged) {
-                $workflowOwner = $reimbursement->user ?? User::find($reimbursement->user_id);
-                if ($workflowOwner) {
-                    [$currentStepId, $initialStatus, $autoNote, $approvalData] = $this->buildInitialApprovalState($targetCostCenter, $workflowOwner);
-                    $data['current_step_id'] = $currentStepId;
-                    $data['status'] = $initialStatus;
-                    $data['payment_week'] = null;
-                    $data = array_merge($data, $approvalData);
-                    if ($autoNote !== '') {
-                        $data['observaciones'] = trim(($data['observaciones'] ?? $reimbursement->observaciones ? ($data['observaciones'] ?? $reimbursement->observaciones) . "\n" : '') . $autoNote);
-                    }
-                } else {
-                    $data['current_step_id'] = $targetCostCenter->approvalSteps()->orderBy('order')->first()?->id;
-                    $data['status'] = 'enviado';
-                    $data['payment_week'] = null;
+                [$adjustment, , $adjustmentError] = $this->prepareAdminFlowAdjustment($reimbursement, $user, [
+                    'status' => 'enviado',
+                    'cost_center_id' => $targetCostCenterId,
+                    'admin_comment' => $request->user_correction_comment,
+                ]);
+                if ($adjustmentError) {
+                    return back()->withInput()->with('error', $adjustmentError);
                 }
+                $data['current_step_id'] = $adjustment['current_step_id'] ?? $reimbursement->current_step_id;
+                $data['status'] = $adjustment['status'];
             } else {
                 // Return exactly to the stage that requested the correction. A correction
                 // clears current_step_id, so it must be restored on resubmission; otherwise
                 // an unassigned authorization workflow has no approver that can act on it.
                 $lastCorrection = $reimbursement->approvals()
                     ->where('action', 'requiere_correccion')
-                    ->latest()
+                    ->reorder()->latest('created_at')->latest('id')
                     ->first();
-                $lastCorrectionStep = $lastCorrection->step_name ?? '';
+                $lastCorrectionStep = $lastCorrection?->step_name ?? '';
 
                 if (str_contains($lastCorrectionStep, 'Cuentas por Pagar Revisadores')) {
                     $data['status'] = 'pendiente_revision_cxp';
@@ -2735,18 +2750,7 @@ class ReimbursementController extends Controller
                     $data['status'] = 'pendiente_pago';
                     $data['payment_week'] = $reimbursement->payment_week ?: $this->currentProcessingWeek();
                 } else {
-                    $correctionStep = $lastCorrection->approval_step_id
-                        ? $reimbursement->costCenter?->approvalSteps()->whereKey($lastCorrection->approval_step_id)->first()
-                        : null;
-                    $correctionStep ??= $reimbursement->costCenter?->approvalSteps()
-                        ->where('name', $lastCorrectionStep)
-                        ->orderBy('order')
-                        ->first();
-
-                    // If an administrator removed or renamed the original step, recover
-                    // to the first outstanding configured step. This keeps the request
-                    // actionable instead of leaving it pending without an assignee.
-                    $correctionStep ??= $reimbursement->firstPendingConfiguredApprovalStep();
+                    $correctionStep = $this->resubmissionApprovalStep($reimbursement, $lastCorrection);
 
                     if ($correctionStep) {
                         $data['status'] = 'enviado';
@@ -2843,6 +2847,11 @@ class ReimbursementController extends Controller
             $this->handleDynamicApprovals($reimbursement, $user, false, $originalStatus, $stepAtActionTime);
         }
 
+        if ($replacedFiles) {
+            DB::afterCommit(fn () => Storage::delete($replacedFiles));
+        }
+        $reimbursement->unsetRelation('currentStep');
+
         // DYNAMIC NOTIFICATIONS
         // We use the current status from the model as it might have been changed by handleDynamicApprovals
         $currentStatus = $reimbursement->status;
@@ -2913,6 +2922,15 @@ class ReimbursementController extends Controller
      * Administrative flow adjustment for users with reimbursement edit permission.
      */
     public function adminFlowUpdate(Request $request, Reimbursement $reimbursement)
+    {
+        return DB::transaction(function () use ($request, $reimbursement) {
+            $locked = Reimbursement::query()->lockForUpdate()->findOrFail($reimbursement->id);
+
+            return $this->adminFlowUpdateLocked($request, $locked);
+        });
+    }
+
+    private function adminFlowUpdateLocked(Request $request, Reimbursement $reimbursement)
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
@@ -3930,11 +3948,16 @@ class ReimbursementController extends Controller
      */
     public function bulkAuditAction(Request $request)
     {
+        return DB::transaction(fn () => $this->bulkAuditActionLocked($request));
+    }
+
+    private function bulkAuditActionLocked(Request $request)
+    {
         Log::info("BULK_AUDIT_ACTION_START: User=" . Auth::id() . " Action=" . $request->action . " IDs=" . json_encode($request->ids));
 
         $request->validate([
-            'ids' => 'required|array',
-            'ids.*' => 'exists:reimbursements,id',
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|integer|distinct|exists:reimbursements,id',
             'action' => 'required|in:aprobado,rechazado,requiere_correccion,editar',
             'rejection_reason' => 'nullable|string|required_if:action,rechazado|required_if:action,requiere_correccion',
             'status' => ['nullable', Rule::in(['enviado', 'requiere_correccion', 'rechazado'])],
@@ -3966,7 +3989,7 @@ class ReimbursementController extends Controller
             : [];
 
         foreach ($request->ids as $id) {
-            $reimbursement = Reimbursement::find($id);
+            $reimbursement = Reimbursement::query()->lockForUpdate()->find($id);
             if (!$reimbursement) continue;
 
             if ($request->action === 'editar') {
@@ -4022,7 +4045,11 @@ class ReimbursementController extends Controller
                 }
                 $substituteText = $isSubstitute ? " (en sustitución de " . $substitutedName . ")" : "";
                 $currentStep = $reimbursement->currentStep;
-                $currentStepName = $currentStep?->name ?? 'Auditoria';
+                $currentStepName = $currentStep?->name ?? match ($reimbursement->status) {
+                    'pendiente_revision_cxp' => 'Cuentas por Pagar Revisadores',
+                    'pendiente_pago' => 'Cuentas por Pagar Pagadores',
+                    default => 'Auditoria',
+                };
 
                 if (in_array($request->action, ['rechazado', 'requiere_correccion'], true)) {
                      $currentObs = $reimbursement->observaciones;
@@ -4125,6 +4152,10 @@ class ReimbursementController extends Controller
         }
 
         $header = fgetcsv($handle);
+        if (!is_array($header)) {
+            fclose($handle);
+            return back()->with('error', 'El archivo CSV está vacío o no tiene encabezados válidos.');
+        }
         
         if (!$header) {
             fclose($handle);
@@ -4149,6 +4180,7 @@ class ReimbursementController extends Controller
             'invalid_status' => [],
         ];
 
+        $processedIds = [];
         while (($row = fgetcsv($handle)) !== false) {
             $folio = $row[$folioIdx] ?? null;
             $uuid = $row[$uuidIdx] ?? null;
@@ -4167,6 +4199,11 @@ class ReimbursementController extends Controller
             }
 
             if ($reimbursement) {
+                if (isset($processedIds[$reimbursement->id])) {
+                    $failed++;
+                    $errors['already_approved'][] = "Folio $folio: Está repetido en el archivo y ya fue procesado.";
+                    continue;
+                }
                 // Validación estricta: UUID exacto O Monto exacto (si no hay código XML)
                 $isValid = false;
                 $parsedTotal = 0;
@@ -4209,6 +4246,7 @@ class ReimbursementController extends Controller
 
                 // 3. Check workflow profile
                 $canReviewCxp = $reimbursement->status === 'pendiente_revision_cxp'
+                    && $reimbursement->configuredApprovalFlowIsComplete()
                     && ($user->isAdmin() || $user->isCxp());
                 $canPayCxp = $reimbursement->status === 'pendiente_pago'
                     && $reimbursement->approved_by_cxp_id !== null
@@ -4226,6 +4264,7 @@ class ReimbursementController extends Controller
 
                 $updateData = [
                     'status' => 'pendiente_pago',
+                    'current_step_id' => null,
                     'approved_by_cxp_id' => $isCxpReviewAction
                         ? $user->id
                         : $reimbursement->approved_by_cxp_id,
@@ -4241,6 +4280,7 @@ class ReimbursementController extends Controller
                 }
 
                 $reimbursement->update($updateData);
+                $processedIds[$reimbursement->id] = true;
                 $processed++;
                 
                 // Add an audit approval trail entry just like the single approval
@@ -5235,6 +5275,7 @@ class ReimbursementController extends Controller
      */
     public function autoStore(Request $request)
     {
+        abort_if(Auth::user()->isAdminView(), 403, 'Tu rol es de solo consulta y no puede registrar reembolsos.');
         set_time_limit(180); // Higher limit for file uploads in drafts
         
         try {
@@ -5854,6 +5895,7 @@ class ReimbursementController extends Controller
 
     private function canCreateReimbursement(\App\Models\User $user, $type, $costCenterId, $travelEventId = null)
     {
+        if ($user->isAdminView()) return false;
         // Auto-resolve CC if missing but event is provided
         if (!$costCenterId && $travelEventId) {
             $costCenterId = \App\Models\TravelEvent::where('id', $travelEventId)->value('cost_center_id');
@@ -6535,6 +6577,13 @@ class ReimbursementController extends Controller
             if (!$pendingStep) {
                 return [[], [], 'El centro seleccionado no tiene una etapa equivalente a la actual. No se guardó el ajuste para evitar reiniciar o saltar aprobaciones.'];
             }
+            $preview = clone $reimbursement;
+            $preview->cost_center_id = $targetCostCenter->id;
+            $preview->setRelation('costCenter', $targetCostCenter);
+            $firstPending = $preview->firstPendingConfiguredApprovalStep();
+            if ($firstPending && (int) $firstPending->order < (int) $pendingStep->order) {
+                return [[], [], 'El nuevo centro tiene etapas anteriores sin una aprobación equivalente. No se guardó el cambio para conservar el avance de la solicitud.'];
+            }
         }
         if ($pendingStep) {
             $data['current_step_id'] = $pendingStep->id;
@@ -6575,6 +6624,24 @@ class ReimbursementController extends Controller
             : $note;
 
         return [$data, $changeLines, null];
+    }
+
+    private function resubmissionApprovalStep(Reimbursement $reimbursement, ?\App\Models\ReimbursementApproval $lastCorrection): ?ApprovalStep
+    {
+        // Administrative corrections can have no approver return event.
+        $step = $lastCorrection?->approval_step_id
+            ? $reimbursement->costCenter?->approvalSteps()->whereKey($lastCorrection->approval_step_id)->first()
+            : null;
+        if (!$step && $lastCorrection?->step_name) {
+            $step = $reimbursement->costCenter?->approvalSteps()
+                ->where('name', $lastCorrection->step_name)->orderBy('order')->first();
+        }
+        if (!$step && $reimbursement->currentStep
+            && (int) $reimbursement->currentStep->cost_center_id === (int) $reimbursement->cost_center_id) {
+            $step = $reimbursement->currentStep;
+        }
+
+        return $step ?? $reimbursement->firstPendingConfiguredApprovalStep();
     }
 
     private function adminFlowResetState(): array

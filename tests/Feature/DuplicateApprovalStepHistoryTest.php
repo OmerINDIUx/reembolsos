@@ -58,5 +58,11 @@ class DuplicateApprovalStepHistoryTest extends TestCase
         $this->assertTrue($logs->has($firstStep->id));
         $this->assertFalse($logs->has($secondStep->id));
         $this->assertSame($secondStep->id, $reimbursement->firstPendingConfiguredApprovalStep()?->id);
+        $this->assertFalse(Reimbursement::whereKey($reimbursement->id)->withCompletedConfiguredApprovalFlow()->exists());
+
+        $reimbursement->approvals()->create([
+            'user_id' => $approver->id, 'step_name' => $secondStep->name, 'action' => 'aprobado',
+        ]);
+        $this->assertTrue(Reimbursement::whereKey($reimbursement->id)->withCompletedConfiguredApprovalFlow()->exists());
     }
 }

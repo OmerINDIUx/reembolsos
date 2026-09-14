@@ -134,7 +134,7 @@ class ReimbursementSequentialApprovalTest extends TestCase
 
         $reimbursement->refresh();
 
-        $this->assertSame('pendiente_autorizacion', $reimbursement->status);
+        $this->assertSame('aprobado_ejecutivo', $reimbursement->status);
         $this->assertSame($nextStep->id, $reimbursement->current_step_id);
         $this->assertDatabaseHas('reimbursement_approvals', [
             'reimbursement_id' => $reimbursement->id,
@@ -251,7 +251,7 @@ class ReimbursementSequentialApprovalTest extends TestCase
 
         $reimbursement->refresh();
 
-        $this->assertSame('enviado', $reimbursement->status);
+        $this->assertSame('aprobado_ejecutivo', $reimbursement->status);
         $this->assertSame($n4Step->id, $reimbursement->current_step_id);
         $this->assertTrue($reimbursement->canBeApprovedBy($n4));
     }
@@ -300,7 +300,7 @@ class ReimbursementSequentialApprovalTest extends TestCase
 
         $reimbursement->refresh();
 
-        $this->assertSame('pendiente_autorizacion', $reimbursement->status);
+        $this->assertSame('enviado', $reimbursement->status);
         $this->assertSame($approvalStep->id, $reimbursement->current_step_id);
         $this->assertTrue($reimbursement->canBeApprovedBy($approver));
     }

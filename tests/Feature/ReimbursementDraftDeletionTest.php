@@ -105,7 +105,7 @@ class ReimbursementDraftDeletionTest extends TestCase
             'display_name' => 'Eliminar reembolsos',
             'module' => 'reimbursements',
         ]);
-        $profile = Profile::create(['name' => 'reimbursement_deleter']);
+        $profile = Profile::create(['name' => 'reimbursement_deleter', 'display_name' => 'Eliminar reembolsos']);
         $profile->permissions()->attach($permission);
 
         return User::factory()->create([
